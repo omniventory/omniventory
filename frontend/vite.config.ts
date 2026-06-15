@@ -8,13 +8,21 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      /** Precache the app shell (entry points + assets). */
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,png,svg,ico}"],
+      },
       manifest: {
         name: "Omniventory",
         short_name: "Omniventory",
         description: "Self-hosted inventory management",
-        theme_color: "#0ea5e9",
-        display: "standalone",
+        /**
+         * Theme color matches our primary teal (#0d9488 = Mantine teal[8]).
+         * Also set in index.html <meta name="theme-color">.
+         */
+        theme_color: "#0d9488",
         background_color: "#ffffff",
+        display: "standalone",
         icons: [
           {
             src: "/icon-192.png",
@@ -25,6 +33,7 @@ export default defineConfig({
             src: "/icon-512.png",
             sizes: "512x512",
             type: "image/png",
+            purpose: "any maskable",
           },
         ],
       },
@@ -33,6 +42,6 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    setupFiles: [],
+    setupFiles: ["src/__tests__/setup.ts"],
   },
 });
