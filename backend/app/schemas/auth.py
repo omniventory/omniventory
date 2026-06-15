@@ -38,3 +38,16 @@ class MessageResponse(BaseModel):
     """Generic message response (used for logout)."""
 
     message: str
+
+
+class SetupStatusResponse(BaseModel):
+    """Response body for GET /auth/setup-status."""
+
+    setup_required: bool
+
+
+class SetupRequest(BaseModel):
+    """Body for POST /auth/setup — create the first admin user."""
+
+    email: str
+    password: str

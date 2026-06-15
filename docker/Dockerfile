@@ -66,11 +66,11 @@ COPY backend/alembic ./alembic
 # Copy the built frontend static assets
 COPY --from=frontend /build/frontend/dist ./static
 
-# Declare the data directory as a volume so SQLite lives on the host, not in
-# the image layer.  The directory is created so Docker can bind-mount it.
-RUN mkdir -p /app/data && chown app:app /app/data /app
-
-VOLUME ["/app/data"]
+# Create the data directory so the bind mount target exists.
+# Ownership is set to uid/gid 1000 (the uid the container runs as, matching
+# the typical host user) so the bind-mounted SQLite file is owned by 1000:1000
+# and can be read/written/backed-up without sudo.
+RUN mkdir -p /app/data && chown 1000:1000 /app/data /app
 
 # Expose the application port
 EXPOSE 8000
@@ -90,7 +90,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-USER app
+USER 1000:1000
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["uvicorn", "app.main:create_app", "--factory", "--host", "0.0.0.0", "--port", "8000"]

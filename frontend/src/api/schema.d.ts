@@ -75,6 +75,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Setup
+         * @description Create the first admin user (first-run onboarding).
+         *
+         *     Self-closing and concurrency-safe: the admin user and a sentinel row
+         *     (``app_config.key = 'onboarding_completed'``) are created in a **single
+         *     transaction**.  Because ``app_config.key`` is the primary key, a second
+         *     concurrent request that also passes the fast-path pre-check will hit a
+         *     primary-key ``IntegrityError`` when it tries to insert the same sentinel,
+         *     causing its transaction to roll back → 409.
+         *
+         *     This works even when two concurrent requests each read ``count == 0`` with
+         *     *different* emails (which would bypass the email-unique constraint alone):
+         *     only one can win the sentinel insert; the loser always gets 409.
+         *
+         *     Fast-path pre-check (sentinel exists or any user exists → 409) is kept for
+         *     the common case, but the correctness guarantee comes from the unique-key
+         *     sentinel insert, not from the pre-check.
+         *
+         *     On success returns the created user (HTTP 201).  Does NOT auto-login —
+         *     the frontend transitions to the normal login screen after setup.
+         */
+        post: operations["setup_api_auth_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/setup-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Setup Status
+         * @description Return whether first-run setup is still required.
+         *
+         *     ``setup_required: true``  — no users exist; the setup page must be shown.
+         *     ``setup_required: false`` — at least one user exists; show the login page.
+         *
+         *     Unauthenticated — the frontend calls this on every load to decide which
+         *     page to show before the user has any session cookie.
+         */
+        get: operations["setup_status_api_auth_setup_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -148,6 +212,24 @@ export interface components {
         MessageResponse: {
             /** Message */
             message: string;
+        };
+        /**
+         * SetupRequest
+         * @description Body for POST /auth/setup — create the first admin user.
+         */
+        SetupRequest: {
+            /** Email */
+            email: string;
+            /** Password */
+            password: string;
+        };
+        /**
+         * SetupStatusResponse
+         * @description Response body for GET /auth/setup-status.
+         */
+        SetupStatusResponse: {
+            /** Setup Required */
+            setup_required: boolean;
         };
         /**
          * UserResponse
@@ -259,6 +341,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+        };
+    };
+    setup_api_auth_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    setup_status_api_auth_setup_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupStatusResponse"];
                 };
             };
         };

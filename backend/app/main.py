@@ -6,6 +6,7 @@ module-import time — all side-effectful work happens inside the factory
 function, which is called explicitly (e.g. by the ASGI server or by tests).
 """
 
+import secrets
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -20,52 +21,66 @@ from fastapi.staticfiles import StaticFiles
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
-def _bootstrap_admin() -> None:
-    """Idempotently create the admin user from ``admin_bootstrap_*`` settings.
+def _resolve_secret_key(app: FastAPI) -> None:
+    """Resolve the effective secret key and stash it on ``app.state.secret_key``.
 
-    Called during the FastAPI lifespan startup (NOT at import time).
+    Resolution order:
+    1. ``settings.secret_key`` is set and non-empty  → use it as-is (do NOT
+       persist it; the env value may rotate).
+    2. ``app_config['secret_key']`` exists in the DB  → use the persisted key.
+    3. Neither present                                → generate
+       ``secrets.token_hex(32)``, persist to ``app_config``, use it.
 
-    Rules:
-    - If ``admin_bootstrap_email`` or ``admin_bootstrap_password`` is unset
-      (``None`` / empty), skip silently.
-    - If the ``users`` table does not yet exist (schema not migrated), skip
-      silently — same best-effort policy as ``_purge_expired_sessions``.
-    - If a user with that email already exists, skip (idempotent).
-    - Otherwise, create the admin user with the hashed password.
-
-    No exception is raised on "already exists" — re-running the app with the
-    same bootstrap env is a no-op.
+    The function is best-effort: if the ``app_config`` table does not yet
+    exist (schema not yet migrated) it skips the DB read/write and uses the
+    env value (or raises a clear error if there is none).
     """
+    import logging
+
     from sqlalchemy import inspect as sa_inspect
 
-    from app.auth.passwords import hash_password
     from app.config import get_settings
     from app.db.base import get_engine, get_session_factory
-    from app.repositories.user import UserRepository
+    from app.repositories.app_config import AppConfigRepository
 
+    logger = logging.getLogger(__name__)
     settings = get_settings()
 
-    if not settings.admin_bootstrap_email or not settings.admin_bootstrap_password:
-        return  # Bootstrap env not configured — skip.
+    # If the caller provided an explicit env key, use it directly.
+    if settings.secret_key:
+        app.state.secret_key = settings.secret_key
+        return
 
-    if not sa_inspect(get_engine()).has_table("users"):
-        return  # Schema not yet migrated — skip silently.
+    engine = get_engine()
+    table_ready = sa_inspect(engine).has_table("app_config")
+
+    if not table_ready:
+        # Schema not migrated yet — generate an ephemeral key for this boot.
+        # On a real deployment alembic upgrade head runs before uvicorn starts,
+        # so this branch is only hit in tests or bare-python runs pre-migration.
+        logger.warning(
+            "app_config table not found; using an ephemeral secret_key for this boot. "
+            "Run 'alembic upgrade head' to persist the key across restarts."
+        )
+        app.state.secret_key = secrets.token_hex(32)
+        return
 
     factory = get_session_factory()
     db = factory()
     try:
-        repo = UserRepository(db)
-        existing = repo.get_by_email(settings.admin_bootstrap_email)
-        if existing is not None:
-            return  # Already bootstrapped — no-op.
+        repo = AppConfigRepository(db)
+        persisted = repo.get("secret_key")
 
-        repo.create(
-            email=settings.admin_bootstrap_email,
-            password_hash=hash_password(settings.admin_bootstrap_password),
-            role="admin",
-            is_active=True,
-        )
+        if persisted:
+            app.state.secret_key = persisted
+            return
+
+        # Generate, persist, and use a new key.
+        new_key = secrets.token_hex(32)
+        repo.set("secret_key", new_key)
         db.commit()
+        logger.info("Generated and persisted a new secret_key in app_config.")
+        app.state.secret_key = new_key
     except Exception:
         db.rollback()
         raise
@@ -117,10 +132,10 @@ def _purge_expired_sessions() -> None:
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:  # noqa: ARG001
-    """FastAPI lifespan: run admin bootstrap and expired-session purge on startup."""
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
+    """FastAPI lifespan: resolve secret key and purge expired sessions on startup."""
+    _resolve_secret_key(app)
     _purge_expired_sessions()
-    _bootstrap_admin()
     yield
 
 

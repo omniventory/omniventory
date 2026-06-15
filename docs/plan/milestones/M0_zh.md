@@ -16,7 +16,7 @@
 
 **明确不在 M0 内:**
 - 除 `Household/Workspace` 单例外，**不**建任何领域模型——Item/Definition/Lot/Location/Category/Movement 全部从 M1 起（M0 不碰）。
-- 不做多用户、角色、邀请（M6）。M0 只引导出**恰好一个** admin 用户。
+- 不做多用户、角色、邀请（M6）。M0 通过一个轻量首次运行引导页创建**恰好一个** admin 用户，不做通用注册 UI。
 - 不做提醒、不做邮件/SMTP、不做条码、不做 CSV/导入导出、不做 LLM 钩子。
 - 除基线卫生外不做生产级加固（安全加固在 M6）。
 - 不做定制视觉设计——前端只给**轻量主题地基 + 响应式壳**（§7）。
@@ -33,7 +33,7 @@
 | 持久化 | **SQLAlchemy 2.0**（带类型，`Mapped[...]`）+ **Alembic** 迁移 + **SQLite**（默认，文件落在 volume 上）。 |
 | 前端语言/工具链 | **React + TypeScript** + **Vite**，包管理 **`pnpm`**；lint **eslint**，类型检查 **tsc**，测试 **vitest**（+ Testing Library）。 |
 | UI | **Mantine** 组件库 + **`react-feather`** 图标；响应式（桌面与移动同等一等公民）；**PWA**（可安装、离线 app-shell）。 |
-| 认证 | **Session-cookie**：不透明 session id 装进 `HttpOnly` + `Secure` + `SameSite=Lax` cookie；服务端 SQLite `sessions` 表。v1 不用 JWT。 |
+| 认证 | **Session-cookie**：不透明 session id 装进 `HttpOnly` + `Secure` + `SameSite=Lax` cookie；服务端 SQLite `sessions` 表。v1 不用 JWT。`secret_key` 首次运行时**自动生成并持久化**到 `app_config`（未通过 env 设置时）。首次运行**引导**（`GET/POST /auth/setup-status` / `/auth/setup`）替代基于 env 的 admin bootstrap。 |
 | 契约 | **契约优先**：FastAPI OpenAPI → `openapi-typescript` → `frontend/src/api/schema.d.ts`；运行时调用走 **`openapi-fetch`**。**no-drift CI 闸**（§6）。 |
 | 仓库形态 | **Monorepo**：本仓库，根下 `backend/` + `frontend/`。 |
 | 部署 | **单 Docker 容器**：内嵌已构建前端 + FastAPI + SQLite volume。**生产 `docker-compose.yaml`**（用预构建 image，无 `build`）+ **`docker-compose.dev.yaml`** override（开发时加 `build`）。 |
@@ -52,7 +52,7 @@ omniventory/
 │   ├── alembic.ini
 │   ├── alembic/
 │   │   ├── env.py
-│   │   └── versions/             # 第一条迁移放这里
+│   │   └── versions/             # 迁移：0001 households、0002 users+sessions、0003 app_config
 │   ├── app/
 │   │   ├── __init__.py
 │   │   ├── main.py               # FastAPI app factory + 路由挂载
@@ -64,7 +64,7 @@ omniventory/
 │   │   │   └── context.py        # "current context" 抽象（多租户对冲）
 │   │   ├── repositories/         # 仓储层（杜绝散落的裸查询）
 │   │   ├── services/             # 应用/服务层（业务逻辑在这里）
-│   │   ├── models/               # SQLAlchemy 模型（Household、Session、User）
+│   │   ├── models/               # SQLAlchemy 模型（AppConfig、Household、Session、User）
 │   │   ├── schemas/              # Pydantic 请求/响应模型
 │   │   ├── api/
 │   │   │   ├── deps.py           # FastAPI 依赖（current_user、db、context）
@@ -92,7 +92,9 @@ omniventory/
 │       ├── shell/                # AppShell：响应式导航（sidebar/header/drawer）
 │       ├── components/           # 共享模式种子（Loading/Empty/Error/PageShell）
 │       └── pages/
-│           └── Login.tsx
+│           ├── Login.tsx
+│           └── Setup.tsx         # 首次运行引导（创建第一个 admin）
+├── data/                         # SQLite bind-mount 目标（git-ignored；uid/gid 1000:1000 属主）
 ├── openapi.json                  # 生成的契约快照（提交入库；被 drift 闸卡）
 ├── docker-compose.yaml           # 生产：app 用预构建 image（无 build）
 ├── docker-compose.dev.yaml       # 开发 override：加 build + 开发环境
@@ -112,7 +114,7 @@ omniventory/
 
 ### 4.1 应用与配置
 - **App factory** `create_app()`（`app/main.py`）：构建 FastAPI 实例，把**所有路由挂在一个可配置的 `settings.api_prefix`** 下（默认 `/api`）——这样以后加 `/api/v1`（或 `/v2`）前缀只是一行改动——接入中间件（session；dev 下按需 CORS）。把 import 期副作用挡在外面。
-- **配置**走 `pydantic-settings`（`app/config.py`）：`api_prefix`（默认 `/api`）、`api_version`（兼容性编号，见 §4.2）、`database_url`（默认 `sqlite:///./data/omniventory.db`）、`secret_key`、`session_cookie_name`、`admin_bootstrap_*`、`environment`。从 env / `.env` 读。**代码里不放密钥。**
+- **配置**走 `pydantic-settings`（`app/config.py`）：`api_prefix`（默认 `/api`）、`api_version`（兼容性编号，见 §4.2）、`database_url`（默认 `sqlite:///./data/omniventory.db`）、`secret_key`（**可选**——首次运行自动生成并持久化到 `app_config`，未设置时）、`session_cookie_name`、`environment`。从 env / `.env` 读。**代码里不放密钥。**
 
 ### 4.2 健康检查
 - `GET {api_prefix}/health` → `{ status: "ok", version, api_version, db: "ok" }`。`db` 字段做一次 `SELECT 1`，使健康反映数据库可达性。**`api_version`** 是一个整数兼容性编号（InvenTree 式）——这是我们替代 URL 版本化的选择：客户端/工具靠它探测兼容性，而无需我们对 URL 做版本化。这是一个 🟢 检查点。
@@ -133,8 +135,9 @@ omniventory/
 - **密码哈希**：`argon2`（经 `argon2-cffi` / passlib）——绝不存明文。
 - **`sessions` 表**：`id`（不透明随机，如 `secrets.token_urlsafe`）、`user_id`、`created_at`、`expires_at`、`last_seen_at`。滑动或固定过期（M0 固定即可）。
 - **端点**（`app/api/routes/auth.py`）：`POST /api/auth/login`（设 cookie）、`POST /api/auth/logout`（删服务端 session + 清 cookie）、`GET /api/auth/me`（当前用户；无/无效 session 返回 401）。
+- **首次运行引导端点**（无需认证）：`GET /api/auth/setup-status` → `{ setup_required: bool }`（零用户时为 true）；`POST /api/auth/setup` → body `{ email, password }` — 创建第一个 admin；若用户已存在返回 **409 Conflict**（自关闭）。不自动登录。
+- **Secret key 解析**（lifespan 启动时）：若 `SECRET_KEY` env 已设且非空 → 直接使用；否则读 `app_config['secret_key']`；否则生成 `secrets.token_hex(32)`、持久化到 `app_config`、使用。存到 `app.state.secret_key`。env 值不持久化。
 - **Cookie**：`HttpOnly`、`Secure`、`SameSite=Lax`；值 = 不透明 session id（不含用户数据）。吊销 = 删那一行。
-- **Admin 引导**：首次启动从 env/CLI 创建恰好一个 admin（幂等）。M0 不做注册 UI。
 - **依赖** `current_user`（`app/api/deps.py`）读 cookie、查并校验 session、产出用户（否则 401）。
 
 ---
@@ -186,6 +189,8 @@ omniventory/
 - `components/`：`PageShell`、`LoadingState`、`EmptyState`、`ErrorState`。够 M1+ 页面不必各自重造即可。**不要**在这里造组件库。
 
 ### 7.6 认证 UI
+- **`App.tsx` 门控逻辑**：加载时先调 `GET /api/auth/setup-status`；若 `setup_required` → 显示 Setup；否则调 `GET /api/auth/me` → 壳（已认证）或 Login（匿名）。
+- `pages/Setup.tsx` — 首次运行表单；成功后 → 跳转至 Login（不自动登录）。
 - `pages/Login.tsx` 经类型化 client POST 到 `/api/auth/login`；成功后路由进壳。路由守卫调 `/api/auth/me`；未认证 → 登录。header 带登出动作。
 
 > 独立的双语 *design-system* 文档**推迟**（§12）到 UI 长起来再建；M0 的地基就放在这里。
@@ -206,17 +211,18 @@ omniventory/
 ### 8.2 Docker（`docker/Dockerfile`，多阶段 → 单镜像）
 1. **阶段 1（前端）**：`pnpm install --frozen-lockfile` + `pnpm build` → 静态资源。
 2. **阶段 2（后端）**：`uv sync --frozen` 装进精简 Python 基础镜像。
-3. **最终**：拷入后端 + 已构建前端；FastAPI 在 `/api/*` 提供 API，其余路径提供静态 SPA；SQLite 落在挂载 **volume**；启动时跑 alembic upgrade；`HEALTHCHECK` 打 `/api/health`。单容器、单端口。
+3. **最终**：拷入后端 + 已构建前端；FastAPI 在 `/api/*` 提供 API，其余路径提供静态 SPA；SQLite 落在 **bind mount**（`/app/data`；无 `VOLUME` 指令）；启动时跑 alembic upgrade；`HEALTHCHECK` 打 `/api/health`。单容器、单端口。容器以 **uid/gid `1000:1000`** 运行，使 bind-mounted SQLite 文件归宿主用户所有——备份无需 sudo。
 
 ### 8.3 Compose（生产 + 开发 override）
 两个根级 compose 文件，用 Compose 的 override 机制叠加：
-- **`docker-compose.yaml`（生产）**：`app` 服务从**预构建 `image:`** 运行（无 `build:`），SQLite 落命名 volume，env 来自 `.env`，端口映射、`restart`、healthcheck。
-- **`docker-compose.dev.yaml`（开发 override）**：覆盖 `app`，加 **`build:`**（context `.`、`docker/Dockerfile`）+ 开发专用 env；设计成叠在生产文件之上（日后可加更多开发专用 override——挂载、端口等）。
+- **`docker-compose.yaml`（生产）**：`app` 服务从**预构建 `image:`** 运行（无 `build:`），SQLite 落 **bind mount**（`${DATA_DIR:-./data}:/app/data`；无命名 volume），`user: "1000:1000"` 确保文件归宿主所有，宿主端口来自 `${APP_PORT:-8000}`，env 来自 `.env`，`restart`、healthcheck。
+- **`docker-compose.dev.yaml`（开发 override）**：覆盖 `app`，加 **`build:`**（context `.`、`docker/Dockerfile`）+ 开发专用 env；设计成叠在生产文件之上。
 - **开发启动命令：**
   ```bash
   docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build
   ```
   生产只用生产文件单独跑（用预构建 image，不 build）。
+- **`.env.example`** 记录 `APP_PORT`、`DATA_DIR`、`SECRET_KEY`（空 = 自动生成）。
 
 ---
 
@@ -239,7 +245,7 @@ omniventory/
 ### 步骤 2 — 后端 app 核心（settings、app factory、health）
 - **目标:** FastAPI 启动并在可配置前缀下提供 health（暂无 DB）。
 - **构建:**
-  - `app/config.py`：`Settings`，含 `api_prefix`（默认 `/api`）、`api_version`、`environment`、`secret_key`（必填）、`database_url`、`session_cookie_name`、`admin_bootstrap_email`/`admin_bootstrap_password`。
+  - `app/config.py`：`Settings`，含 `api_prefix`（默认 `/api`）、`api_version`、`environment`、`secret_key`（**可选**，默认 `None`——启动时解析）、`database_url`、`session_cookie_name`。
   - `app/main.py`：`create_app()` → FastAPI 实例，把一个根 `APIRouter` 挂在 `settings.api_prefix` 下；无 import 期副作用。
   - `app/api/routes/health.py`：`GET {api_prefix}/health` → `{status, version, api_version}`（`db` 字段步骤 3 加）。
 - **测试:** `TestClient`——health 200 + 载荷形状；配置从 env 加载（含缺密钥时失败）。
@@ -268,8 +274,10 @@ omniventory/
   - `app/auth/passwords.py`（argon2 哈希/校验）、`app/auth/sessions.py`（创建/校验/吊销/清过期）。
   - `app/api/routes/auth.py`：`POST {prefix}/auth/login`（校验 → 建 session → 设 `HttpOnly`+`Secure`+`SameSite=Lax` cookie）、`POST {prefix}/auth/logout`（吊销 + 清 cookie）、`GET {prefix}/auth/me`（当前用户 / 401）。
   - `app/api/deps.py`：`current_user`（cookie → 校验 session → 用户 / 401）；`RequestContext` 此时携带用户。
-  - **Admin 引导**：从 `admin_bootstrap_*` 在启动时幂等创建（或 `make bootstrap` / CLI）。
-- **测试（易错逻辑——必测）:** 密码哈希/校验；session 创建→校验往返；**过期 session 被拒**；logout 真正吊销（之后校验失败）；cookie 标志齐全；`me` 无 cookie 401 / 有 cookie 200；引导幂等（跑两次 = 一个 admin）。
+  - **`app_config` 键值模型/仓储** 与 **迁移 0003**（可逆；创建 `app_config` 表）。
+  - **Secret key 解析**（lifespan 启动时）：env 值（若有）；否则 `app_config['secret_key']`；否则生成并持久化。存到 `app.state.secret_key`。
+  - **引导端点**（无需认证）：`GET /auth/setup-status` → `{ setup_required }`（零用户时为 true）；`POST /auth/setup` → 创建第一个 admin（已有用户 409；不自动登录）。
+- **测试（易错逻辑——必测）:** 密码哈希/校验；session 创建→校验往返；**过期 session 被拒**；logout 真正吊销（之后校验失败）；cookie 标志齐全；`me` 无 cookie 401 / 有 cookie 200；`app_config` get/set；secret key 解析（env 覆盖；生成→持久化→复用；env 不持久化）；引导（`setup-status` 反映用户数；第一次 setup 创建哈希 admin；第二次 → 409；不自动登录）；迁移 0003 upgrade/downgrade 干净。
 - **完成判据:** login 设 cookie、`me` 可用、logout 吊销；闸绿。
 - **不该做:** 无注册 UI、除"是合法用户"外无角色强制、无多用户。
 - **Commit:** `feat(backend): session-cookie auth skeleton and admin bootstrap`
@@ -294,8 +302,10 @@ omniventory/
   - `src/shell/AppShell.tsx`：桌面 sidebar + header；移动 burger → `Drawer`。**唯一**一个壳。
   - PWA：`vite-plugin-pwa` + web manifest + `public/` 图标；预缓存 app shell。
   - `src/components/`：极小的 `PageShell`、`LoadingState`、`EmptyState`、`ErrorState`。
+  - `src/pages/Setup.tsx`：首次运行表单 → `client.POST('/api/auth/setup')`；成功后 → Login。
   - `src/pages/Login.tsx`：表单 → `client.POST('/auth/login')` → 路由进壳；路由守卫经 `client.GET('/auth/me')`（未认证 → 登录）；header 里登出动作。
-- **测试（vitest + Testing Library）:** Login 渲染 + 提交（mock client）；未认证时守卫重定向；色彩方案切换渲染。
+  - `App.tsx` 门控：先 `GET /api/auth/setup-status` → Setup（若需要）→ 否则 `GET /api/auth/me` → 壳或 Login。
+- **测试（vitest + Testing Library）:** Login 渲染 + 提交（mock client）；Setup 渲染 + 提交（mock client）；`setup_required:true` 时门控显示 Setup；false + 未认证时显示 Login；已认证时显示壳；色彩方案切换渲染。
 - **完成判据:** `pnpm dev` 启动；登录与运行中的后端往返；PWA 可安装；桌面 + 移动响应式；闸绿。
 - **不该做:** 无领域页面、除占位外无导航项、无组件库。
 - **Commit:** `feat(frontend): Mantine shell, theme, PWA, and login`
@@ -304,11 +314,11 @@ omniventory/
 - **目标:** 一个镜像跑起整套；生产 + 开发 compose，配 override 工作流。
 - **构建:**
   - `docker/Dockerfile`：多阶段——(1) `pnpm install --frozen-lockfile` + `pnpm build`；(2) `uv sync --frozen`；(3) 精简最终镜像拷入后端 + 已构建静态；FastAPI 提供 `/api/*` + 带 **history 回退**的 SPA；启动跑 `alembic upgrade head`；`HEALTHCHECK` → `/api/health`；单端口。
-  - `docker-compose.yaml`（**生产**）：`app` 从**预构建 `image:`**（无 `build:`）、SQLite 命名 volume、env 来自 `.env`、端口、`restart`、healthcheck。
+  - `docker-compose.yaml`（**生产**）：`app` 从**预构建 `image:`**（无 `build:`）、SQLite 落 **bind mount**（`${DATA_DIR:-./data}:/app/data`）、`user: "1000:1000"`、宿主端口 `${APP_PORT:-8000}`、env 来自 `.env`、`restart`、healthcheck。
   - `docker-compose.dev.yaml`（**开发 override**）：覆盖 `app` 加 **`build:`**（context `.`、`docker/Dockerfile`）+ 开发 env；叠在生产文件之上。
   - 记录开发命令：`docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build`。
   - CI **docker** 作业：构建镜像 + 冒烟（`docker run` → curl `/api/health`）。
-- **测试:** 镜像构建；容器启动；迁移应用到全新 volume；`/api/health` 绿；浏览器可达登录。
+- **测试:** 镜像构建；容器以 uid 1000:1000 启动；迁移 0001/0002/0003 应用到全新 bind-mounted DB；SQLite 文件归属 1000:1000；`/api/health` 绿；setup-status 可达。
 - **完成判据:** 生产构建与开发 override 都能跑；CI docker 作业绿。
 - **不该做:** 无 k8s/编排、无反向代理/TLS、无 Postgres。
 - **Commit:** `build: single-container Dockerfile and prod/dev compose`
@@ -336,11 +346,18 @@ omniventory/
 里程碑末作者手动走查（每条展开一个 roadmap 🟢 要点）：
 
 1. **构建镜像**：`docker build -f docker/Dockerfile .` 成功。
-2. **运行它**：带 volume + admin 引导 env 的 `docker run`；容器启动，把 Alembic 迁移干净地应用到全新空库、无错。
+2. **运行它**：
+   ```bash
+   mkdir -p ./data
+   docker run --user 1000:1000 -e SECRET_KEY= -e ENVIRONMENT=production \
+     -v "$PWD/data:/app/data" -p 8000:8000 omniventory:latest
+   ```
+   容器启动，把 Alembic 迁移 0001/0002/0003 干净地应用到全新空 bind-mounted DB、无错。`ls -ln ./data` 显示 SQLite 文件归属 `1000:1000`。
 3. **健康**：`curl /api/health` → `{status:"ok", db:"ok", version:...}`。
-4. **登录可用**：浏览器打开应用 → 跳登录 → 用引导出的 admin 登入 → 进入响应式壳；cookie 为 `HttpOnly`（JS 看不到）；刷新仍登录；登出回到登录页。
-5. **响应式 + PWA**：壳在桌面与移动宽度下都正常；明暗可切；应用可安装（PWA）且壳能离线加载。
-6. **CI 绿**：同一套闸在 GitHub Actions 里通过，含 **no-drift** 契约闸。
+4. **首次运行引导**：浏览器打开应用 → 跳转到 **Setup 页面** → 填入 email + 密码 → admin 账号创建 → 跳转至 Login → 登录 → 进入响应式壳；cookie 为 `HttpOnly`（JS 看不到）；刷新仍登录；登出回到登录页。
+5. **Secret 自动生成**：`SECRET_KEY` 为空；应用已自动生成并将密钥持久化至 `app_config`。重启容器复用持久化密钥——session 跨重启存活。
+6. **响应式 + PWA**：壳在桌面与移动宽度下都正常；明暗可切；应用可安装（PWA）且壳能离线加载。
+7. **CI 绿**：同一套闸在 GitHub Actions 里通过，含 **no-drift** 契约闸。
 
 ---
 

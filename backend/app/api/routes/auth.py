@@ -28,16 +28,25 @@ flag logic directly (without needing HTTPS infrastructure).
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.auth import sessions as session_auth
-from app.auth.passwords import dummy_verify, verify_password
+from app.auth.passwords import dummy_verify, hash_password, verify_password
 from app.config import get_settings
 from app.db.session import get_db
+from app.models.app_config import AppConfig
 from app.models.user import User
 from app.repositories.user import UserRepository
-from app.schemas.auth import LoginRequest, MeResponse, MessageResponse, UserResponse
+from app.schemas.auth import (
+    LoginRequest,
+    MeResponse,
+    MessageResponse,
+    SetupRequest,
+    SetupStatusResponse,
+    UserResponse,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -147,3 +156,87 @@ def me(user: User = Depends(get_current_user)) -> MeResponse:
     Requires a valid session cookie.  Returns 401 if absent / expired.
     """
     return MeResponse(user=UserResponse.model_validate(user))
+
+
+# ---------------------------------------------------------------------------
+# First-run onboarding endpoints (unauthenticated)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/setup-status", response_model=SetupStatusResponse)
+def setup_status(db: Session = Depends(get_db)) -> SetupStatusResponse:
+    """Return whether first-run setup is still required.
+
+    ``setup_required: true``  — no users exist; the setup page must be shown.
+    ``setup_required: false`` — at least one user exists; show the login page.
+
+    Unauthenticated — the frontend calls this on every load to decide which
+    page to show before the user has any session cookie.
+    """
+    repo = UserRepository(db)
+    return SetupStatusResponse(setup_required=repo.count() == 0)
+
+
+_ONBOARDING_SENTINEL_KEY = "onboarding_completed"
+
+
+@router.post("/setup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+def setup(
+    body: SetupRequest,
+    db: Session = Depends(get_db),
+) -> UserResponse:
+    """Create the first admin user (first-run onboarding).
+
+    Self-closing and concurrency-safe: the admin user and a sentinel row
+    (``app_config.key = 'onboarding_completed'``) are created in a **single
+    transaction**.  Because ``app_config.key`` is the primary key, a second
+    concurrent request that also passes the fast-path pre-check will hit a
+    primary-key ``IntegrityError`` when it tries to insert the same sentinel,
+    causing its transaction to roll back → 409.
+
+    This works even when two concurrent requests each read ``count == 0`` with
+    *different* emails (which would bypass the email-unique constraint alone):
+    only one can win the sentinel insert; the loser always gets 409.
+
+    Fast-path pre-check (sentinel exists or any user exists → 409) is kept for
+    the common case, but the correctness guarantee comes from the unique-key
+    sentinel insert, not from the pre-check.
+
+    On success returns the created user (HTTP 201).  Does NOT auto-login —
+    the frontend transitions to the normal login screen after setup.
+    """
+    repo = UserRepository(db)
+
+    # Fast-path: sentinel already written or user already exists → skip the
+    # expensive password hash and return immediately.
+    sentinel_exists = db.get(AppConfig, _ONBOARDING_SENTINEL_KEY) is not None
+    if sentinel_exists or repo.count() > 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Setup already complete: an admin user already exists.",
+        )
+
+    # Insert both the user and the sentinel atomically.  If another concurrent
+    # request races to the same point, one of them will raise IntegrityError on
+    # the sentinel's primary-key uniqueness → translated to 409 below.
+    user = repo.create(
+        email=body.email,
+        password_hash=hash_password(body.password),
+        role="admin",
+        is_active=True,
+    )
+    db.flush()  # Assign user.id before inserting the sentinel.
+    sentinel = AppConfig(key=_ONBOARDING_SENTINEL_KEY, value="true")
+    db.add(sentinel)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Setup already complete: an admin user already exists.",
+        ) from None
+
+    db.refresh(user)
+    return UserResponse.model_validate(user)

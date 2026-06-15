@@ -56,19 +56,33 @@ def _make_in_memory_session() -> Session:
 
     from sqlalchemy import event
 
-    # Re-sync the model metadata: reload db.base first (new Base + empty
-    # metadata), then reload each model module so they re-register to it.
+    # Re-sync the model metadata.
+    #
+    # Strategy: import all model modules FIRST (so they exist in sys.modules
+    # regardless of whether they had been imported before), THEN reload db.base
+    # to create a fresh Base with empty metadata, THEN reload every model so
+    # they re-register against the new Base.
+    #
+    # If a model has not yet been imported, the first ``import`` statement runs
+    # its module body and registers the class against the CURRENT (old) Base.
+    # That is fine — the subsequent ``reload`` is what re-registers it against
+    # the NEW Base.  Doing the reload of db.base BEFORE the first import would
+    # cause the model to register with the new Base twice (once on first import
+    # and once on reload), producing the "already defined" error.
     import app.db.base as db_base_mod
-
-    importlib.reload(db_base_mod)
-
+    import app.models.app_config as app_config_mod
     import app.models.household as hh_mod
     import app.models.session as sess_mod
     import app.models.user as user_mod
 
+    # Reload db.base → fresh Base with empty metadata.
+    importlib.reload(db_base_mod)
+
+    # Reload each model → it imports the NEW Base and re-registers its table.
     importlib.reload(hh_mod)
     importlib.reload(user_mod)
     importlib.reload(sess_mod)
+    importlib.reload(app_config_mod)
 
     from app.db.base import Base as _Base  # fresh Base with all tables
 
@@ -701,111 +715,109 @@ class TestLoginLogoutFlow:
 
 
 # ---------------------------------------------------------------------------
-# 8. Admin bootstrap idempotency
+# 8. AppConfigRepository get/set
 # ---------------------------------------------------------------------------
 
 
-class TestAdminBootstrap:
-    """Bootstrap idempotent — easy-to-get-wrong logic."""
+class TestAppConfigRepository:
+    """AppConfigRepository get/set — easy-to-get-wrong logic."""
 
-    def test_bootstrap_creates_admin_on_first_run(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """_bootstrap_admin() creates exactly one admin when none exists."""
-        url, db_path = _make_temp_db_url()
-        monkeypatch.setenv("SECRET_KEY", "test-secret")
-        monkeypatch.setenv("ENVIRONMENT", "test")
-        monkeypatch.setenv("DATABASE_URL", url)
-        monkeypatch.setenv("ADMIN_BOOTSTRAP_EMAIL", "admin@example.com")
-        monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "adminpass123")
+    def test_get_returns_none_when_absent(self, db_session: Session) -> None:
+        """get() returns None for a key that has never been set."""
+        import importlib
 
-        from app.db.base import Base, get_engine
-        from app.main import _bootstrap_admin
-        from app.repositories.user import UserRepository
+        import app.db.base as db_base_mod
 
-        engine = get_engine()
-        Base.metadata.create_all(engine)
+        importlib.reload(db_base_mod)
+        import app.models.app_config as ac_mod
+
+        importlib.reload(ac_mod)
+
+        from app.db.base import Base as _Base
+
+        engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        _Base.metadata.create_all(engine)
+        factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+        sess = factory()
         try:
-            _bootstrap_admin()
+            from app.repositories.app_config import AppConfigRepository
 
-            factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-            db = factory()
-            repo = UserRepository(db)
-            user = repo.get_by_email("admin@example.com")
-            assert user is not None
-            assert user.role == "admin"
-            assert user.is_active is True
-            db.close()
+            repo = AppConfigRepository(sess)
+            assert repo.get("nonexistent_key") is None
         finally:
-            Base.metadata.drop_all(engine)
-            if db_path.exists():
-                db_path.unlink()
+            sess.close()
 
-    def test_bootstrap_idempotent_running_twice_gives_one_admin(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """Calling _bootstrap_admin() twice must leave exactly one admin user."""
-        url, db_path = _make_temp_db_url()
-        monkeypatch.setenv("SECRET_KEY", "test-secret")
-        monkeypatch.setenv("ENVIRONMENT", "test")
-        monkeypatch.setenv("DATABASE_URL", url)
-        monkeypatch.setenv("ADMIN_BOOTSTRAP_EMAIL", "admin@example.com")
-        monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "adminpass123")
+    def test_set_then_get_roundtrip(self, db_session: Session) -> None:  # noqa: ARG002
+        """set() then get() returns the stored value."""
+        import importlib
 
-        from app.db.base import Base, get_engine
-        from app.main import _bootstrap_admin
-        from app.repositories.user import UserRepository
+        import app.db.base as db_base_mod
 
-        engine = get_engine()
-        Base.metadata.create_all(engine)
+        importlib.reload(db_base_mod)
+        import app.models.app_config as ac_mod
+
+        importlib.reload(ac_mod)
+
+        from app.db.base import Base as _Base
+
+        engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        _Base.metadata.create_all(engine)
+        factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+        sess = factory()
         try:
-            _bootstrap_admin()  # First call — creates admin.
-            _bootstrap_admin()  # Second call — must be a no-op.
+            from app.repositories.app_config import AppConfigRepository
 
-            factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-            db = factory()
-            repo = UserRepository(db)
-            assert repo.count() == 1, "Exactly one admin user must exist after two bootstrap calls."
-            db.close()
+            repo = AppConfigRepository(sess)
+            repo.set("secret_key", "my-test-secret")
+            sess.commit()
+            assert repo.get("secret_key") == "my-test-secret"
         finally:
-            Base.metadata.drop_all(engine)
-            if db_path.exists():
-                db_path.unlink()
+            sess.close()
 
-    def test_bootstrap_skips_when_email_not_set(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """_bootstrap_admin() is a no-op when ADMIN_BOOTSTRAP_EMAIL is unset."""
-        url, db_path = _make_temp_db_url()
-        monkeypatch.setenv("SECRET_KEY", "test-secret")
-        monkeypatch.setenv("ENVIRONMENT", "test")
-        monkeypatch.setenv("DATABASE_URL", url)
-        monkeypatch.delenv("ADMIN_BOOTSTRAP_EMAIL", raising=False)
-        monkeypatch.delenv("ADMIN_BOOTSTRAP_PASSWORD", raising=False)
+    def test_set_overwrites_existing_value(self, db_session: Session) -> None:  # noqa: ARG002
+        """set() on an existing key updates the value (upsert)."""
+        import importlib
 
-        from app.db.base import Base, get_engine
-        from app.main import _bootstrap_admin
-        from app.repositories.user import UserRepository
+        import app.db.base as db_base_mod
 
-        engine = get_engine()
-        Base.metadata.create_all(engine)
+        importlib.reload(db_base_mod)
+        import app.models.app_config as ac_mod
+
+        importlib.reload(ac_mod)
+
+        from app.db.base import Base as _Base
+
+        engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        _Base.metadata.create_all(engine)
+        factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+        sess = factory()
         try:
-            _bootstrap_admin()
+            from app.repositories.app_config import AppConfigRepository
 
-            factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
-            db = factory()
-            repo = UserRepository(db)
-            assert repo.count() == 0
-            db.close()
+            repo = AppConfigRepository(sess)
+            repo.set("secret_key", "first-value")
+            sess.commit()
+            repo.set("secret_key", "second-value")
+            sess.commit()
+            assert repo.get("secret_key") == "second-value"
         finally:
-            Base.metadata.drop_all(engine)
-            if db_path.exists():
-                db_path.unlink()
+            sess.close()
 
-    def test_bootstrap_via_lifespan_creates_admin(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Admin created via lifespan startup is accessible via login."""
+
+# ---------------------------------------------------------------------------
+# 8b. Secret-key resolution at startup
+# ---------------------------------------------------------------------------
+
+
+class TestSecretKeyResolution:
+    """Secret-key resolution — easy-to-get-wrong logic."""
+
+    def test_env_key_used_directly(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When SECRET_KEY env is set, app.state.secret_key reflects it (not persisted)."""
         url, db_path = _make_temp_db_url()
-        monkeypatch.setenv("SECRET_KEY", "test-secret")
+        monkeypatch.setenv("SECRET_KEY", "explicit-env-secret")
         monkeypatch.setenv("ENVIRONMENT", "test")
         monkeypatch.setenv("DATABASE_URL", url)
-        monkeypatch.setenv("ADMIN_BOOTSTRAP_EMAIL", "boot@example.com")
-        monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "bootpass456")
 
         from app.db.base import Base, get_engine
         from app.main import create_app
@@ -814,17 +826,231 @@ class TestAdminBootstrap:
         Base.metadata.create_all(engine)
         try:
             app = create_app()
-            with TestClient(app, raise_server_exceptions=True) as client:
-                response = client.post(
-                    "/api/auth/login",
-                    json={"email": "boot@example.com", "password": "bootpass456"},
-                )
-                assert response.status_code == 200
-                assert response.json()["email"] == "boot@example.com"
+            with TestClient(app, raise_server_exceptions=True):
+                assert app.state.secret_key == "explicit-env-secret"
         finally:
             Base.metadata.drop_all(engine)
             if db_path.exists():
                 db_path.unlink()
+
+    def test_auto_generated_key_persisted_and_reused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Without env SECRET_KEY, a key is generated, persisted, and reused on second boot."""
+        url, db_path = _make_temp_db_url()
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        monkeypatch.setenv("ENVIRONMENT", "test")
+        monkeypatch.setenv("DATABASE_URL", url)
+
+        from app.db.base import Base, get_engine
+        from app.main import create_app
+
+        engine = get_engine()
+        Base.metadata.create_all(engine)
+        try:
+            # First boot — key generated and persisted.
+            app1 = create_app()
+            with TestClient(app1, raise_server_exceptions=True):
+                key1 = app1.state.secret_key
+            assert key1  # Must be non-empty.
+
+            # Second boot — same key reused from app_config.
+            from app.config import get_settings
+            from app.db.base import get_engine as _ge
+
+            get_settings.cache_clear()
+            _ge.cache_clear()
+            monkeypatch.setenv("DATABASE_URL", url)  # keep same DB
+
+            app2 = create_app()
+            with TestClient(app2, raise_server_exceptions=True):
+                key2 = app2.state.secret_key
+
+            assert key1 == key2, "Second boot must reuse the persisted key"
+        finally:
+            Base.metadata.drop_all(engine)
+            if db_path.exists():
+                db_path.unlink()
+
+    def test_env_key_not_persisted(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When SECRET_KEY env is set, it is NOT written to app_config."""
+        url, db_path = _make_temp_db_url()
+        monkeypatch.setenv("SECRET_KEY", "do-not-persist-me")
+        monkeypatch.setenv("ENVIRONMENT", "test")
+        monkeypatch.setenv("DATABASE_URL", url)
+
+        from app.db.base import Base, get_engine
+        from app.main import create_app
+
+        engine = get_engine()
+        Base.metadata.create_all(engine)
+        try:
+            app = create_app()
+            with TestClient(app, raise_server_exceptions=True):
+                pass
+
+            # Verify the env key was NOT written to app_config.
+            factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+            db = factory()
+            try:
+                from app.repositories.app_config import AppConfigRepository
+
+                repo = AppConfigRepository(db)
+                assert repo.get("secret_key") is None, (
+                    "Env-provided secret_key must not be persisted in app_config"
+                )
+            finally:
+                db.close()
+        finally:
+            Base.metadata.drop_all(engine)
+            if db_path.exists():
+                db_path.unlink()
+
+
+# ---------------------------------------------------------------------------
+# 8c. First-run onboarding endpoints
+# ---------------------------------------------------------------------------
+
+
+class TestOnboardingEndpoints:
+    """First-run onboarding — easy-to-get-wrong logic."""
+
+    def test_setup_status_true_when_no_users(self, test_client: TestClient) -> None:
+        """GET /auth/setup-status returns {setup_required: true} when no users exist."""
+        response = test_client.get("/api/auth/setup-status")
+        assert response.status_code == 200
+        assert response.json()["setup_required"] is True
+
+    def test_setup_status_false_after_user_created(self, test_client: TestClient) -> None:
+        """GET /auth/setup-status returns {setup_required: false} after a user exists."""
+        from app.auth.passwords import hash_password
+        from app.db.base import get_engine
+        from app.repositories.user import UserRepository
+
+        engine = get_engine()
+        factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+        db = factory()
+        repo = UserRepository(db)
+        repo.create(email="existing@example.com", password_hash=hash_password("pw"))
+        db.commit()
+        db.close()
+
+        response = test_client.get("/api/auth/setup-status")
+        assert response.status_code == 200
+        assert response.json()["setup_required"] is False
+
+    def test_setup_creates_admin_with_hashed_password(self, test_client: TestClient) -> None:
+        """POST /auth/setup creates an admin user with argon2-hashed password."""
+        from app.auth.passwords import verify_password
+        from app.db.base import get_engine
+        from app.repositories.user import UserRepository
+
+        response = test_client.post(
+            "/api/auth/setup",
+            json={"email": "firstadmin@example.com", "password": "strongpass!"},
+        )
+        assert response.status_code == 201
+        body = response.json()
+        assert body["email"] == "firstadmin@example.com"
+        assert body["role"] == "admin"
+        assert body["is_active"] is True
+
+        # Verify the password is hashed (not stored in plaintext).
+        engine = get_engine()
+        factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+        db = factory()
+        repo = UserRepository(db)
+        user = repo.get_by_email("firstadmin@example.com")
+        assert user is not None
+        assert verify_password("strongpass!", user.password_hash)
+        assert "strongpass!" not in user.password_hash
+        db.close()
+
+    def test_second_setup_returns_409(self, test_client: TestClient) -> None:
+        """A second POST /auth/setup (when a user exists) returns 409 Conflict."""
+        # First setup succeeds.
+        first = test_client.post(
+            "/api/auth/setup",
+            json={"email": "admin@example.com", "password": "firstpass!"},
+        )
+        assert first.status_code == 201
+
+        # Second attempt must be rejected.
+        second = test_client.post(
+            "/api/auth/setup",
+            json={"email": "intruder@example.com", "password": "intruderpass!"},
+        )
+        assert second.status_code == 409
+
+    def test_setup_does_not_auto_login(self, test_client: TestClient) -> None:
+        """POST /auth/setup must NOT set a session cookie (no auto-login)."""
+        from app.config import get_settings
+
+        settings = get_settings()
+        response = test_client.post(
+            "/api/auth/setup",
+            json={"email": "nologin@example.com", "password": "passw0rd!"},
+        )
+        assert response.status_code == 201
+        # No session cookie must be set.
+        assert settings.session_cookie_name not in response.cookies
+
+    def test_setup_status_reflects_user_count_correctly(self, test_client: TestClient) -> None:
+        """setup-status → true; after setup → false; second setup → 409 but status stays false."""
+        assert test_client.get("/api/auth/setup-status").json()["setup_required"] is True
+
+        test_client.post(
+            "/api/auth/setup",
+            json={"email": "a@example.com", "password": "pass!"},
+        )
+        assert test_client.get("/api/auth/setup-status").json()["setup_required"] is False
+
+    def test_sentinel_lock_blocks_different_email_on_second_setup(
+        self, test_client: TestClient
+    ) -> None:
+        """After a successful setup, a second POST /auth/setup with a *different* email
+        returns 409 and exactly one user exists.
+
+        This proves the sentinel-based lock (not just the email-unique constraint)
+        is what makes the endpoint self-closing: even a completely distinct email
+        is rejected once ``app_config.onboarding_completed`` is written.
+        """
+        from app.db.base import get_engine
+        from app.models.app_config import AppConfig as AppConfigModel
+        from app.repositories.user import UserRepository
+
+        # First setup — must succeed.
+        first = test_client.post(
+            "/api/auth/setup",
+            json={"email": "original@example.com", "password": "strongpass!"},
+        )
+        assert first.status_code == 201, f"First setup failed unexpectedly: {first.json()}"
+
+        # Second setup with a *different* email — must be rejected by the sentinel,
+        # not by the email-unique constraint.
+        second = test_client.post(
+            "/api/auth/setup",
+            json={"email": "intruder@example.com", "password": "intruderpass!"},
+        )
+        assert second.status_code == 409, (
+            f"Second setup (different email) should have returned 409, got {second.status_code}"
+        )
+
+        # Only exactly one user must exist in the DB.
+        engine = get_engine()
+        factory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+        db = factory()
+        try:
+            repo = UserRepository(db)
+            assert repo.count() == 1, (
+                f"Expected exactly 1 user after failed second setup, found {repo.count()}"
+            )
+            # Verify the sentinel row exists (it is what closed the endpoint).
+            sentinel = db.get(AppConfigModel, "onboarding_completed")
+            assert sentinel is not None, (
+                "onboarding_completed sentinel row must exist after successful setup"
+            )
+            assert sentinel.value == "true"
+        finally:
+            db.close()
 
 
 # ---------------------------------------------------------------------------
@@ -1013,8 +1239,8 @@ class TestHealthNotBrokenByAuth:
 
 
 class TestStartupHooksSafeOnUnmigratedDb:
-    """_purge_expired_sessions and _bootstrap_admin must not crash when the DB
-    schema does not yet exist (i.e. alembic upgrade head has not been run).
+    """_purge_expired_sessions and _resolve_secret_key must not crash when the
+    DB schema does not yet exist (i.e. alembic upgrade head has not been run).
 
     This guards against the N1 regression introduced by the first fixup, where
     the unconditional DELETE FROM sessions at startup caused
@@ -1039,22 +1265,28 @@ class TestStartupHooksSafeOnUnmigratedDb:
             if db_path.exists():
                 db_path.unlink()
 
-    def test_bootstrap_admin_is_noop_when_table_absent(
+    def test_secret_key_resolution_is_safe_when_app_config_table_absent(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """_bootstrap_admin() must not raise on an empty (un-migrated) DB when creds are set."""
+        """_resolve_secret_key() must not crash when app_config table is absent.
+
+        When the table doesn't exist, an ephemeral key is generated for the
+        boot (with a logged warning) rather than crashing the app.
+        """
         url, db_path = _make_temp_db_url()
-        monkeypatch.setenv("SECRET_KEY", "test-secret")
+        monkeypatch.delenv("SECRET_KEY", raising=False)
         monkeypatch.setenv("ENVIRONMENT", "test")
         monkeypatch.setenv("DATABASE_URL", url)
-        monkeypatch.setenv("ADMIN_BOOTSTRAP_EMAIL", "admin@example.com")
-        monkeypatch.setenv("ADMIN_BOOTSTRAP_PASSWORD", "adminpass123")
 
         try:
-            from app.main import _bootstrap_admin
+            from fastapi import FastAPI
 
-            # Must complete without raising — the users table does not exist.
-            _bootstrap_admin()
+            from app.main import _resolve_secret_key
+
+            # Empty DB: no tables at all.
+            dummy_app = FastAPI()
+            _resolve_secret_key(dummy_app)  # Must not raise.
+            assert dummy_app.state.secret_key  # Ephemeral key generated.
         finally:
             if db_path.exists():
                 db_path.unlink()
@@ -1077,6 +1309,97 @@ class TestStartupHooksSafeOnUnmigratedDb:
             # TestClient entering the context manager triggers the lifespan startup.
             with TestClient(app, raise_server_exceptions=True):
                 pass  # If we reach here without exception, the boot succeeded.
+        finally:
+            if db_path.exists():
+                db_path.unlink()
+
+
+# ---------------------------------------------------------------------------
+# 13. Alembic migration 0003
+# ---------------------------------------------------------------------------
+
+
+class TestAlembicMigration0003:
+    """Migration 0003 must apply clean on top of 0002 and be reversible."""
+
+    def _run_alembic(self, *args: str, url: str) -> tuple[int, str]:
+        """Run alembic as a subprocess; return (returncode, output)."""
+        import subprocess
+
+        backend_root = Path(__file__).parent.parent
+        env = {
+            **os.environ,
+            "DATABASE_URL": url,
+        }
+        result = subprocess.run(
+            [".venv/bin/alembic", *args],
+            cwd=str(backend_root),
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        return result.returncode, result.stdout + result.stderr
+
+    def test_upgrade_head_creates_app_config(self) -> None:
+        """alembic upgrade head creates the app_config table."""
+        url, db_path = _make_temp_db_url()
+        try:
+            rc, output = self._run_alembic("upgrade", "head", url=url)
+            assert rc == 0, f"alembic upgrade head failed:\n{output}"
+
+            engine = create_engine(url)
+            with engine.connect() as conn:
+                tables = conn.execute(
+                    text("SELECT name FROM sqlite_master WHERE type='table'")
+                ).fetchall()
+                table_names = {row[0] for row in tables}
+                assert "app_config" in table_names, (
+                    f"app_config table missing; found: {table_names}"
+                )
+        finally:
+            if db_path.exists():
+                db_path.unlink()
+
+    def test_downgrade_0003_removes_app_config(self) -> None:
+        """Downgrading from 0003 to 0002 drops app_config, keeps users/sessions."""
+        url, db_path = _make_temp_db_url()
+        try:
+            rc_up, out_up = self._run_alembic("upgrade", "head", url=url)
+            assert rc_up == 0, f"alembic upgrade head failed:\n{out_up}"
+
+            rc_down, out_down = self._run_alembic("downgrade", "0002", url=url)
+            assert rc_down == 0, f"alembic downgrade to 0002 failed:\n{out_down}"
+
+            engine = create_engine(url)
+            with engine.connect() as conn:
+                tables = conn.execute(
+                    text("SELECT name FROM sqlite_master WHERE type='table'")
+                ).fetchall()
+                table_names = {row[0] for row in tables}
+                assert "app_config" not in table_names, "app_config must be dropped by downgrade"
+                assert "users" in table_names, "users table must still exist at 0002"
+                assert "sessions" in table_names, "sessions table must still exist at 0002"
+        finally:
+            if db_path.exists():
+                db_path.unlink()
+
+    def test_upgrade_stepwise_0001_0002_0003_clean(self) -> None:
+        """Stepwise upgrade 0001 → 0002 → 0003 must succeed cleanly."""
+        url, db_path = _make_temp_db_url()
+        try:
+            for rev in ["0001", "0002", "0003"]:
+                rc, out = self._run_alembic("upgrade", rev, url=url)
+                assert rc == 0, f"alembic upgrade {rev} failed:\n{out}"
+
+            engine = create_engine(url)
+            with engine.connect() as conn:
+                tables = conn.execute(
+                    text("SELECT name FROM sqlite_master WHERE type='table'")
+                ).fetchall()
+                table_names = {row[0] for row in tables}
+                assert "app_config" in table_names
+                assert "users" in table_names
+                assert "sessions" in table_names
         finally:
             if db_path.exists():
                 db_path.unlink()

@@ -3,7 +3,7 @@
 Covers:
 - health endpoint: HTTP 200 + exact payload shape (status, version, api_version)
 - settings load from environment variables
-- missing secret_key raises a validation error (required field)
+- missing secret_key defaults to None (auto-generated at startup)
 - api_prefix is configurable and changes the health endpoint mount point
 
 Note: Step 3 extended the health endpoint to add ``db: "ok"``.  The fixtures
@@ -20,7 +20,6 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -190,17 +189,17 @@ class TestSettings:
         s = Settings()
         assert s.api_prefix == "/api"
 
-    def test_settings_missing_secret_key_raises(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Constructing Settings without SECRET_KEY must raise a ValidationError."""
+    def test_settings_missing_secret_key_defaults_to_none(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Constructing Settings without SECRET_KEY must default to None (auto-gen at startup)."""
         # Ensure SECRET_KEY is NOT present in the environment for this test.
         monkeypatch.delenv("SECRET_KEY", raising=False)
 
         from app.config import Settings
 
-        with pytest.raises(ValidationError) as exc_info:
-            Settings()
-        # Confirm the error mentions secret_key.
-        assert "secret_key" in str(exc_info.value).lower()
+        s = Settings()
+        assert s.secret_key is None
 
     def test_settings_database_url_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """database_url must default to a SQLite URL."""
@@ -239,12 +238,11 @@ class TestSettings:
         s = Settings()
         assert s.session_cookie_name == "omniventory_session"
 
-    def test_settings_admin_bootstrap_defaults_none(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """admin_bootstrap_email and admin_bootstrap_password default to None."""
-        monkeypatch.setenv("SECRET_KEY", "test-secret")
+    def test_settings_secret_key_from_env(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When SECRET_KEY is set in env, settings.secret_key reflects it."""
+        monkeypatch.setenv("SECRET_KEY", "explicit-env-secret")
 
         from app.config import Settings
 
         s = Settings()
-        assert s.admin_bootstrap_email is None
-        assert s.admin_bootstrap_password is None
+        assert s.secret_key == "explicit-env-secret"

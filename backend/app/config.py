@@ -1,6 +1,7 @@
 """Application settings loaded from environment / .env file.
 
-No secrets are hardcoded here; every sensitive field is required at runtime.
+No secrets are hardcoded here; sensitive fields either come from the
+environment or are auto-generated and persisted at first run.
 ``get_settings()`` is a cached accessor so nothing is read at import time.
 """
 
@@ -47,13 +48,15 @@ class Settings(BaseSettings):
     )
 
     # ------------------------------------------------------------------ #
-    # Security (required — no defaults so misconfiguration fails loudly)   #
+    # Security (optional — auto-generated & persisted on first run)        #
     # ------------------------------------------------------------------ #
-    secret_key: str = Field(
+    secret_key: str | None = Field(
+        default=None,
         description=(
             "Secret key used for signing sessions and other cryptographic operations. "
-            "Must be provided via environment variable or .env. "
-            "No default — omitting it is a configuration error."
+            "Leave unset (None / blank) to auto-generate and persist in the app_config "
+            "table on first run.  Set explicitly to override or to rotate the key "
+            "(rotating invalidates all existing sessions)."
         ),
     )
 
@@ -73,18 +76,6 @@ class Settings(BaseSettings):
         description="Name of the HttpOnly session cookie.",
     )
 
-    # ------------------------------------------------------------------ #
-    # Admin bootstrap                                                       #
-    # ------------------------------------------------------------------ #
-    admin_bootstrap_email: str | None = Field(
-        default=None,
-        description="Email for the bootstrapped admin user (first-run only).",
-    )
-    admin_bootstrap_password: str | None = Field(
-        default=None,
-        description="Password for the bootstrapped admin user (first-run only).",
-    )
-
 
 @lru_cache
 def get_settings() -> Settings:
@@ -94,7 +85,4 @@ def get_settings() -> Settings:
     process, while keeping import-time side-effects out of module scope.
     Call ``get_settings.cache_clear()`` in tests to force a fresh read.
     """
-    # pydantic-settings populates required fields (secret_key) from the
-    # environment at runtime; mypy cannot infer this, so we suppress the
-    # "missing argument" false-positive here.
-    return Settings()  # type: ignore[call-arg]
+    return Settings()
