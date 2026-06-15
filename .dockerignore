@@ -1,0 +1,49 @@
+# ---- Version control ----
+.git
+.gitignore
+
+# ---- Working / review artifacts ----
+review-notes/
+
+# ---- Python / backend build artifacts ----
+backend/.venv/
+backend/.uv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/**/*.py[cod]
+backend/.mypy_cache/
+backend/.ruff_cache/
+backend/.pytest_cache/
+backend/.coverage
+backend/htmlcov/
+backend/*.egg-info/
+
+# ---- Node / frontend build artifacts ----
+frontend/node_modules/
+frontend/.pnpm-store/
+frontend/dist/
+frontend/dev-dist/
+frontend/.vite/
+
+# ---- App data ----
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# ---- Secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Docs (not needed in image) ----
+docs/
+
+# ---- OS / editor ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
