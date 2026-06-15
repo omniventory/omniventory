@@ -26,7 +26,12 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
-ignore = ["E501"]
+ignore = [
+    "E501",
+    # B008: FastAPI's Depends() in function signatures is the canonical pattern;
+    # this rule generates false positives for all FastAPI dependency injection.
+    "B008",
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]

@@ -5,7 +5,18 @@ Covers:
 - settings load from environment variables
 - missing secret_key raises a validation error (required field)
 - api_prefix is configurable and changes the health endpoint mount point
+
+Note: Step 3 extended the health endpoint to add ``db: "ok"``.  The fixtures
+below therefore wire up a temp-file SQLite database so that the health
+endpoint can perform its DB probe across threads.  Using a real file (not
+:memory:) ensures the schema built in the fixture thread is visible to the
+TestClient worker thread that executes route handlers.
 """
+
+import os
+import tempfile
+from collections.abc import Generator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -17,31 +28,55 @@ from pydantic import ValidationError
 
 
 @pytest.fixture(autouse=True)
-def _clear_settings_cache() -> None:
-    """Clear the lru_cache on get_settings before and after every test.
-
-    This ensures each test gets a fresh Settings object from the current
-    environment, with no bleed-over between tests.
-    """
+def _clear_settings_and_engine_cache() -> Generator[None]:
+    """Clear lru_cache on get_settings and get_engine before/after every test."""
     from app.config import get_settings
+    from app.db.base import get_engine
 
     get_settings.cache_clear()
-    yield  # type: ignore[misc]
+    get_engine.cache_clear()
+    yield
     get_settings.cache_clear()
+    get_engine.cache_clear()
+
+
+def _make_temp_db(monkeypatch: pytest.MonkeyPatch) -> tuple[str, Path]:
+    """Create a temp-file SQLite DB, set DATABASE_URL, and return (url, path)."""
+    fd, path_str = tempfile.mkstemp(suffix=".db", prefix="omniventory_step2_")
+    os.close(fd)
+    path = Path(path_str)
+    path.unlink()  # Remove so the DB starts empty.
+    url = f"sqlite:///{path_str}"
+    monkeypatch.setenv("DATABASE_URL", url)
+    return url, path
 
 
 @pytest.fixture()
-def default_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Set the minimum required environment variables for a valid Settings."""
+def default_env(monkeypatch: pytest.MonkeyPatch) -> Generator[None]:
+    """Set the minimum required environment variables for a valid Settings.
+
+    Uses a temp-file SQLite (not :memory:) so the schema is shared across
+    threads when TestClient drives requests through route handlers.
+    """
     monkeypatch.setenv("SECRET_KEY", "test-secret-key-for-unit-tests")
+    _, db_path = _make_temp_db(monkeypatch)
+    yield
+    if db_path.exists():
+        db_path.unlink()
 
 
 @pytest.fixture()
-def test_client(default_env: None) -> TestClient:  # noqa: ARG001
-    """Return a TestClient built with default test environment."""
+def test_client(default_env: None) -> Generator[TestClient]:  # noqa: ARG001
+    """Return a TestClient backed by a temp-file SQLite with the full schema."""
+    from app.db.base import Base, get_engine
     from app.main import create_app
 
-    return TestClient(create_app(), raise_server_exceptions=True)
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+    app = create_app()
+    with TestClient(app, raise_server_exceptions=True) as client:
+        yield client
+    Base.metadata.drop_all(engine)
 
 
 # ---------------------------------------------------------------------------
@@ -58,16 +93,17 @@ class TestHealthEndpoint:
         assert response.status_code == 200
 
     def test_health_payload_shape(self, test_client: TestClient) -> None:
-        """Health response must include status, version, and api_version."""
+        """Health response must include status, version, and api_version.
+
+        Note: Step 3 added ``db: "ok"`` to the response; this assertion now
+        checks that the three original Step-2 keys are still present.
+        """
         body = test_client.get("/api/health").json()
 
-        # Required keys
+        # Required keys (present since Step 2)
         assert "status" in body
         assert "version" in body
         assert "api_version" in body
-
-        # No extra keys that belong to later steps (e.g. "db")
-        assert "db" not in body, "Step 2 must NOT include the 'db' field; that's Step 3."
 
     def test_health_status_ok(self, test_client: TestClient) -> None:
         """Health status must be 'ok' while the process is running."""
@@ -89,25 +125,43 @@ class TestHealthEndpoint:
         """Health must be reachable under a custom api_prefix."""
         monkeypatch.setenv("SECRET_KEY", "test-secret")
         monkeypatch.setenv("API_PREFIX", "/v1")
+        _, db_path = _make_temp_db(monkeypatch)
 
+        from app.db.base import Base, get_engine
         from app.main import create_app
 
-        client = TestClient(create_app())
-        # Must be reachable under /v1/health
-        assert client.get("/v1/health").status_code == 200
-        # Must NOT be reachable under the default /api/health
-        assert client.get("/api/health").status_code == 404
+        engine = get_engine()
+        Base.metadata.create_all(engine)
+        try:
+            with TestClient(create_app()) as client:
+                # Must be reachable under /v1/health
+                assert client.get("/v1/health").status_code == 200
+                # Must NOT be reachable under the default /api/health
+                assert client.get("/api/health").status_code == 404
+        finally:
+            Base.metadata.drop_all(engine)
+            if db_path.exists():
+                db_path.unlink()
 
     def test_health_custom_api_version(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """api_version in the health response must reflect the configured value."""
         monkeypatch.setenv("SECRET_KEY", "test-secret")
         monkeypatch.setenv("API_VERSION", "42")
+        _, db_path = _make_temp_db(monkeypatch)
 
+        from app.db.base import Base, get_engine
         from app.main import create_app
 
-        client = TestClient(create_app())
-        body = client.get("/api/health").json()
-        assert body["api_version"] == 42
+        engine = get_engine()
+        Base.metadata.create_all(engine)
+        try:
+            with TestClient(create_app()) as client:
+                body = client.get("/api/health").json()
+                assert body["api_version"] == 42
+        finally:
+            Base.metadata.drop_all(engine)
+            if db_path.exists():
+                db_path.unlink()
 
 
 # ---------------------------------------------------------------------------
