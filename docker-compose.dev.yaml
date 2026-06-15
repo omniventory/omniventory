@@ -1,0 +1,15 @@
+# Omniventory — Dev compose override
+# Stacks on top of docker-compose.yaml to add the build step and dev env.
+# Run with:  docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build
+#
+# This file overrides the `app` service from docker-compose.yaml:
+#   - Adds `build:` so the image is built locally from source
+#   - Sets ENVIRONMENT=development
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    environment:
+      ENVIRONMENT: development

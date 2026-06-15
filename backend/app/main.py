@@ -8,8 +8,16 @@ function, which is called explicitly (e.g. by the ASGI server or by tests).
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+# Path to the directory where the Vite build output lands inside the container.
+# When running in dev / tests with no built frontend this directory won't exist
+# and static serving is silently skipped (the condition is checked at startup).
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 def _bootstrap_admin() -> None:
@@ -155,5 +163,61 @@ def create_app() -> FastAPI:
     root_router.include_router(auth.router)
 
     app.include_router(root_router, prefix=settings.api_prefix)
+
+    # ------------------------------------------------------------------ #
+    # Static SPA serving (Step 7)                                          #
+    # Mounted ONLY when the built frontend directory exists, so dev / tests #
+    # / make codegen runs without a frontend build are unaffected.         #
+    #                                                                      #
+    # Mount order matters: the API router is registered above, so          #
+    # /api/* routes take precedence over the static mount.                 #
+    #                                                                      #
+    # The catch-all SPA route is marked include_in_schema=False so it      #
+    # never appears in the OpenAPI spec and `make codegen` stays a no-op.  #
+    # ------------------------------------------------------------------ #
+    if _STATIC_DIR.is_dir():
+        # Mount named static assets (hashed filenames from Vite build).
+        # "html=False" so that 404s fall through to our catch-all below.
+        app.mount(
+            "/assets",
+            StaticFiles(directory=str(_STATIC_DIR / "assets")),
+            name="static-assets",
+        )
+
+        # Serve well-known top-level files from the static root
+        # (manifest.webmanifest, icons, sw.js, …) via a secondary mount.
+        # We mount it at /static-root internally but expose it at root via
+        # the catch-all below for everything that isn't /api or /assets.
+        _index_html = _STATIC_DIR / "index.html"
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def spa_fallback(full_path: str) -> FileResponse:
+            """Serve the SPA index.html for all non-API routes (history fallback).
+
+            The ``include_in_schema=False`` flag keeps this route invisible to
+            the OpenAPI document generator, ensuring ``make codegen`` is a
+            true no-op even when the static directory exists.
+
+            Unregistered ``/api/*`` paths are short-circuited to 404 so that
+            client typos and not-yet-implemented endpoints return a JSON 404
+            instead of SPA HTML.  The prefix is derived from
+            ``settings.api_prefix`` (default ``/api``) with the leading slash
+            stripped, so the check stays correct if the prefix is reconfigured.
+            Registered API routes (``/api/health``, ``/api/auth/*``, docs)
+            continue to be matched before this catch-all ever fires.
+            """
+            # Short-circuit unregistered /api/* paths → 404 JSON.
+            # full_path has no leading slash (Starlette strips it from the
+            # path parameter), so we compare against the prefix without "/".
+            api_prefix = settings.api_prefix.lstrip("/")  # e.g. "api"
+            if full_path == api_prefix or full_path.startswith(api_prefix + "/"):
+                raise HTTPException(status_code=404)
+
+            # Try the exact path first (e.g. /icon-192.png, /manifest.webmanifest)
+            candidate = _STATIC_DIR / full_path
+            if candidate.is_file():
+                return FileResponse(str(candidate))
+            # Fall back to index.html for all SPA client-side routes
+            return FileResponse(str(_index_html))
 
     return app

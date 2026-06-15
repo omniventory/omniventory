@@ -1,0 +1,150 @@
+"""Step 7 regression tests: single-container Docker + static SPA serving.
+
+Focused on the catch-all SPA fallback behaviour:
+- Unregistered ``/api/<path>`` → 404 JSON (must NOT return SPA HTML).
+- SPA client-side routes (e.g. ``/some/spa/route``) → 200 + index.html.
+- Registered API route (``/api/health``) → 200 JSON (unchanged).
+
+Static serving is only activated when the built static directory exists at
+``backend/static/``.  In the normal test run that directory is absent, so the
+catch-all is never registered and the tests above would trivially pass (or
+even miss the bug).  To exercise the real code path these tests create a
+temporary directory containing a minimal ``index.html``, monkeypatch the
+module-level ``app.main._STATIC_DIR`` to point at it, and rebuild the app.
+The temp dir is cleaned up automatically via ``tmp_path`` (pytest built-in).
+"""
+
+import os
+import tempfile
+from collections.abc import Generator
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# Helpers / fixtures
+# ---------------------------------------------------------------------------
+
+
+def _make_temp_db_url() -> tuple[str, Path]:
+    """Return a (url, path) pair for a fresh temp-file SQLite DB."""
+    fd, path_str = tempfile.mkstemp(suffix=".db", prefix="omniventory_step7_")
+    os.close(fd)
+    path = Path(path_str)
+    path.unlink()  # Start empty; SQLAlchemy will create it.
+    return f"sqlite:///{path_str}", path
+
+
+@pytest.fixture()
+def static_client(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> Generator[TestClient]:
+    """TestClient with static serving active against a temp directory.
+
+    Steps:
+    1. Create a minimal ``static/`` tree under ``tmp_path`` (just ``index.html``
+       and an ``assets/`` subdirectory so StaticFiles mounts don't error).
+    2. Monkeypatch ``app.main._STATIC_DIR`` to point at that temp dir.
+    3. Set the required env vars (SECRET_KEY, ENVIRONMENT=test, DATABASE_URL).
+    4. Clear lru_cache singletons so the patched values take effect.
+    5. Build a fresh app and yield a ``TestClient``.
+    6. Teardown clears caches again; ``tmp_path`` is cleaned by pytest.
+    """
+    # --- Build minimal static tree -----------------------------------------
+    static_dir = tmp_path / "static"
+    static_dir.mkdir()
+    (static_dir / "index.html").write_text("<!doctype html><html><body>SPA</body></html>")
+    assets_dir = static_dir / "assets"
+    assets_dir.mkdir()
+    # A dummy asset so the /assets mount has at least one file.
+    (assets_dir / "main.js").write_text("// bundle")
+
+    # --- Patch module-level _STATIC_DIR BEFORE create_app() is called -------
+    import app.main as main_mod
+
+    monkeypatch.setattr(main_mod, "_STATIC_DIR", static_dir)
+
+    # --- Env / cache setup --------------------------------------------------
+    url, db_path = _make_temp_db_url()
+    monkeypatch.setenv("SECRET_KEY", "test-secret-key-step7")
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    monkeypatch.setenv("DATABASE_URL", url)
+
+    from app.config import get_settings
+    from app.db.base import get_engine
+
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+
+    # --- Create app + schema ------------------------------------------------
+    from app.db.base import Base
+    from app.main import create_app
+
+    engine = get_engine()
+    Base.metadata.create_all(engine)
+
+    app = create_app()
+    with TestClient(app, raise_server_exceptions=False) as client:
+        yield client
+
+    # --- Teardown -----------------------------------------------------------
+    Base.metadata.drop_all(engine)
+    get_settings.cache_clear()
+    get_engine.cache_clear()
+    if db_path.exists():
+        db_path.unlink()
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
+class TestSpaFallbackWithStaticServing:
+    """Catch-all SPA fallback behaviour when static serving is active."""
+
+    def test_unregistered_api_path_returns_404_not_spa(self, static_client: TestClient) -> None:
+        """GET /api/<nonexistent> must return 404, not 200 SPA HTML.
+
+        This is the regression guard for the finding in M0-step7-review.md:
+        the catch-all was swallowing unregistered /api/* paths and returning
+        the SPA index.html with status 200.
+        """
+        response = static_client.get("/api/nonexistent")
+        assert response.status_code == 404, (
+            f"Expected 404 for unregistered /api/nonexistent but got {response.status_code}; "
+            f"body: {response.text[:200]}"
+        )
+        # Must NOT return SPA HTML.
+        assert "<!doctype html>" not in response.text.lower(), (
+            "Unregistered /api/* path must not return SPA HTML"
+        )
+
+    def test_unregistered_api_nested_path_returns_404(self, static_client: TestClient) -> None:
+        """GET /api/v99/deep/path also returns 404 (not SPA HTML)."""
+        response = static_client.get("/api/v99/deep/path")
+        assert response.status_code == 404
+
+    def test_bare_api_prefix_returns_404(self, static_client: TestClient) -> None:
+        """GET /api (no trailing slash) also returns 404."""
+        response = static_client.get("/api")
+        assert response.status_code == 404
+
+    def test_spa_client_side_route_returns_index_html(self, static_client: TestClient) -> None:
+        """GET /some/spa/route must return 200 with the SPA index.html content."""
+        response = static_client.get("/some/spa/route")
+        assert response.status_code == 200, (
+            f"Expected 200 for SPA route but got {response.status_code}"
+        )
+        assert "<!doctype html>" in response.text.lower(), "SPA route must return index.html"
+
+    def test_registered_api_health_still_returns_200(self, static_client: TestClient) -> None:
+        """GET /api/health must still return 200 JSON (registered route unaffected)."""
+        response = static_client.get("/api/health")
+        assert response.status_code == 200, (
+            f"Registered /api/health broken; got {response.status_code}"
+        )
+        body = response.json()
+        assert body.get("status") == "ok"

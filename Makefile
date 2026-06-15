@@ -2,7 +2,7 @@
 # Thin aliases so humans and CI call the same commands.
 # All targets delegate to the toolchain inside backend/ or frontend/.
 
-.PHONY: check lint test codegen
+.PHONY: check lint test codegen docker-build docker-dev
 
 # Run all quality gates (lint + type-check + tests on both sides)
 check: lint test
@@ -36,3 +36,13 @@ codegen:
 	cd backend && uv run python scripts/export_openapi.py
 	@echo "==> Codegen step 2: openapi-typescript → frontend/src/api/schema.d.ts"
 	cd frontend && pnpm exec openapi-typescript ../openapi.json -o src/api/schema.d.ts
+
+# Docker targets (Step 7)
+# Build the production image locally
+docker-build:
+	docker build -f docker/Dockerfile -t omniventory:latest .
+
+# Run with dev override (builds the image locally from source)
+# Requires a .env file with at least SECRET_KEY set.
+docker-dev:
+	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build
