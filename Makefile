@@ -42,7 +42,9 @@ codegen:
 docker-build:
 	docker build -f docker/Dockerfile -t omniventory:latest .
 
-# Run with dev override (builds the image locally from source)
-# Requires a .env file with at least SECRET_KEY set.
+# Run with dev override (builds the image locally from source).
+# Runs the one-shot `migrate` service first, then starts `app` once migrations
+# succeed (fail-closed). Reads config from .env (SECRET_KEY may be left blank;
+# it is auto-generated and persisted on first run).
 docker-dev:
-	docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build
+	docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build

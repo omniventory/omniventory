@@ -1,11 +1,15 @@
 #!/bin/sh
 # Omniventory container entrypoint.
-# Runs Alembic migrations against the volume-mounted SQLite DB, then
-# hands off to the uvicorn server (the CMD from Dockerfile or compose).
+#
+# NOTE: Alembic migrations are intentionally NOT run here. A dedicated one-shot
+# `migrate` service in docker-compose.yml runs `alembic upgrade head`, and the
+# `app` service starts only after it completes successfully
+# (depends_on: condition: service_completed_successfully) — i.e. fail-closed:
+# if migrations fail, the app is never started.
+#
+# This entrypoint just execs the given command:
+#   - the `app` service runs the Dockerfile CMD (uvicorn)
+#   - the `migrate` service overrides the command with `alembic upgrade head`
 set -e
 
-echo "[entrypoint] Running Alembic migrations..."
-alembic upgrade head
-
-echo "[entrypoint] Starting application..."
 exec "$@"

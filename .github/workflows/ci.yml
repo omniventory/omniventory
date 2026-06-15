@@ -152,40 +152,66 @@ jobs:
       - name: Build image
         run: docker build -f docker/Dockerfile -t omniventory:ci .
 
-      - name: Smoke test — start container and check /api/health
+      - name: Validate compose config
+        # Ensures the compose files (incl. the migrate service + the app's
+        # depends_on: service_completed_successfully gate) are valid.
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml config -q
+
+      - name: Smoke test — run migration (one-shot), then start the app
         run: |
+          # Migrations now run in their own one-shot container (mirroring the
+          # compose `migrate` service); the entrypoint no longer migrates.
+          # A shared named volume carries the migrated DB to the app container.
+          # Named volumes inherit the image's /app/data ownership (uid 1000),
+          # so the app user can write without bind-mount permission juggling.
+          docker volume create omniventory-ci-data
+
+          # Fail-closed: if migration exits non-zero this step fails and the
+          # app is never started.
+          docker run --rm \
+            -v omniventory-ci-data:/app/data \
+            -e SECRET_KEY=ci-test-secret-key \
+            -e DATABASE_URL=sqlite:////app/data/omniventory.db \
+            omniventory:ci alembic upgrade head
+
+          # Start the app against the already-migrated volume.
           docker run -d \
             --name omniventory-ci \
+            -v omniventory-ci-data:/app/data \
             -p 8000:8000 \
             -e SECRET_KEY=ci-test-secret-key \
             -e ENVIRONMENT=production \
             -e DATABASE_URL=sqlite:////app/data/omniventory.db \
-            -e ADMIN_BOOTSTRAP_EMAIL=admin@example.com \
-            -e ADMIN_BOOTSTRAP_PASSWORD=ci-test-password \
             omniventory:ci
 
-          # Wait for the container to be healthy (up to 60 s)
-          for i in $(seq 1 12); do
+          # Wait for the container to be healthy (up to 90 s)
+          for i in $(seq 1 18); do
             STATUS=$(docker inspect --format='{{.State.Health.Status}}' omniventory-ci 2>/dev/null || echo "starting")
-            echo "Health status ($i/12): $STATUS"
+            echo "Health status ($i/18): $STATUS"
             if [ "$STATUS" = "healthy" ]; then
               break
             fi
             sleep 5
           done
 
-          # Verify /api/health returns HTTP 200 with db:ok
-          RESPONSE=$(docker exec omniventory-ci python -c "
+          # /api/health must report db:ok ...
+          docker exec omniventory-ci python -c "
           import urllib.request, json, sys
-          res = urllib.request.urlopen('http://127.0.0.1:8000/api/health')
-          body = json.loads(res.read())
-          print(json.dumps(body))
+          body = json.loads(urllib.request.urlopen('http://127.0.0.1:8000/api/health').read())
+          print('health:', body)
           sys.exit(0 if body.get('db') == 'ok' else 1)
-          ")
-          echo "Health response: $RESPONSE"
+          "
+          # ... and setup-status must be true, proving the migrated tables exist.
+          docker exec omniventory-ci python -c "
+          import urllib.request, json, sys
+          body = json.loads(urllib.request.urlopen('http://127.0.0.1:8000/api/auth/setup-status').read())
+          print('setup-status:', body)
+          sys.exit(0 if body.get('setup_required') is True else 1)
+          "
 
       - name: Clean up
         if: always()
         run: |
           docker rm -f omniventory-ci || true
+          docker volume rm omniventory-ci-data || true
           docker rmi omniventory:ci || true

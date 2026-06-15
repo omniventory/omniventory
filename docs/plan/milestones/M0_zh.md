@@ -36,7 +36,7 @@
 | 认证 | **Session-cookie**：不透明 session id 装进 `HttpOnly` + `Secure` + `SameSite=Lax` cookie；服务端 SQLite `sessions` 表。v1 不用 JWT。`secret_key` 首次运行时**自动生成并持久化**到 `app_config`（未通过 env 设置时）。首次运行**引导**（`GET/POST /auth/setup-status` / `/auth/setup`）替代基于 env 的 admin bootstrap。 |
 | 契约 | **契约优先**：FastAPI OpenAPI → `openapi-typescript` → `frontend/src/api/schema.d.ts`；运行时调用走 **`openapi-fetch`**。**no-drift CI 闸**（§6）。 |
 | 仓库形态 | **Monorepo**：本仓库，根下 `backend/` + `frontend/`。 |
-| 部署 | **单 Docker 容器**：内嵌已构建前端 + FastAPI + SQLite volume。**生产 `docker-compose.yaml`**（用预构建 image，无 `build`）+ **`docker-compose.dev.yaml`** override（开发时加 `build`）。 |
+| 部署 | **单 Docker 容器**：内嵌已构建前端 + FastAPI + SQLite（bind mount）。**生产 `docker-compose.yml`**（用预构建 image，无 `build`）+ **`docker-compose.dev.yml`** override（开发时加 `build`）。迁移由一次性 `migrate` 服务跑，app 仅在其成功后启动（fail-closed）。 |
 
 > 按 `AGENTS.md`，这些属"foundations"；M0 落地后再填 `AGENTS.md` 的 "Tech stack & commands" 一节（且仅在那时）。
 
@@ -96,8 +96,8 @@ omniventory/
 │           └── Setup.tsx         # 首次运行引导（创建第一个 admin）
 ├── data/                         # SQLite bind-mount 目标（git-ignored；uid/gid 1000:1000 属主）
 ├── openapi.json                  # 生成的契约快照（提交入库；被 drift 闸卡）
-├── docker-compose.yaml           # 生产：app 用预构建 image（无 build）
-├── docker-compose.dev.yaml       # 开发 override：加 build + 开发环境
+├── docker-compose.yml            # 生产：migrate（一次性）+ app，用预构建 image
+├── docker-compose.dev.yml        # 开发 override：加 build + 开发环境
 ├── docker/
 │   └── Dockerfile                # 多阶段；单一最终镜像
 ├── .dockerignore
@@ -204,24 +204,26 @@ omniventory/
 - **backend**：装 uv（+缓存）、`ruff`、`mypy`、`pytest`、对临时 SQLite 跑 alembic upgrade（迁移干净应用）。
 - **frontend**：装 pnpm（**+ pnpm store 缓存**）与 node、`eslint`、`tsc`、`vitest`、`vite build`。
 - **contract**：`make codegen` + `git diff --exit-code`（no-drift 闸）。
-- **docker**：`docker build` 单镜像（冒烟：容器起得来、`/api/health` 绿）。
+- **docker**：`docker build` 单镜像；`docker compose config` 校验 compose 文件；冒烟测试先跑一次性**迁移**，再启动容器并检查 `/api/health`（`db:ok`）+ `/api/auth/setup-status`。
 
 > CI 分钟数要省（免费档有上限）：**缓存 pnpm store 与 uv 缓存**，让重复运行时安装步骤近乎瞬时。
 
 ### 8.2 Docker（`docker/Dockerfile`，多阶段 → 单镜像）
 1. **阶段 1（前端）**：`pnpm install --frozen-lockfile` + `pnpm build` → 静态资源。
 2. **阶段 2（后端）**：`uv sync --frozen` 装进精简 Python 基础镜像。
-3. **最终**：拷入后端 + 已构建前端；FastAPI 在 `/api/*` 提供 API，其余路径提供静态 SPA；SQLite 落在 **bind mount**（`/app/data`；无 `VOLUME` 指令）；启动时跑 alembic upgrade；`HEALTHCHECK` 打 `/api/health`。单容器、单端口。容器以 **uid/gid `1000:1000`** 运行，使 bind-mounted SQLite 文件归宿主用户所有——备份无需 sudo。
+3. **最终**：拷入后端 + 已构建前端；FastAPI 在 `/api/*` 提供 API，其余路径提供静态 SPA；SQLite 落在 **bind mount**（`/app/data`；无 `VOLUME` 指令）；**entrypoint 不跑迁移**——由专门的 compose `migrate` 服务负责（§8.3）；`HEALTHCHECK` 打 `/api/health`。单容器、单端口。容器以 **uid/gid `1000:1000`** 运行，使 bind-mounted SQLite 文件归宿主用户所有——备份无需 sudo。
 
 ### 8.3 Compose（生产 + 开发 override）
 两个根级 compose 文件，用 Compose 的 override 机制叠加：
-- **`docker-compose.yaml`（生产）**：`app` 服务从**预构建 `image:`** 运行（无 `build:`），SQLite 落 **bind mount**（`${DATA_DIR:-./data}:/app/data`；无命名 volume），`user: "1000:1000"` 确保文件归宿主所有，宿主端口来自 `${APP_PORT:-8000}`，env 来自 `.env`，`restart`、healthcheck。
-- **`docker-compose.dev.yaml`（开发 override）**：覆盖 `app`，加 **`build:`**（context `.`、`docker/Dockerfile`）+ 开发专用 env；设计成叠在生产文件之上。
+- **`docker-compose.yml`（生产）** 定义两个服务：
+  - **`migrate`** —— 一次性运行器（`command: ["alembic", "upgrade", "head"]`），与 app 共用镜像 / bind mount / `user`，`restart: "no"`、关闭 healthcheck。它应用迁移后退出。
+  - **`app`** —— 从**预构建 `image:`** 运行（无 `build:`），SQLite 落同一 **bind mount**（`${DATA_DIR:-./data}:/app/data`；无命名 volume），`user: "1000:1000"` 确保文件归宿主所有，宿主端口来自 `${APP_PORT:-8000}`，env 来自 `.env`，`restart`、healthcheck。它 **`depends_on` `migrate` 且 `condition: service_completed_successfully`**，故 app **仅在迁移成功后**才启动；迁移失败则 app 永不启动（**fail-closed**）。
+- **`docker-compose.dev.yml`（开发 override）**：给 `migrate` 和 `app` **两个服务**都加 **`build:`**（context `.`、`docker/Dockerfile`）+ 开发 env（用 YAML anchor 共享）；设计成叠在生产文件之上。
 - **开发启动命令：**
   ```bash
-  docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build
+  docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
   ```
-  生产只用生产文件单独跑（用预构建 image，不 build）。
+  生产只用生产文件单独跑（`docker compose up -d`，用预构建 image，不 build）。
 - **`.env.example`** 记录 `APP_PORT`、`DATA_DIR`、`SECRET_KEY`（空 = 自动生成）。
 
 ---
@@ -313,12 +315,12 @@ omniventory/
 ### 步骤 7 — 单容器 Docker + 生产/开发 compose
 - **目标:** 一个镜像跑起整套；生产 + 开发 compose，配 override 工作流。
 - **构建:**
-  - `docker/Dockerfile`：多阶段——(1) `pnpm install --frozen-lockfile` + `pnpm build`；(2) `uv sync --frozen`；(3) 精简最终镜像拷入后端 + 已构建静态；FastAPI 提供 `/api/*` + 带 **history 回退**的 SPA；启动跑 `alembic upgrade head`；`HEALTHCHECK` → `/api/health`；单端口。
-  - `docker-compose.yaml`（**生产**）：`app` 从**预构建 `image:`**（无 `build:`）、SQLite 落 **bind mount**（`${DATA_DIR:-./data}:/app/data`）、`user: "1000:1000"`、宿主端口 `${APP_PORT:-8000}`、env 来自 `.env`、`restart`、healthcheck。
-  - `docker-compose.dev.yaml`（**开发 override**）：覆盖 `app` 加 **`build:`**（context `.`、`docker/Dockerfile`）+ 开发 env；叠在生产文件之上。
-  - 记录开发命令：`docker compose -f docker-compose.yaml -f docker-compose.dev.yaml up -d --build`。
-  - CI **docker** 作业：构建镜像 + 冒烟（`docker run` → curl `/api/health`）。
-- **测试:** 镜像构建；容器以 uid 1000:1000 启动；迁移 0001/0002/0003 应用到全新 bind-mounted DB；SQLite 文件归属 1000:1000；`/api/health` 绿；setup-status 可达。
+  - `docker/Dockerfile`：多阶段——(1) `pnpm install --frozen-lockfile` + `pnpm build`；(2) `uv sync --frozen`；(3) 精简最终镜像拷入后端 + 已构建静态；FastAPI 提供 `/api/*` + 带 **history 回退**的 SPA；**entrypoint 只 exec 命令（不跑迁移）**；`HEALTHCHECK` → `/api/health`；单端口。
+  - `docker-compose.yml`（**生产**）：一次性 **`migrate`** 服务（`alembic upgrade head`，`restart: "no"`）+ **`app`** 服务，从**预构建 `image:`**（无 `build:`）、SQLite 落 **bind mount**（`${DATA_DIR:-./data}:/app/data`）、`user: "1000:1000"`、宿主端口 `${APP_PORT:-8000}`、env 来自 `.env`、`restart`、healthcheck。`app` `depends_on` `migrate` 且 `condition: service_completed_successfully`（**fail-closed**：仅迁移成功才启动 app）。
+  - `docker-compose.dev.yml`（**开发 override**）：给 `migrate` 和 `app` 都加 **`build:`**（context `.`、`docker/Dockerfile`）+ 开发 env（共享 YAML anchor）；叠在生产文件之上。
+  - 记录开发命令：`docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build`。
+  - CI **docker** 作业：构建镜像、`docker compose config` 校验，再冒烟（先跑一次性迁移 → 启动 app → curl `/api/health` + `/api/auth/setup-status`）。
+- **测试:** 镜像构建；`docker compose up` 先跑 `migrate`（受闸控）再跑 `app`；迁移 0001/0002/0003 以 uid 1000:1000 应用到全新 bind-mounted DB；SQLite 文件归属 1000:1000；`/api/health` 绿；setup-status 可达；**fail-closed**：迁移失败时 `app` 不启动。
 - **完成判据:** 生产构建与开发 override 都能跑；CI docker 作业绿。
 - **不该做:** 无 k8s/编排、无反向代理/TLS、无 Postgres。
 - **Commit:** `build: single-container Dockerfile and prod/dev compose`
@@ -345,14 +347,14 @@ omniventory/
 
 里程碑末作者手动走查（每条展开一个 roadmap 🟢 要点）：
 
-1. **构建镜像**：`docker build -f docker/Dockerfile .` 成功。
-2. **运行它**：
+1. **构建镜像**：`make docker-build`（或 `docker build -f docker/Dockerfile -t omniventory:latest .`）成功。
+2. **运行它**（compose 先跑 `migrate` 服务，再起 app）：
    ```bash
-   mkdir -p ./data
-   docker run --user 1000:1000 -e SECRET_KEY= -e ENVIRONMENT=production \
-     -v "$PWD/data:/app/data" -p 8000:8000 omniventory:latest
+   cp .env.example .env        # SECRET_KEY 可留空 → 自动生成
+   mkdir -p ./data             # 宿主 bind-mount 目录（归你所有，uid 1000）
+   docker compose up -d
    ```
-   容器启动，把 Alembic 迁移 0001/0002/0003 干净地应用到全新空 bind-mounted DB、无错。`ls -ln ./data` 显示 SQLite 文件归属 `1000:1000`。
+   一次性 `migrate` 服务把 Alembic 迁移 0001/0002/0003 干净地应用到全新空 bind-mounted DB 并退出 0；**之后** `app` 才启动（fail-closed）。`ls -ln ./data` 显示 SQLite 文件归属 `1000:1000`。（迁移失败则 `app` 不启动——用 `docker compose ps -a` 可验证。）
 3. **健康**：`curl /api/health` → `{status:"ok", db:"ok", version:...}`。
 4. **首次运行引导**：浏览器打开应用 → 跳转到 **Setup 页面** → 填入 email + 密码 → admin 账号创建 → 跳转至 Login → 登录 → 进入响应式壳；cookie 为 `HttpOnly`（JS 看不到）；刷新仍登录；登出回到登录页。
 5. **Secret 自动生成**：`SECRET_KEY` 为空；应用已自动生成并将密钥持久化至 `app_config`。重启容器复用持久化密钥——session 跨重启存活。
