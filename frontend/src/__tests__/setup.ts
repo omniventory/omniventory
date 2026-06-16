@@ -34,3 +34,13 @@ Object.defineProperty(window, "ResizeObserver", {
   writable: true,
   value: ResizeObserverStub,
 });
+
+/**
+ * Stub Element.prototype.scrollIntoView (jsdom does not implement it).
+ * Mantine's Combobox (the engine behind Select) scrolls the active option
+ * into view when its dropdown opens, which otherwise throws in jsdom.
+ */
+Object.defineProperty(Element.prototype, "scrollIntoView", {
+  writable: true,
+  value: () => {},
+});

@@ -26,7 +26,7 @@ import {
   Button,
   ActionIcon,
   TextInput,
-  NumberInput,
+  Select,
   Modal,
   Alert,
   Tree,
@@ -107,7 +107,8 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
 
   // Form state for modals
   const [formName, setFormName] = useState("");
-  const [formParentId, setFormParentId] = useState<number | "">("");
+  // For the reparent modal: "" means root (null parent), otherwise a stringified node id.
+  const [formParentId, setFormParentId] = useState<string>("");
 
   const tree = useTree();
 
@@ -182,7 +183,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
   }
 
   function openReparent(nodeId: number, currentParentId: number | null) {
-    setFormParentId(currentParentId ?? "");
+    setFormParentId(currentParentId !== null ? String(currentParentId) : "");
     setActionError(null);
     setModal({ kind: "reparent", nodeId, currentParentId });
   }
@@ -266,6 +267,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
     setBusy(true);
     setActionError(null);
     const newParentId = formParentId === "" ? null : Number(formParentId);
+    // newParentId is null (root) or a valid numeric id from the picker.
     try {
       if (resource === "locations") {
         const { error } = await client.PATCH("/api/locations/{location_id}", {
@@ -354,6 +356,46 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
       setBusy(false);
     }
   }
+
+  // ── Reparent helpers ───────────────────────────────────────────────────────
+
+  /**
+   * Collect the ID of the given node and all its descendants (recursive).
+   * Used to filter out cycle-unsafe choices from the reparent picker.
+   */
+  function collectDescendantIds(nodeId: number): Set<number> {
+    const ids = new Set<number>();
+    function walk(id: number) {
+      ids.add(id);
+      for (const [nid, n] of flatMap) {
+        if (n.parent_id === id) walk(nid);
+      }
+    }
+    walk(nodeId);
+    return ids;
+  }
+
+  /**
+   * Build the Select option list for the reparent modal.
+   * - First entry: root sentinel ("" → parent_id = null).
+   * - Remaining entries: every node in flatMap EXCEPT the moving node and its
+   *   descendants (cycle-safe), sorted by name.
+   *
+   * Memoised on flatMap + modal so it only recomputes when the picker opens.
+   */
+  const reparentOptions = useMemo(() => {
+    const rootOption = { value: "", label: "— (root / no parent)" };
+    if (modal.kind !== "reparent") return [rootOption];
+
+    const excluded = collectDescendantIds(modal.nodeId);
+    const nodes = [...flatMap.values()]
+      .filter((n) => !excluded.has(n.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((n) => ({ value: String(n.id), label: n.name }));
+
+    return [rootOption, ...nodes];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flatMap, modal]);
 
   // ── Selected node info ─────────────────────────────────────────────────────
   const selectedNode = selectedId !== null ? flatMap.get(selectedId) : null;
@@ -624,13 +666,14 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
               {actionError}
             </Alert>
           )}
-          <NumberInput
-            label="New parent ID (leave empty for root)"
+          <Select
+            label={`New parent ${label.toLowerCase()} (choose "root" to move to top level)`}
+            data={reparentOptions}
             value={formParentId}
-            onChange={(v) => setFormParentId(v === "" ? "" : Number(v))}
-            min={1}
-            allowDecimal={false}
-            data-testid="reparent-input"
+            onChange={(v) => setFormParentId(v ?? "")}
+            allowDeselect={false}
+            searchable
+            data-testid="reparent-select"
           />
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal} disabled={busy}>

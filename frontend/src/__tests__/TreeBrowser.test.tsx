@@ -12,6 +12,11 @@
  *  - Delete happy path: DELETE succeeds → tree reloads.
  *  - Delete-guard 409: server returns 409 → error message renders inside the modal.
  *  - Container-as-item: location node with item_instance_id shows the asset badge.
+ *  - Reparent happy path: Select picker shown, pick existing node → PATCH with parent_id.
+ *  - Reparent root option: pick "root" → PATCH with parent_id: null.
+ *  - Reparent cycle-safety: node being moved and its descendants not in picker options.
+ *  - Reparent backend error: server 4xx detail message shown in modal.
+ *  - Reparent categories: same behaviour for resource="categories".
  *
  * Client mocking: vi.mock the typed client module (M0 style).
  */
@@ -334,6 +339,305 @@ describe("TreeBrowser — delete-guard 409 surfaced", () => {
       expect(
         screen.getByText(/cannot delete.*location still has child/i),
       ).toBeDefined();
+    });
+  });
+});
+
+// ── Reparent (move) tests ─────────────────────────────────────────────────────
+
+describe("TreeBrowser — reparent modal shows Select picker (not numeric input)", () => {
+  beforeEach(() => {
+    makeSuccessGetLocations();
+  });
+
+  it("opens reparent modal with a Select combobox, no NumberInput", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Home"));
+
+    // Select the "Garage" node (id=2) by clicking it
+    fireEvent.click(screen.getByText("Garage"));
+
+    // The selected-node panel appears; click "Reparent"
+    const reparentBtn = await screen.findByRole("button", { name: /reparent/i });
+    fireEvent.click(reparentBtn);
+
+    // The modal should show the Select (not the old numeric input)
+    await waitFor(() => {
+      // The reparent-select wrapper is present
+      expect(screen.getByTestId("reparent-select")).toBeDefined();
+      // The old "New parent ID" label must not appear
+      expect(screen.queryByText(/new parent id/i)).toBeNull();
+    });
+  });
+});
+
+describe("TreeBrowser — reparent happy path (pick an existing node)", () => {
+  beforeEach(() => {
+    makeSuccessGetLocations();
+    vi.mocked(client.PATCH).mockResolvedValue({
+      data: {},
+      response: new Response(null, { status: 200 }),
+    } as AnyClientResult);
+  });
+
+  it("selecting an existing node option → PATCH with its numeric parent_id", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Select "Garage" (id=2, parent_id=1)
+    fireEvent.click(screen.getByText("Garage"));
+
+    const reparentBtn = await screen.findByRole("button", { name: /reparent/i });
+    fireEvent.click(reparentBtn);
+
+    // data-testid goes directly onto the <input> in Mantine v7 Select
+    const selectInput = await screen.findByTestId("reparent-select");
+    // Open the dropdown by clicking the select input
+    fireEvent.click(selectInput);
+
+    // Options rendered in a portal (role="option")
+    // Toolbox (id=3) is a valid sibling target (not Garage itself or its descendants)
+    await waitFor(() => {
+      const toolboxOption = [...document.querySelectorAll('[role="option"]')].find(
+        (el) => el.textContent?.includes("Toolbox"),
+      );
+      expect(toolboxOption).toBeDefined();
+    });
+
+    const toolboxOption = [...document.querySelectorAll('[role="option"]')].find(
+      (el) => el.textContent?.includes("Toolbox"),
+    );
+    fireEvent.click(toolboxOption!);
+
+    // Click Move
+    const moveBtn = screen.getByRole("button", { name: /^move$/i });
+    fireEvent.click(moveBtn);
+
+    await waitFor(() => {
+      expect(client.PATCH).toHaveBeenCalledWith(
+        "/api/locations/{location_id}",
+        expect.objectContaining({
+          params: { path: { location_id: 2 } },
+          body: expect.objectContaining({ parent_id: 3 }),
+        }),
+      );
+    });
+  });
+});
+
+describe("TreeBrowser — reparent root option → parent_id: null", () => {
+  beforeEach(() => {
+    makeSuccessGetLocations();
+    vi.mocked(client.PATCH).mockResolvedValue({
+      data: {},
+      response: new Response(null, { status: 200 }),
+    } as AnyClientResult);
+  });
+
+  it("selecting 'root' option → PATCH with parent_id: null", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Select "Garage" (id=2, currently child of Home id=1)
+    fireEvent.click(screen.getByText("Garage"));
+
+    const reparentBtn = await screen.findByRole("button", { name: /reparent/i });
+    fireEvent.click(reparentBtn);
+
+    // data-testid is on the <input> itself in Mantine v7 Select
+    const selectInput = await screen.findByTestId("reparent-select");
+    fireEvent.click(selectInput);
+
+    // Find and click the root sentinel option
+    await waitFor(() => {
+      const rootOption = [...document.querySelectorAll('[role="option"]')].find(
+        (el) => el.textContent?.includes("root"),
+      );
+      expect(rootOption).toBeDefined();
+    });
+
+    const rootOption = [...document.querySelectorAll('[role="option"]')].find(
+      (el) => el.textContent?.includes("root"),
+    );
+    fireEvent.click(rootOption!);
+
+    const moveBtn = screen.getByRole("button", { name: /^move$/i });
+    fireEvent.click(moveBtn);
+
+    await waitFor(() => {
+      expect(client.PATCH).toHaveBeenCalledWith(
+        "/api/locations/{location_id}",
+        expect.objectContaining({
+          params: { path: { location_id: 2 } },
+          body: expect.objectContaining({ parent_id: null }),
+        }),
+      );
+    });
+  });
+});
+
+describe("TreeBrowser — reparent cycle-safety: node and descendants excluded", () => {
+  beforeEach(() => {
+    // Use a deeper tree: Home(1) → Garage(2) → Shelf(4)
+    vi.mocked(client.GET).mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          name: "Home",
+          description: null,
+          parent_id: null,
+          item_instance_id: null,
+          created_at: "2025-01-01T00:00:00Z",
+          children: [
+            {
+              id: 2,
+              name: "Garage",
+              description: null,
+              parent_id: 1,
+              item_instance_id: null,
+              created_at: "2025-01-01T00:00:00Z",
+              children: [
+                {
+                  id: 4,
+                  name: "Shelf",
+                  description: null,
+                  parent_id: 2,
+                  item_instance_id: null,
+                  created_at: "2025-01-01T00:00:00Z",
+                  children: [],
+                },
+              ],
+            },
+            {
+              id: 3,
+              name: "Kitchen",
+              description: null,
+              parent_id: 1,
+              item_instance_id: null,
+              created_at: "2025-01-01T00:00:00Z",
+              children: [],
+            },
+          ],
+        },
+      ],
+      response: new Response(null, { status: 200 }),
+    } as AnyClientResult);
+  });
+
+  it("picker excludes the moving node itself and its descendants", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Click "Garage" (id=2) to select it
+    fireEvent.click(screen.getByText("Garage"));
+
+    const reparentBtn = await screen.findByRole("button", { name: /reparent/i });
+    fireEvent.click(reparentBtn);
+
+    // data-testid is on the <input> itself in Mantine v7 Select
+    const selectInput = await screen.findByTestId("reparent-select");
+    fireEvent.click(selectInput);
+
+    // Wait for dropdown to open
+    await waitFor(() => {
+      // "Kitchen" (id=3) is a valid target and should appear
+      const kitchenOption = [...document.querySelectorAll('[role="option"]')].find(
+        (el) => el.textContent?.includes("Kitchen"),
+      );
+      expect(kitchenOption).toBeDefined();
+    });
+
+    const allOptions = [...document.querySelectorAll('[role="option"]')];
+    const optionTexts = allOptions.map((el) => el.textContent ?? "");
+
+    // "Garage" (the node being moved) must NOT appear
+    expect(optionTexts.some((t) => t.includes("Garage"))).toBe(false);
+    // "Shelf" (descendant of Garage) must NOT appear
+    expect(optionTexts.some((t) => t.includes("Shelf"))).toBe(false);
+    // "Home" (valid ancestor) MUST appear
+    expect(optionTexts.some((t) => t.includes("Home"))).toBe(true);
+    // "Kitchen" (sibling, valid) MUST appear
+    expect(optionTexts.some((t) => t.includes("Kitchen"))).toBe(true);
+    // Root option must appear
+    expect(optionTexts.some((t) => t.includes("root"))).toBe(true);
+  });
+});
+
+describe("TreeBrowser — reparent backend error is surfaced in modal", () => {
+  beforeEach(() => {
+    makeSuccessGetLocations();
+    vi.mocked(client.PATCH).mockResolvedValue({
+      error: { detail: "Cannot reparent: would create a cycle." },
+      response: new Response(null, { status: 400 }),
+    } as AnyClientResult);
+  });
+
+  it("shows the server error detail in the reparent modal", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Select "Garage" and open reparent modal
+    fireEvent.click(screen.getByText("Garage"));
+    const reparentBtn = await screen.findByRole("button", { name: /reparent/i });
+    fireEvent.click(reparentBtn);
+
+    // Click Move without changing the selection (current parent pre-selected)
+    await screen.findByTestId("reparent-select");
+    const moveBtn = screen.getByRole("button", { name: /^move$/i });
+    fireEvent.click(moveBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText(/cannot reparent.*would create a cycle/i)).toBeDefined();
+    });
+  });
+});
+
+describe("TreeBrowser — reparent works for categories resource", () => {
+  beforeEach(() => {
+    makeSuccessGetCategories();
+    vi.mocked(client.PATCH).mockResolvedValue({
+      data: {},
+      response: new Response(null, { status: 200 }),
+    } as AnyClientResult);
+  });
+
+  it("opens reparent modal for a category and calls PATCH on categories endpoint", async () => {
+    renderCategories();
+    await waitFor(() => screen.getByText("Power Tools"));
+
+    // Select "Power Tools" (id=11)
+    fireEvent.click(screen.getByText("Power Tools"));
+
+    const reparentBtn = await screen.findByRole("button", { name: /reparent/i });
+    fireEvent.click(reparentBtn);
+
+    // data-testid is on the <input> itself in Mantine v7 Select
+    const selectInput = await screen.findByTestId("reparent-select");
+    fireEvent.click(selectInput);
+
+    // Open dropdown and click root option
+    await waitFor(() => {
+      const rootOption = [...document.querySelectorAll('[role="option"]')].find(
+        (el) => el.textContent?.includes("root"),
+      );
+      expect(rootOption).toBeDefined();
+    });
+    const rootOption = [...document.querySelectorAll('[role="option"]')].find(
+      (el) => el.textContent?.includes("root"),
+    );
+    fireEvent.click(rootOption!);
+
+    const moveBtn = screen.getByRole("button", { name: /^move$/i });
+    fireEvent.click(moveBtn);
+
+    await waitFor(() => {
+      expect(client.PATCH).toHaveBeenCalledWith(
+        "/api/categories/{category_id}",
+        expect.objectContaining({
+          params: { path: { category_id: 11 } },
+          body: expect.objectContaining({ parent_id: null }),
+        }),
+      );
     });
   });
 });
