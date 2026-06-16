@@ -28,6 +28,8 @@ import { Setup } from "./pages/Setup";
 import { Dashboard } from "./pages/Dashboard";
 import { Locations } from "./pages/Locations";
 import { Categories } from "./pages/Categories";
+import { Items, ItemDetail } from "./pages/Items";
+import { InstanceDetail } from "./pages/InstanceDetail";
 import { client } from "./api/client";
 
 type AuthState = "loading" | "setup" | "authed" | "anon";
@@ -82,7 +84,9 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/locations" element={<Locations />} />
           <Route path="/categories" element={<Categories />} />
-          {/* Step 6 will add: /items, /items/:id, /instances/:id */}
+          <Route path="/items" element={<Items />} />
+          <Route path="/items/:id" element={<ItemDetail />} />
+          <Route path="/instances/:id" element={<InstanceDetail />} />
         </Routes>
       </AppShell>
     </BrowserRouter>

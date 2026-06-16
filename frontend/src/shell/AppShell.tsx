@@ -27,7 +27,7 @@ import {
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
-import { Sun, Moon, LogOut, Layout, MapPin, Tag } from "react-feather";
+import { Sun, Moon, LogOut, Layout, MapPin, Tag, Package } from "react-feather";
 import { client } from "../api/client";
 
 interface AppShellProps {
@@ -95,6 +95,12 @@ function NavContent({ onClose }: { onClose?: () => void }) {
         to="/categories"
         label="Categories"
         icon={<Tag size={16} />}
+        onClick={onClose}
+      />
+      <NavItem
+        to="/items"
+        label="Items"
+        icon={<Package size={16} />}
         onClick={onClose}
       />
     </Stack>
