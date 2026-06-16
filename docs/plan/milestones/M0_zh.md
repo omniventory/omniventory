@@ -289,7 +289,7 @@ omniventory/
 - **构建:**
   - `backend/scripts/export_openapi.py`：导入 app，以**稳定键序**写仓库根 `openapi.json`（确定性 diff）。
   - `Makefile` `codegen`：导出 `openapi.json` → `openapi-typescript openapi.json -o frontend/src/api/schema.d.ts`。
-  - `frontend/src/api/client.ts`：`openapi-fetch` `createClient<paths>({ baseUrl: '/api', credentials: 'include' })`。
+  - `frontend/src/api/client.ts`：`openapi-fetch` `createClient<paths>({ baseUrl: '', credentials: 'include' })`。（因路由挂在 `/api` 下,生成的 `schema.d.ts` path key 已自带 `/api`——故 `baseUrl` 保持 `''`,调用方用完整 key,如 `client.POST('/api/auth/login')`。用 `baseUrl: '/api'` 会双重前缀成 `/api/api/...`。）
   - 提交生成的 `openapi.json` + `frontend/src/api/schema.d.ts`。
   - CI **contract** 作业：`make codegen` 然后 `git diff --exit-code openapi.json frontend/src/api/schema.d.ts`。
 - **测试:** 干净树上 `make codegen` 为 no-op（diff 空）；临时改一个端点确认闸变红，再回滚——**不留痕**。
@@ -305,7 +305,7 @@ omniventory/
   - PWA：`vite-plugin-pwa` + web manifest + `public/` 图标；预缓存 app shell。
   - `src/components/`：极小的 `PageShell`、`LoadingState`、`EmptyState`、`ErrorState`。
   - `src/pages/Setup.tsx`：首次运行表单 → `client.POST('/api/auth/setup')`；成功后 → Login。
-  - `src/pages/Login.tsx`：表单 → `client.POST('/auth/login')` → 路由进壳；路由守卫经 `client.GET('/auth/me')`（未认证 → 登录）；header 里登出动作。
+  - `src/pages/Login.tsx`：表单 → `client.POST('/api/auth/login')` → 路由进壳；路由守卫经 `client.GET('/api/auth/me')`（未认证 → 登录）；header 里登出动作。
   - `App.tsx` 门控：先 `GET /api/auth/setup-status` → Setup（若需要）→ 否则 `GET /api/auth/me` → 壳或 Login。
 - **测试（vitest + Testing Library）:** Login 渲染 + 提交（mock client）；Setup 渲染 + 提交（mock client）；`setup_required:true` 时门控显示 Setup；false + 未认证时显示 Login；已认证时显示壳；色彩方案切换渲染。
 - **完成判据:** `pnpm dev` 启动；登录与运行中的后端往返；PWA 可安装；桌面 + 移动响应式；闸绿。
@@ -370,3 +370,15 @@ omniventory/
 - **session 过期策略**：固定 vs 滑动窗口，以及"记住我"——M0 取固定；随 M6 多用户再议。
 - **`react-feather` vs `@tabler/icons-react`**：roadmap 锁 `react-feather`；步骤 6 确认其覆盖度，有缺口则标记。
 - **静态托管细节**：SPA 回退路由（history 模式）在后端静态挂载里处理——步骤 7 确认。
+
+---
+
+## 13. 实现后的后续项（非阻断遗留）
+
+在作者人工 walkthrough 后退役 M0 里程碑 report 时,把这些(持久地)记到这里。均不阻断 M1;有空再处理。
+
+1. **测试隔离脆弱(后端)。** Step 3 的 `importlib.reload(...)` autouse 夹具会改全局状态,导致**单独**运行某些测试模块(如单跑 `pytest tests/test_step4.py`,或类乱序)可能报错。**完整有序的 CI 套件是绿的**;两轮盲审确认其为既有、非阻断。有空时用一个 `chore(test)` / `conftest` 收口,让各模块的 settings/env 隔离自包含。
+2. **`/api/health` 的 `version` 恒为 `"dev"`。** 后端未作为发行版安装,`importlib.metadata.version(...)` 取不到真实版本。契约只要求 `version` 是字符串(非阻断)。接入打包/发行版本时统一一个版本来源。
+3. **Step 6 三处装饰性观察(不返工)。** `ColorSchemeScript` 放 `<body>` 对 CSR SPA 的 FOUC 防护说明略夸大;`useComputedColorScheme` 兜底用 `"dark"`(惯例是 `"light"`);源码 import 省略扩展名而测试用 `.js` 风格。均为装饰性,无功能影响。
+
+> 第四个遗留项——设计文档 `baseUrl` 不一致——已**就地解决**:§9 步骤 5/6 现已写成实现的口径(`baseUrl: ''` + 完整 `/api/...` key)。
