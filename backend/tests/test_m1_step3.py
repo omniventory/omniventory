@@ -23,6 +23,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from tests.conftest import drop_all_sqlite
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -208,7 +210,7 @@ def test_client(temp_db: Path) -> Generator[TestClient]:  # noqa: ARG001
         assert response.status_code == 200
         yield client
 
-    Base.metadata.drop_all(engine)
+    drop_all_sqlite(Base, engine)
 
 
 # ---------------------------------------------------------------------------
@@ -326,7 +328,7 @@ class TestKindsEndpoint:
         with TestClient(app, raise_server_exceptions=True) as client:
             resp = client.get("/api/kinds")
             assert resp.status_code == 401
-        Base.metadata.drop_all(engine)
+        drop_all_sqlite(Base, engine)
 
     def test_no_write_endpoints_exist(self, test_client: TestClient) -> None:
         """POST/PATCH/DELETE /kinds should return 405 (method not allowed) or 404."""
@@ -479,7 +481,7 @@ class TestDefinitionCRUD:
         with TestClient(app, raise_server_exceptions=True) as client:
             resp = client.post("/api/definitions", json={"name": "No Auth"})
             assert resp.status_code == 401
-        Base.metadata.drop_all(engine)
+        drop_all_sqlite(Base, engine)
 
     def test_definition_response_includes_kind_object(self, test_client: TestClient) -> None:
         """DefinitionResponse includes the nested kind object with id/code/name."""

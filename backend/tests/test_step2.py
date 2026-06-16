@@ -21,6 +21,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.conftest import drop_all_sqlite
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -75,7 +77,7 @@ def test_client(default_env: None) -> Generator[TestClient]:  # noqa: ARG001
     app = create_app()
     with TestClient(app, raise_server_exceptions=True) as client:
         yield client
-    Base.metadata.drop_all(engine)
+    drop_all_sqlite(Base, engine)
 
 
 # ---------------------------------------------------------------------------
@@ -138,7 +140,7 @@ class TestHealthEndpoint:
                 # Must NOT be reachable under the default /api/health
                 assert client.get("/api/health").status_code == 404
         finally:
-            Base.metadata.drop_all(engine)
+            drop_all_sqlite(Base, engine)
             if db_path.exists():
                 db_path.unlink()
 
@@ -158,7 +160,7 @@ class TestHealthEndpoint:
                 body = client.get("/api/health").json()
                 assert body["api_version"] == 42
         finally:
-            Base.metadata.drop_all(engine)
+            drop_all_sqlite(Base, engine)
             if db_path.exists():
                 db_path.unlink()
 

@@ -28,6 +28,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session, sessionmaker
 
+from tests.conftest import drop_all_sqlite
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -230,7 +232,7 @@ def test_client(temp_db: Path) -> Generator[TestClient]:  # noqa: ARG001
         assert response.status_code == 200
         yield client
 
-    Base.metadata.drop_all(engine)
+    drop_all_sqlite(Base, engine)
 
 
 # ---------------------------------------------------------------------------
@@ -993,7 +995,7 @@ class TestInstancesRequireAuth:
         with TestClient(app, raise_server_exceptions=True) as client:
             resp = client.get("/api/instances")
             assert resp.status_code == 401
-        Base.metadata.drop_all(engine)
+        drop_all_sqlite(Base, engine)
 
 
 # ---------------------------------------------------------------------------

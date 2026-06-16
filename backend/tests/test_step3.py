@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db.base import Base
 from app.models.household import Household
 from app.repositories.household import HouseholdRepository
+from tests.conftest import drop_all_sqlite
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -150,7 +151,7 @@ def test_client(temp_db: Path) -> Generator[TestClient]:  # noqa: ARG001
     app = create_app()
     with TestClient(app, raise_server_exceptions=True) as client:
         yield client
-    Base.metadata.drop_all(engine)
+    drop_all_sqlite(Base, engine)
 
 
 # ---------------------------------------------------------------------------
@@ -432,7 +433,7 @@ class TestContextLayer:
         # Default name from HouseholdRepository.ensure().
         assert body["household_name"] == "My Household"
 
-        Base.metadata.drop_all(engine)
+        drop_all_sqlite(Base, engine)
 
     def test_get_context_household_is_persisted_in_real_db(self, temp_db: Path) -> None:
         """Household created by get_context must be persisted to the file-based DB."""
@@ -465,7 +466,7 @@ class TestContextLayer:
         assert row is not None, "singleton row must be persisted after get_context request"
         assert row[0] == 1
 
-        Base.metadata.drop_all(engine)
+        drop_all_sqlite(Base, engine)
 
 
 # ---------------------------------------------------------------------------

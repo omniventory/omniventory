@@ -14,10 +14,12 @@
  *  - Delete a node — surfaces the server's 409 guard message when non-empty.
  *  - For locations: shows a badge when the node has item_instance_id set
  *    (container-as-item indicator).
+ *  - For locations: the detail panel lists instances physically at that location,
+ *    with move-to-another-location and delete actions (Fix 3 — M1 followup).
  *
  * Data access: exclusively via the typed openapi-fetch `client` (no hand-written fetch).
  */
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import {
   Stack,
   Group,
@@ -31,9 +33,11 @@ import {
   Alert,
   Tree,
   useTree,
+  Divider,
+  Table,
 } from "@mantine/core";
 import type { TreeNodeData } from "@mantine/core";
-import { Plus, Edit2, Trash2, AlertCircle } from "react-feather";
+import { Plus, Edit2, Trash2, AlertCircle, Move } from "react-feather";
 import { client } from "../api/client";
 import type { components } from "../api/schema";
 import { LoadingState } from "./LoadingState";
@@ -47,6 +51,7 @@ export type TreeResource = "locations" | "categories";
 
 type LocationTreeNode = components["schemas"]["LocationTreeNode"];
 type CategoryTreeNode = components["schemas"]["CategoryTreeNode"];
+type InstanceResponse = components["schemas"]["InstanceResponse"];
 
 /** Union of both tree-node shapes (categories don't have item_instance_id). */
 type AnyTreeNode = LocationTreeNode | CategoryTreeNode;
@@ -82,7 +87,9 @@ type ModalState =
   | { kind: "create"; parentId: number | null }
   | { kind: "rename"; nodeId: number; currentName: string }
   | { kind: "reparent"; nodeId: number; currentParentId: number | null }
-  | { kind: "delete"; nodeId: number; nodeName: string };
+  | { kind: "delete"; nodeId: number; nodeName: string }
+  | { kind: "moveInstance"; instance: InstanceResponse }
+  | { kind: "deleteInstance"; instance: InstanceResponse };
 
 // ── Main component ───────────────────────────────────────────────────────────
 
@@ -109,6 +116,21 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
   const [formName, setFormName] = useState("");
   // For the reparent modal: "" means root (null parent), otherwise a stringified node id.
   const [formParentId, setFormParentId] = useState<string>("");
+  // For the move-instance modal: the target location id as a string.
+  const [moveTargetId, setMoveTargetId] = useState<string>("");
+
+  // ── Location instances (Fix 3) ─────────────────────────────────────────────
+  // Instances at the currently selected location (locations only).
+  const [locationInstances, setLocationInstances] = useState<InstanceResponse[]>([]);
+  const [instancesLoading, setInstancesLoading] = useState(false);
+  // definition_id → definition name for display.
+  const [definitionNames, setDefinitionNames] = useState<Map<number, string>>(new Map());
+  // Ref kept in sync with definitionNames so loadLocationInstances can read the
+  // latest cache without being in its dependency array (avoids redundant refetches).
+  const definitionNamesRef = useRef(definitionNames);
+  useEffect(() => {
+    definitionNamesRef.current = definitionNames;
+  }, [definitionNames]);
 
   const tree = useTree();
 
@@ -169,6 +191,58 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [treeData]);
 
+  // ── Load instances for the selected location (Fix 3) ──────────────────────
+  const loadLocationInstances = useCallback(async (locationId: number) => {
+    setInstancesLoading(true);
+    try {
+      const { data, error } = await client.GET("/api/instances", {
+        params: { query: { location_id: locationId } },
+      });
+      if (error || !data) {
+        setLocationInstances([]);
+        return;
+      }
+      setLocationInstances(data);
+
+      // Load definition names for any definition_id we haven't cached yet.
+      // Read from the ref (always current) to avoid a stale-closure on the
+      // state value while keeping this callback stable (empty dep array).
+      const missingDefIds = [
+        ...new Set(data.map((i) => i.definition_id)),
+      ].filter((id) => !definitionNamesRef.current.has(id));
+
+      if (missingDefIds.length > 0) {
+        // Fetch definitions in parallel.
+        const results = await Promise.all(
+          missingDefIds.map((id) =>
+            client.GET("/api/definitions/{definition_id}", {
+              params: { path: { definition_id: id } },
+            }),
+          ),
+        );
+        setDefinitionNames((prev) => {
+          const next = new Map(prev);
+          results.forEach((r, idx) => {
+            if (r.data) next.set(missingDefIds[idx], r.data.name);
+          });
+          return next;
+        });
+      }
+    } finally {
+      setInstancesLoading(false);
+    }
+  }, []);
+
+  // Reload instances when the selected location changes.
+  useEffect(() => {
+    if (resource === "locations" && selectedId !== null) {
+      void loadLocationInstances(selectedId);
+    } else {
+      setLocationInstances([]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, resource]);
+
   // ── Modal helpers ──────────────────────────────────────────────────────────
   function openCreate(parentId: number | null) {
     setFormName("");
@@ -191,6 +265,17 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
   function openDelete(nodeId: number, nodeName: string) {
     setActionError(null);
     setModal({ kind: "delete", nodeId, nodeName });
+  }
+
+  function openMoveInstance(instance: InstanceResponse) {
+    setMoveTargetId(instance.location_id !== null ? String(instance.location_id) : "");
+    setActionError(null);
+    setModal({ kind: "moveInstance", instance });
+  }
+
+  function openDeleteInstance(instance: InstanceResponse) {
+    setActionError(null);
+    setModal({ kind: "deleteInstance", instance });
   }
 
   function closeModal() {
@@ -357,6 +442,51 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
     }
   }
 
+  // ── Instance move / delete actions (Fix 3) ────────────────────────────────
+
+  async function handleMoveInstance(instance: InstanceResponse) {
+    setBusy(true);
+    setActionError(null);
+    const newLocationId = moveTargetId === "" ? null : Number(moveTargetId);
+    try {
+      const { error } = await client.PATCH("/api/instances/{instance_id}", {
+        params: { path: { instance_id: instance.id } },
+        body: { location_id: newLocationId },
+      });
+      if (error) {
+        const msg =
+          typeof error === "object" && error !== null && "detail" in error
+            ? String((error as { detail: unknown }).detail)
+            : "Failed to move instance.";
+        setActionError(msg);
+        return;
+      }
+      closeModal();
+      // Reload instances for the current location (instance left this location).
+      if (selectedId !== null) await loadLocationInstances(selectedId);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteInstance(instance: InstanceResponse) {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const { error } = await client.DELETE("/api/instances/{instance_id}", {
+        params: { path: { instance_id: instance.id } },
+      });
+      if (error) {
+        setActionError("Failed to delete instance.");
+        return;
+      }
+      closeModal();
+      if (selectedId !== null) await loadLocationInstances(selectedId);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // ── Reparent helpers ───────────────────────────────────────────────────────
 
   /**
@@ -396,6 +526,20 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
     return [rootOption, ...nodes];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flatMap, modal]);
+
+  /**
+   * Build the Select option list for the move-instance modal.
+   * All locations are valid targets (including the current one), sorted by name.
+   * A "None" option lets the user clear the location.
+   * Only relevant when resource === "locations".
+   */
+  const moveLocationOptions = useMemo(() => {
+    const noneOption = { value: "", label: "— None (no location) —" };
+    const nodes = [...flatMap.values()]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((n) => ({ value: String(n.id), label: n.name }));
+    return [noneOption, ...nodes];
+  }, [flatMap]);
 
   // ── Selected node info ─────────────────────────────────────────────────────
   const selectedNode = selectedId !== null ? flatMap.get(selectedId) : null;
@@ -570,6 +714,87 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
               {(selectedNode as LocationTreeNode).item_instance_id}
             </Badge>
           )}
+          {/* Instances at this location (Fix 3 — locations only) */}
+          {isLocation && (
+            <>
+              <Divider my="xs" />
+              <Text size="xs" fw={500} c="dimmed" data-testid="instances-section-label">
+                Items at this location
+              </Text>
+              {instancesLoading ? (
+                <Text size="xs" c="dimmed">Loading…</Text>
+              ) : locationInstances.length === 0 ? (
+                <Text size="xs" c="dimmed" data-testid="instances-empty">
+                  No items here. This location can be deleted.
+                </Text>
+              ) : (
+                <Table
+                  withTableBorder={false}
+                  withColumnBorders={false}
+                  highlightOnHover
+                  data-testid="instances-table"
+                >
+                  <Table.Thead>
+                    <Table.Tr>
+                      <Table.Th>
+                        <Text size="xs">Definition</Text>
+                      </Table.Th>
+                      <Table.Th>
+                        <Text size="xs">Serial</Text>
+                      </Table.Th>
+                      <Table.Th>
+                        <Text size="xs">Qty</Text>
+                      </Table.Th>
+                      <Table.Th />
+                    </Table.Tr>
+                  </Table.Thead>
+                  <Table.Tbody>
+                    {locationInstances.map((inst) => (
+                      <Table.Tr key={inst.id} data-testid={`instance-row-${inst.id}`}>
+                        <Table.Td>
+                          <Text size="xs">
+                            {definitionNames.get(inst.definition_id) ??
+                              `#${inst.definition_id}`}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Text size="xs" c="dimmed">
+                            {inst.serial ?? "—"}
+                          </Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Text size="xs">{inst.quantity}</Text>
+                        </Table.Td>
+                        <Table.Td>
+                          <Group gap={2} wrap="nowrap" justify="flex-end">
+                            <ActionIcon
+                              size="xs"
+                              variant="subtle"
+                              aria-label={`Move instance ${inst.id}`}
+                              onClick={() => openMoveInstance(inst)}
+                              data-testid={`move-instance-${inst.id}`}
+                            >
+                              <Move size={12} />
+                            </ActionIcon>
+                            <ActionIcon
+                              size="xs"
+                              variant="subtle"
+                              color="red"
+                              aria-label={`Delete instance ${inst.id}`}
+                              onClick={() => openDeleteInstance(inst)}
+                              data-testid={`delete-instance-${inst.id}`}
+                            >
+                              <Trash2 size={12} />
+                            </ActionIcon>
+                          </Group>
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              )}
+            </>
+          )}
         </Stack>
       )}
 
@@ -734,6 +959,80 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                 Delete
               </Button>
             )}
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* Move-instance modal (Fix 3) */}
+      <Modal
+        opened={modal.kind === "moveInstance"}
+        onClose={closeModal}
+        title="Move item to another location"
+        size="sm"
+      >
+        <Stack gap="sm">
+          {actionError && (
+            <Alert icon={<AlertCircle size={16} />} color="red" variant="light">
+              {actionError}
+            </Alert>
+          )}
+          <Select
+            label="New location"
+            data={moveLocationOptions}
+            value={moveTargetId}
+            onChange={(v) => setMoveTargetId(v ?? "")}
+            allowDeselect={false}
+            searchable
+            data-testid="move-location-select"
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeModal} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() =>
+                modal.kind === "moveInstance" && handleMoveInstance(modal.instance)
+              }
+              loading={busy}
+              data-testid="confirm-move-btn"
+            >
+              Move
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* Delete-instance confirmation modal (Fix 3) */}
+      <Modal
+        opened={modal.kind === "deleteInstance"}
+        onClose={closeModal}
+        title="Delete item"
+        size="sm"
+      >
+        <Stack gap="sm">
+          {actionError && (
+            <Alert icon={<AlertCircle size={16} />} color="red" variant="light">
+              {actionError}
+            </Alert>
+          )}
+          <Text size="sm">
+            Permanently delete this item instance? This cannot be undone.
+          </Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeModal} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={() =>
+                modal.kind === "deleteInstance" &&
+                handleDeleteInstance(modal.instance)
+              }
+              loading={busy}
+              data-testid="confirm-delete-instance-btn"
+            >
+              Delete
+            </Button>
           </Group>
         </Stack>
       </Modal>

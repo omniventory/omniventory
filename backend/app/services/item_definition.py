@@ -25,6 +25,7 @@ from app.repositories.category import CategoryRepository
 from app.repositories.item_definition import ItemDefinitionRepository
 from app.repositories.item_kind import ItemKindRepository
 from app.repositories.location import LocationRepository
+from app.repositories.stock_instance import StockInstanceRepository
 from app.schemas.item_definition import DefinitionCreate, DefinitionUpdate
 
 _DURABLE_CODE = "durable"
@@ -39,6 +40,7 @@ class ItemDefinitionService:
         self._kind_repo = ItemKindRepository(db)
         self._cat_repo = CategoryRepository(db)
         self._loc_repo = LocationRepository(db)
+        self._inst_repo = StockInstanceRepository(db)
 
     # ---------------------------------------------------------------------- #
     # Private helpers                                                          #
@@ -175,6 +177,21 @@ class ItemDefinitionService:
         )
 
     def delete(self, definition_id: int) -> None:
-        """Delete an item definition."""
+        """Delete an item definition.
+
+        Blocked (HTTP 409) if any stock instance still references this
+        definition — symmetric to the location delete-guard (M1.md §2
+        "Tree delete semantics").  An instance must always have a definition;
+        orphaning one is forbidden.
+        """
         defn = self._get_or_404(definition_id)
+        if self._inst_repo.has_instances_for_definition(definition_id):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Item definition '{defn.name}' (id={definition_id}) cannot be "
+                    "deleted because it still has stock instances referencing it. "
+                    "Delete or reassign the instances first."
+                ),
+            )
         self._repo.delete(defn)

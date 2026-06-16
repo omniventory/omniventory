@@ -28,6 +28,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
+from tests.conftest import drop_all_sqlite
 
 # ---------------------------------------------------------------------------
 # Helpers shared across fixtures
@@ -159,7 +160,7 @@ def test_client(temp_db: Path) -> Generator[TestClient]:  # noqa: ARG001
     app = create_app()
     with TestClient(app, raise_server_exceptions=True) as client:
         yield client
-    Base.metadata.drop_all(engine)
+    drop_all_sqlite(Base, engine)
 
 
 # ---------------------------------------------------------------------------
@@ -829,7 +830,7 @@ class TestSecretKeyResolution:
             with TestClient(app, raise_server_exceptions=True):
                 assert app.state.secret_key == "explicit-env-secret"
         finally:
-            Base.metadata.drop_all(engine)
+            drop_all_sqlite(Base, engine)
             if db_path.exists():
                 db_path.unlink()
 
@@ -866,7 +867,7 @@ class TestSecretKeyResolution:
 
             assert key1 == key2, "Second boot must reuse the persisted key"
         finally:
-            Base.metadata.drop_all(engine)
+            drop_all_sqlite(Base, engine)
             if db_path.exists():
                 db_path.unlink()
 
@@ -900,7 +901,7 @@ class TestSecretKeyResolution:
             finally:
                 db.close()
         finally:
-            Base.metadata.drop_all(engine)
+            drop_all_sqlite(Base, engine)
             if db_path.exists():
                 db_path.unlink()
 

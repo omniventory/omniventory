@@ -641,3 +641,269 @@ describe("TreeBrowser — reparent works for categories resource", () => {
     });
   });
 });
+
+// ── Fix 3: Location instances panel ──────────────────────────────────────────
+
+/** Instance fixture for location_id=2 (Garage). */
+const instanceAtGarage = {
+  id: 101,
+  definition_id: 5,
+  location_id: 2,
+  quantity: "1",
+  serial: "SN-001",
+  model_number: null,
+  manufacturer: "Bosch",
+  warranty_expires: null,
+  warranty_details: null,
+  purchase_price: null,
+  purchase_date: null,
+  purchase_source: null,
+  created_at: "2025-01-01T00:00:00Z",
+};
+
+const definitionDrill = {
+  id: 5,
+  name: "Cordless Drill",
+  description: null,
+  category_id: null,
+  kind: { id: 1, code: "durable", name: "Durable", is_system: true, created_at: "2025-01-01T00:00:00Z" },
+  kind_id: 1,
+  unit: "pcs",
+  default_location_id: null,
+  created_at: "2025-01-01T00:00:00Z",
+};
+
+describe("TreeBrowser — location instances panel renders", () => {
+  beforeEach(() => {
+    // GET /api/locations/tree
+    vi.mocked(client.GET).mockImplementation(async (path: string, opts?: unknown) => {
+      if (path === "/api/locations/tree") {
+        return {
+          data: locationTreeFixture,
+          response: new Response(null, { status: 200 }),
+        } as AnyClientResult;
+      }
+      // GET /api/instances?location_id=2
+      if (path === "/api/instances") {
+        const params = (opts as { params?: { query?: { location_id?: number } } })?.params?.query;
+        if (params?.location_id === 2) {
+          return {
+            data: [instanceAtGarage],
+            response: new Response(null, { status: 200 }),
+          } as AnyClientResult;
+        }
+        return { data: [], response: new Response(null, { status: 200 }) } as AnyClientResult;
+      }
+      // GET /api/definitions/{definition_id}
+      if (path === "/api/definitions/{definition_id}") {
+        return {
+          data: definitionDrill,
+          response: new Response(null, { status: 200 }),
+        } as AnyClientResult;
+      }
+      return { data: [], response: new Response(null, { status: 200 }) } as AnyClientResult;
+    });
+  });
+
+  it("shows instances section label when a location is selected", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Home"));
+
+    // Select "Garage" (id=2)
+    fireEvent.click(screen.getByText("Garage"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("instances-section-label")).toBeDefined();
+    });
+  });
+
+  it("shows instance row with definition name and serial", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Home"));
+
+    fireEvent.click(screen.getByText("Garage"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`instance-row-${instanceAtGarage.id}`)).toBeDefined();
+    });
+
+    // Definition name should appear (fetched separately)
+    await waitFor(() => {
+      expect(screen.getByText("Cordless Drill")).toBeDefined();
+    });
+
+    // Serial should appear
+    expect(screen.getByText("SN-001")).toBeDefined();
+  });
+
+  it("shows empty state when location has no instances", async () => {
+    // Home (id=1) has no instances.
+    renderLocations();
+    await waitFor(() => screen.getByText("Home"));
+
+    // Select "Home" (id=1) — instances mock returns []
+    fireEvent.click(screen.getByText("Home"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("instances-empty")).toBeDefined();
+    });
+  });
+
+  it("does NOT show instances section for categories", async () => {
+    vi.mocked(client.GET).mockResolvedValue({
+      data: categoryTreeFixture,
+      response: new Response(null, { status: 200 }),
+    } as AnyClientResult);
+
+    renderCategories();
+    await waitFor(() => {
+      // Wait for the tree to load — "Tools" is the root category
+      expect(screen.getAllByText("Tools").length).toBeGreaterThan(0);
+    });
+
+    // Select the root "Tools" category node (the tree node, not any heading)
+    // Use the first occurrence of "Tools" text (the tree node)
+    const toolsNodes = screen.getAllByText("Tools");
+    fireEvent.click(toolsNodes[0]);
+
+    await waitFor(() => {
+      // After selecting, there should be at least two "Tools" text elements
+      // (tree node + detail panel) — panel has appeared
+      expect(screen.getAllByText("Tools").length).toBeGreaterThanOrEqual(1);
+    });
+
+    // Instances section must NOT appear for categories
+    expect(screen.queryByTestId("instances-section-label")).toBeNull();
+  });
+});
+
+describe("TreeBrowser — move instance happy path", () => {
+  beforeEach(() => {
+    vi.mocked(client.GET).mockImplementation(async (path: string, opts?: unknown) => {
+      if (path === "/api/locations/tree") {
+        return {
+          data: locationTreeFixture,
+          response: new Response(null, { status: 200 }),
+        } as AnyClientResult;
+      }
+      if (path === "/api/instances") {
+        const params = (opts as { params?: { query?: { location_id?: number } } })?.params?.query;
+        if (params?.location_id === 2) {
+          return {
+            data: [instanceAtGarage],
+            response: new Response(null, { status: 200 }),
+          } as AnyClientResult;
+        }
+        return { data: [], response: new Response(null, { status: 200 }) } as AnyClientResult;
+      }
+      if (path === "/api/definitions/{definition_id}") {
+        return { data: definitionDrill, response: new Response(null, { status: 200 }) } as AnyClientResult;
+      }
+      return { data: [], response: new Response(null, { status: 200 }) } as AnyClientResult;
+    });
+    vi.mocked(client.PATCH).mockResolvedValue({
+      data: { ...instanceAtGarage, location_id: 1 },
+      response: new Response(null, { status: 200 }),
+    } as AnyClientResult);
+  });
+
+  it("clicking move icon opens move modal and PATCH is called with new location_id", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+    fireEvent.click(screen.getByText("Garage"));
+
+    // Wait for instance row to appear
+    await waitFor(() => {
+      expect(screen.getByTestId(`move-instance-${instanceAtGarage.id}`)).toBeDefined();
+    });
+
+    // Click the move icon
+    fireEvent.click(screen.getByTestId(`move-instance-${instanceAtGarage.id}`));
+
+    // Modal should open with the location select
+    const locationSelect = await screen.findByTestId("move-location-select");
+    expect(locationSelect).toBeDefined();
+
+    // Open the dropdown
+    fireEvent.click(locationSelect);
+
+    // Pick "Home" (id=1)
+    await waitFor(() => {
+      const homeOption = [...document.querySelectorAll('[role="option"]')].find(
+        (el) => el.textContent?.includes("Home"),
+      );
+      expect(homeOption).toBeDefined();
+    });
+    const homeOption = [...document.querySelectorAll('[role="option"]')].find(
+      (el) => el.textContent?.includes("Home"),
+    );
+    fireEvent.click(homeOption!);
+
+    // Click Move
+    const moveBtn = screen.getByTestId("confirm-move-btn");
+    fireEvent.click(moveBtn);
+
+    await waitFor(() => {
+      expect(client.PATCH).toHaveBeenCalledWith(
+        "/api/instances/{instance_id}",
+        expect.objectContaining({
+          params: { path: { instance_id: instanceAtGarage.id } },
+          body: expect.objectContaining({ location_id: 1 }),
+        }),
+      );
+    });
+  });
+});
+
+describe("TreeBrowser — delete instance happy path", () => {
+  beforeEach(() => {
+    vi.mocked(client.GET).mockImplementation(async (path: string, opts?: unknown) => {
+      if (path === "/api/locations/tree") {
+        return { data: locationTreeFixture, response: new Response(null, { status: 200 }) } as AnyClientResult;
+      }
+      if (path === "/api/instances") {
+        const params = (opts as { params?: { query?: { location_id?: number } } })?.params?.query;
+        if (params?.location_id === 2) {
+          return { data: [instanceAtGarage], response: new Response(null, { status: 200 }) } as AnyClientResult;
+        }
+        return { data: [], response: new Response(null, { status: 200 }) } as AnyClientResult;
+      }
+      if (path === "/api/definitions/{definition_id}") {
+        return { data: definitionDrill, response: new Response(null, { status: 200 }) } as AnyClientResult;
+      }
+      return { data: [], response: new Response(null, { status: 200 }) } as AnyClientResult;
+    });
+    vi.mocked(client.DELETE).mockResolvedValue({
+      data: undefined,
+      response: new Response(null, { status: 204 }),
+    } as AnyClientResult);
+  });
+
+  it("clicking delete icon opens confirm modal and DELETE is called", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+    fireEvent.click(screen.getByText("Garage"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(`delete-instance-${instanceAtGarage.id}`)).toBeDefined();
+    });
+
+    // Click the delete icon
+    fireEvent.click(screen.getByTestId(`delete-instance-${instanceAtGarage.id}`));
+
+    // Confirm modal appears
+    const confirmBtn = await screen.findByTestId("confirm-delete-instance-btn");
+    expect(confirmBtn).toBeDefined();
+
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(client.DELETE).toHaveBeenCalledWith(
+        "/api/instances/{instance_id}",
+        expect.objectContaining({
+          params: { path: { instance_id: instanceAtGarage.id } },
+        }),
+      );
+    });
+  });
+});

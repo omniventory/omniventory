@@ -22,6 +22,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient  # noqa: E402
 
+from tests.conftest import drop_all_sqlite
+
 # ---------------------------------------------------------------------------
 # Helpers / fixtures
 # ---------------------------------------------------------------------------
@@ -90,7 +92,7 @@ def static_client(
         yield client
 
     # --- Teardown -----------------------------------------------------------
-    Base.metadata.drop_all(engine)
+    drop_all_sqlite(Base, engine)
     get_settings.cache_clear()
     get_engine.cache_clear()
     if db_path.exists():

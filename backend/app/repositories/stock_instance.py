@@ -86,6 +86,11 @@ class StockInstanceRepository:
         stmt = select(StockInstance.id).where(StockInstance.location_id == location_id).limit(1)
         return self._db.scalars(stmt).first() is not None
 
+    def has_instances_for_definition(self, definition_id: int) -> bool:
+        """Return True if any stock instance references the given definition."""
+        stmt = select(StockInstance.id).where(StockInstance.definition_id == definition_id).limit(1)
+        return self._db.scalars(stmt).first() is not None
+
     # ---------------------------------------------------------------------- #
     # Write                                                                    #
     # ---------------------------------------------------------------------- #

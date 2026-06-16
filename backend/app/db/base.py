@@ -10,7 +10,7 @@ override ``database_url`` via environment before the engine is constructed.
 
 from functools import lru_cache
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
@@ -50,15 +50,32 @@ def get_engine() -> Engine:
     url = settings.database_url
 
     connect_args: dict[str, object] = {}
-    if url.startswith("sqlite"):
+    is_sqlite = url.startswith("sqlite")
+    if is_sqlite:
         connect_args = {"check_same_thread": False, "timeout": 30}
 
-    return create_engine(
+    engine = create_engine(
         url,
         connect_args=connect_args,
         # Echo SQL only in development for debugging.
         echo=settings.environment == "development",
     )
+
+    if is_sqlite:
+        # Enable SQLite foreign-key enforcement per connection.
+        # SQLite does not enforce FKs by default; this PRAGMA activates them.
+        # This is a schema-level invariant guard (like CHECK constraints),
+        # not business logic — consistent with roadmap §2.11 ("logic in the
+        # app layer, not the database" refers to triggers/views; FK constraints
+        # and CHECK constraints are schema invariants, explicitly permitted).
+        @event.listens_for(engine, "connect")
+        def _set_sqlite_pragma(dbapi_conn: object, _: object) -> None:
+            import sqlite3
+
+            if isinstance(dbapi_conn, sqlite3.Connection):
+                dbapi_conn.execute("PRAGMA foreign_keys=ON")
+
+    return engine
 
 
 # ---------------------------------------------------------------------------
