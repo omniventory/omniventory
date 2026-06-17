@@ -7,11 +7,7 @@
  */
 import { useState } from "react";
 import {
-  Center,
-  Paper,
   Stack,
-  Title,
-  Text,
   TextInput,
   PasswordInput,
   Button,
@@ -21,7 +17,7 @@ import { AlertCircle } from "react-feather";
 import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
-import { LanguageSwitcher } from "../components/LanguageSwitcher";
+import { AuthLayout } from "../components/AuthLayout";
 
 interface LoginProps {
   onSuccess: () => void;
@@ -54,63 +50,44 @@ export function Login({ onSuccess }: LoginProps) {
   }
 
   return (
-    <Center h="100dvh" p="md">
-      <Paper
-        w="100%"
-        maw={400}
-        p="xl"
-        radius="md"
-        withBorder
-        shadow="sm"
-      >
-        <form onSubmit={handleSubmit}>
-          <Stack gap="lg">
-            <LanguageSwitcher mode="pre-login" />
-            <Stack gap={4}>
-              <Title order={2} ta="center">
-                {t("login.title")}
-              </Title>
-              <Text c="dimmed" size="sm" ta="center">
-                {t("login.subtitle")}
-              </Text>
-            </Stack>
+    <AuthLayout title={t("login.title")} subtitle={t("login.subtitle")}>
+      <form onSubmit={handleSubmit}>
+        <Stack gap="lg">
+          {error && (
+            <Alert
+              icon={<AlertCircle size={16} />}
+              color="red"
+              variant="light"
+              role="alert"
+            >
+              {error}
+            </Alert>
+          )}
 
-            {error && (
-              <Alert
-                icon={<AlertCircle size={16} />}
-                color="red"
-                variant="light"
-                role="alert"
-              >
-                {error}
-              </Alert>
-            )}
+          <TextInput
+            label={t("login.emailLabel")}
+            placeholder={t("login.emailPlaceholder")}
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.currentTarget.value)}
+            required
+            autoComplete="email"
+          />
 
-            <TextInput
-              label={t("login.emailLabel")}
-              placeholder={t("login.emailPlaceholder")}
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.currentTarget.value)}
-              required
-              autoComplete="email"
-            />
+          <PasswordInput
+            label={t("login.passwordLabel")}
+            placeholder={t("login.passwordPlaceholder")}
+            value={password}
+            onChange={(e) => setPassword(e.currentTarget.value)}
+            required
+            autoComplete="current-password"
+          />
 
-            <PasswordInput
-              label={t("login.passwordLabel")}
-              placeholder={t("login.passwordPlaceholder")}
-              value={password}
-              onChange={(e) => setPassword(e.currentTarget.value)}
-              required
-              autoComplete="current-password"
-            />
-
-            <Button type="submit" fullWidth loading={loading}>
-              {t("login.submit")}
-            </Button>
-          </Stack>
-        </form>
-      </Paper>
-    </Center>
+          <Button type="submit" fullWidth loading={loading}>
+            {t("login.submit")}
+          </Button>
+        </Stack>
+      </form>
+    </AuthLayout>
   );
 }
