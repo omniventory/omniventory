@@ -72,7 +72,27 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Me
+         * @description Update per-user preferences for the currently authenticated user.
+         *
+         *     PATCH semantics — field omission vs explicit null
+         *     -------------------------------------------------
+         *     - Field **omitted** from the JSON body: no-op; the stored value is left
+         *       unchanged.
+         *     - Field set to **null** explicitly: writes NULL to the DB, re-enabling the
+         *       client-side resolution chain (localStorage → navigator → 'en').
+         *     - Field set to a **string**: validated against ``SUPPORTED_LANGUAGES``; on
+         *       success the value is persisted.
+         *
+         *     Validation
+         *     ----------
+         *     An unsupported language code raises ``AppError(validation.unsupported_language, 422)``
+         *     and no write happens.
+         *
+         *     Returns the updated ``MeResponse``.
+         */
+        patch: operations["update_me_api_auth_me_patch"];
         trace?: never;
     };
     "/api/auth/setup": {
@@ -870,8 +890,42 @@ export interface components {
             setup_required: boolean;
         };
         /**
+         * UserPreferencesUpdate
+         * @description Body for PATCH /api/auth/me — update per-user preferences.
+         *
+         *     All fields are optional and PATCH-style.  An omitted field is a no-op and
+         *     does NOT overwrite an existing value.  Setting a field to ``null``
+         *     explicitly unsets it (re-inherits client-side resolution chain).
+         *
+         *     Null-vs-omitted semantics
+         *     -------------------------
+         *     We must distinguish three cases for ``preferred_language``:
+         *     - Field **omitted** from the JSON body → no-op (do not touch the stored value).
+         *     - Field set to **null** explicitly → write NULL (explicit unset).
+         *     - Field set to a **string** → validate + write.
+         *
+         *     Pydantic v2's ``model_fields_set`` correctly tracks which fields were
+         *     explicitly present in the raw input, including when the value is ``null``.
+         *     Because ``preferred_language`` defaults to ``None``, an omitted key does
+         *     *not* appear in ``model_fields_set``, while ``{"preferred_language": null}``
+         *     *does* — allowing the route to distinguish omission from explicit null.
+         *     The route checks ``"preferred_language" in body.model_fields_set`` instead
+         *     of relying on a private tracking field.
+         * @example {
+         *       "preferred_language": "zh"
+         *     }
+         */
+        UserPreferencesUpdate: {
+            /** Preferred Language */
+            preferred_language?: string | null;
+        };
+        /**
          * UserResponse
          * @description Public representation of a User (no password_hash).
+         *
+         *     ``preferred_language`` is nullable.  NULL means the user has never
+         *     explicitly chosen a language; the client resolves via its own chain.
+         *     Added in M1.5 Step 2.
          */
         UserResponse: {
             /**
@@ -885,6 +939,8 @@ export interface components {
             id: number;
             /** Is Active */
             is_active: boolean;
+            /** Preferred Language */
+            preferred_language?: string | null;
             /** Role */
             role: string;
         };
@@ -1021,6 +1077,66 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_me_api_auth_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserPreferencesUpdate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

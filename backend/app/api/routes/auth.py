@@ -36,6 +36,7 @@ from app.auth import sessions as session_auth
 from app.auth.passwords import dummy_verify, hash_password, verify_password
 from app.config import get_settings
 from app.core.errors import AppError, ErrorCode, ErrorResponse
+from app.core.languages import SUPPORTED_LANGUAGES
 from app.db.session import get_db
 from app.models.app_config import AppConfig
 from app.models.user import User
@@ -46,6 +47,7 @@ from app.schemas.auth import (
     MessageResponse,
     SetupRequest,
     SetupStatusResponse,
+    UserPreferencesUpdate,
     UserResponse,
 )
 
@@ -166,6 +168,47 @@ def me(user: User = Depends(get_current_user)) -> MeResponse:
 
     Requires a valid session cookie.  Returns 401 if absent / expired.
     """
+    return MeResponse(user=UserResponse.model_validate(user))
+
+
+@router.patch("/me", response_model=MeResponse)
+def update_me(
+    body: UserPreferencesUpdate,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> MeResponse:
+    """Update per-user preferences for the currently authenticated user.
+
+    PATCH semantics — field omission vs explicit null
+    -------------------------------------------------
+    - Field **omitted** from the JSON body: no-op; the stored value is left
+      unchanged.
+    - Field set to **null** explicitly: writes NULL to the DB, re-enabling the
+      client-side resolution chain (localStorage → navigator → 'en').
+    - Field set to a **string**: validated against ``SUPPORTED_LANGUAGES``; on
+      success the value is persisted.
+
+    Validation
+    ----------
+    An unsupported language code raises ``AppError(validation.unsupported_language, 422)``
+    and no write happens.
+
+    Returns the updated ``MeResponse``.
+    """
+    repo = UserRepository(db)
+
+    if "preferred_language" in body.model_fields_set:
+        lang = body.preferred_language
+        if lang is not None and lang not in SUPPORTED_LANGUAGES:
+            raise AppError(
+                ErrorCode.UNSUPPORTED_LANGUAGE,
+                status_code=422,
+                params={"value": lang, "supported": list(SUPPORTED_LANGUAGES)},
+            )
+        repo.set_preferred_language(user, lang)
+        db.commit()
+        db.refresh(user)
+
     return MeResponse(user=UserResponse.model_validate(user))
 
 

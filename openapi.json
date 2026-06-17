@@ -1210,8 +1210,31 @@
         "title": "SetupStatusResponse",
         "type": "object"
       },
+      "UserPreferencesUpdate": {
+        "description": "Body for PATCH /api/auth/me \u2014 update per-user preferences.\n\nAll fields are optional and PATCH-style.  An omitted field is a no-op and\ndoes NOT overwrite an existing value.  Setting a field to ``null``\nexplicitly unsets it (re-inherits client-side resolution chain).\n\nNull-vs-omitted semantics\n-------------------------\nWe must distinguish three cases for ``preferred_language``:\n- Field **omitted** from the JSON body \u2192 no-op (do not touch the stored value).\n- Field set to **null** explicitly \u2192 write NULL (explicit unset).\n- Field set to a **string** \u2192 validate + write.\n\nPydantic v2's ``model_fields_set`` correctly tracks which fields were\nexplicitly present in the raw input, including when the value is ``null``.\nBecause ``preferred_language`` defaults to ``None``, an omitted key does\n*not* appear in ``model_fields_set``, while ``{\"preferred_language\": null}``\n*does* \u2014 allowing the route to distinguish omission from explicit null.\nThe route checks ``\"preferred_language\" in body.model_fields_set`` instead\nof relying on a private tracking field.",
+        "examples": [
+          {
+            "preferred_language": "zh"
+          }
+        ],
+        "properties": {
+          "preferred_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Language"
+          }
+        },
+        "title": "UserPreferencesUpdate",
+        "type": "object"
+      },
       "UserResponse": {
-        "description": "Public representation of a User (no password_hash).",
+        "description": "Public representation of a User (no password_hash).\n\n``preferred_language`` is nullable.  NULL means the user has never\nexplicitly chosen a language; the client resolves via its own chain.\nAdded in M1.5 Step 2.",
         "properties": {
           "created_at": {
             "format": "date-time",
@@ -1229,6 +1252,17 @@
           "is_active": {
             "title": "Is Active",
             "type": "boolean"
+          },
+          "preferred_language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Language"
           },
           "role": {
             "title": "Role",
@@ -1445,6 +1479,76 @@
           }
         },
         "summary": "Me",
+        "tags": [
+          "auth"
+        ]
+      },
+      "patch": {
+        "description": "Update per-user preferences for the currently authenticated user.\n\nPATCH semantics \u2014 field omission vs explicit null\n-------------------------------------------------\n- Field **omitted** from the JSON body: no-op; the stored value is left\n  unchanged.\n- Field set to **null** explicitly: writes NULL to the DB, re-enabling the\n  client-side resolution chain (localStorage \u2192 navigator \u2192 'en').\n- Field set to a **string**: validated against ``SUPPORTED_LANGUAGES``; on\n  success the value is persisted.\n\nValidation\n----------\nAn unsupported language code raises ``AppError(validation.unsupported_language, 422)``\nand no write happens.\n\nReturns the updated ``MeResponse``.",
+        "operationId": "update_me_api_auth_me_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserPreferencesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Update Me",
         "tags": [
           "auth"
         ]

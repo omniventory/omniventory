@@ -11,6 +11,9 @@ Design notes
   table comes in M6.
 - ``is_active`` lets an admin deactivate an account without deleting it.
 - ``created_at`` is filled by the DB server default.
+- ``preferred_language`` is nullable; NULL means "never explicitly chosen" and
+  the client falls back to its own resolution chain (localStorage → navigator → en).
+  Added in M1.5 Step 2.
 """
 
 from datetime import datetime
@@ -26,12 +29,15 @@ class User(Base):
 
     Columns
     -------
-    id            Auto-increment surrogate PK.
-    email         Unique login identifier; lower-cased on write.
-    password_hash Argon2 hash via ``app.auth.passwords.hash_password``.
-    role          Role label (``"admin"`` in M0); expanded in M6.
-    is_active     False → account is disabled; login is rejected.
-    created_at    Row-creation timestamp (UTC, set by DB on insert).
+    id                  Auto-increment surrogate PK.
+    email               Unique login identifier; lower-cased on write.
+    password_hash       Argon2 hash via ``app.auth.passwords.hash_password``.
+    role                Role label (``"admin"`` in M0); expanded in M6.
+    is_active           False → account is disabled; login is rejected.
+    created_at          Row-creation timestamp (UTC, set by DB on insert).
+    preferred_language  BCP-47 language code chosen by the user (nullable).
+                        NULL = "never explicitly chosen" → client resolves.
+                        M1.5 values: ``'en'`` / ``'zh'``.
     """
 
     __tablename__ = "users"
@@ -46,6 +52,7 @@ class User(Base):
         nullable=False,
         server_default=func.now(),
     )
+    preferred_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     # Back-reference to sessions (lazy-loaded on demand).
     sessions: Mapped[list["Session"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
