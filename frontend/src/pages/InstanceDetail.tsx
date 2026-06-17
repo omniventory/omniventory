@@ -33,6 +33,7 @@ import {
   InstanceFormModal,
   type InstanceFormState,
 } from "../components/InstanceFormModal";
+import { formatQuantity } from "../utils";
 
 // ── Schema types ─────────────────────────────────────────────────────────────
 
@@ -296,7 +297,7 @@ export function InstanceDetail() {
       {/* Detail fields */}
       <Paper p="md" withBorder>
         <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
-          <DetailField label="Quantity" value={inst.quantity} />
+          <DetailField label="Quantity" value={formatQuantity(inst.quantity)} />
           <DetailField label="Location" value={locName} />
           <DetailField label="Serial" value={inst.serial} />
           <DetailField label="Model Number" value={inst.model_number} />

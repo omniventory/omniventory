@@ -43,6 +43,7 @@ import type { components } from "../api/schema";
 import { LoadingState } from "./LoadingState";
 import { ErrorState } from "./ErrorState";
 import { EmptyState } from "./EmptyState";
+import { formatQuantity } from "../utils";
 
 // ── Resource-specific types ──────────────────────────────────────────────────
 
@@ -680,7 +681,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
    */
   function instanceLabel(inst: InstanceResponse): string {
     const defName = definitionNames.get(inst.definition_id) ?? `Def #${inst.definition_id}`;
-    const detail = inst.serial ? `SN: ${inst.serial}` : `qty: ${inst.quantity}`;
+    const detail = inst.serial ? `SN: ${inst.serial}` : `qty: ${formatQuantity(inst.quantity)}`;
     return `${defName} — ${detail}`;
   }
 
@@ -968,7 +969,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                           </Text>
                         </Table.Td>
                         <Table.Td>
-                          <Text size="xs">{inst.quantity}</Text>
+                          <Text size="xs">{formatQuantity(inst.quantity)}</Text>
                         </Table.Td>
                         <Table.Td>
                           <Group gap={2} wrap="nowrap" justify="flex-end">

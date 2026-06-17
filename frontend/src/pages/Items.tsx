@@ -43,6 +43,7 @@ import {
   InstanceFormModal,
   type InstanceFormState,
 } from "../components/InstanceFormModal";
+import { formatQuantity } from "../utils";
 
 // ── Schema types ─────────────────────────────────────────────────────────────
 
@@ -1027,7 +1028,7 @@ export function ItemDetail() {
                     </Anchor>
                   </Table.Td>
                   <Table.Td>
-                    <Text size="sm">{inst.quantity}</Text>
+                    <Text size="sm">{formatQuantity(inst.quantity)}</Text>
                   </Table.Td>
                   <Table.Td>
                     <Text size="sm" c="dimmed">
