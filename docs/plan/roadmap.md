@@ -79,7 +79,8 @@ Legend: ⬜ planned · 🟡 active · 🟢 done. **Active milestone = the single
 | # | Milestone | Delivers | Status |
 |---|---|---|---|
 | **M0** | Foundations & scaffolding | running skeleton | 🟢 |
-| **M1** | Unified core model & durable-goods registry | ② (registry) | 🟡 |
+| **M1** | Unified core model & durable-goods registry | ② (registry) | 🟢 |
+| **M1.5** | Internationalization (i18n) foundation | all (ZH + EN) | ⬜ |
 | **M2** | Stock ledger & consumables | ③ (in/out + low-stock) | ⬜ |
 | **M3** | Best-before / expiry & perishables | ① (data + listings) | ⬜ |
 | **M4** | Unified reminder & notification engine | ①②③ proactive alerts | ⬜ |
@@ -113,6 +114,15 @@ Legend: ⬜ planned · 🟡 active · 🟢 done. **Active milestone = the single
 - Durable fields on the instance: serial / model / manufacturer, `warranty_expires` (stored; reminders come in M4), value/purchase.
 - List / detail / tree-browse / search UI.
 - 🟢 Create a nested location tree; register a serialized durable into it; edit; search; the `serial ⇒ qty=1` constraint rejects bad input.
+
+### M1.5 — Internationalization (i18n) foundation
+**Goal:** make the UI bilingual (ZH + EN) *before* more surfaces accrue — a foundational, cross-cutting capability done early so every later milestone authors strings through i18n instead of hardcoding English.
+- Frontend: **react-i18next** scaffolding; extract all existing M0–M1 UI strings into a translation catalog (ZH + EN); a language switcher (also on the pre-login / setup screens).
+- **Layered language resolution:** logged-in → the account's stored `preferred_language` (authoritative, follows the user across devices); pre-login → explicit pick on the login/setup screen (remembered client-side) → browser auto-detect → fallback **EN**.
+- Backend: per-user `preferred_language` field + a read/update endpoint. Because API messages use **stable error codes**, the backend does *no* localization itself — it returns codes and the frontend maps them to localized text (decided here so the wire/display split is in place from the start).
+- 🟢 Switch language at runtime (ZH ⇄ EN) and the whole UI follows; the choice persists with the account across sessions/devices; the login screen renders in the resolved language before auth; a backend error shows up localized via its code.
+
+> Locked: **react-i18next**, ZH + EN, backend error-codes. The detailed design doc (`docs/plan/milestones/M1.5.md`) is written after the M1 walkthrough; the language-persistence specifics (account-bound + pre-login fallback) and the default language are finalized there.
 
 ### M2 — Stock ledger & consumables (③)
 **Goal:** track consumable stock by in/out flows with low-stock detection.
@@ -173,8 +183,8 @@ Legend: ⬜ planned · 🟡 active · 🟢 done. **Active milestone = the single
 Not scheduled; revisit when the core is stable.
 - Opened/frozen/thawed "+N days" perishable refinement (if not folded into M3).
 - OIDC / SSO; 2FA.
-- Internationalization (i18n) / multi-language.
-- Label printing.
+- **Asset tagging & label printing** (complements M5 barcode scanning): for durables without a manufacturer serial, auto-assign an **internal asset tag** — a short human-readable code (e.g. `OMNI-000123`), *not* a raw UUID, kept **distinct from the manufacturer `serial`** field. Generate a printer-friendly **QR/barcode label as SVG** (QR + the human-readable code), stick it on the box/tool, then later **scan to locate / file** it (the scan side lands in M5). Closes the loop: auto-tag → print → stick → scan.
+- **"Promote an instance to a container location"** one-click UX: create the mirror location node + the `item_instance_id` container-as-item link in a single step (removes the manual two-step when a tracked asset is also used as a place — see the container-as-item bridge, M1 §3.1).
 - React Native native mobile client (the responsive PWA covers v1).
 - Postgres + RLS (only if true multi-tenant SaaS is ever wanted).
 
