@@ -9,9 +9,10 @@ import { PageShell } from "../components/PageShell";
 import { TreeBrowser } from "../components/TreeBrowser";
 
 export function Locations() {
-  const { t } = useTranslation("nav");
+  const { t: tNav } = useTranslation("nav");
+  const { t: tLoc } = useTranslation("locations");
   return (
-    <PageShell title={t("locations")}>
+    <PageShell title={tNav("locations")} subtitle={tLoc("page.subtitle")}>
       <TreeBrowser resource="locations" />
     </PageShell>
   );

@@ -1,4 +1,7 @@
 {
+  "page": {
+    "subtitle": "Organize where things are stored"
+  },
   "tree": {
     "loadError": "Failed to load location tree.",
     "empty": "No locations yet. Create one above.",

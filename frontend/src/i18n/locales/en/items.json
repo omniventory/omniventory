@@ -1,6 +1,7 @@
 {
   "page": {
-    "title": "Items"
+    "title": "Items",
+    "subtitle": "Manage your item definitions and instances"
   },
   "search": {
     "placeholder": "Search by name…",

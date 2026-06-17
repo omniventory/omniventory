@@ -413,7 +413,7 @@ export function Items() {
   ];
 
   return (
-    <PageShell title={t("page.title")}>
+    <PageShell title={t("page.title")} subtitle={t("page.subtitle")}>
       <Stack gap="md">
         {/* Search + category filter + create button */}
         <Group wrap="nowrap" align="flex-end">

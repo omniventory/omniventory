@@ -1,4 +1,7 @@
 {
+  "page": {
+    "subtitle": "Group items by category"
+  },
   "tree": {
     "loadError": "Failed to load category tree.",
     "empty": "No categories yet. Create one above.",

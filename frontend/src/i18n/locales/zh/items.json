@@ -1,6 +1,7 @@
 {
   "page": {
-    "title": "物品"
+    "title": "物品",
+    "subtitle": "管理物品定义与实例"
   },
   "search": {
     "placeholder": "按名称搜索……",
