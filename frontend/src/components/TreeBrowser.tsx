@@ -89,7 +89,9 @@ type ModalState =
   | { kind: "reparent"; nodeId: number; currentParentId: number | null }
   | { kind: "delete"; nodeId: number; nodeName: string }
   | { kind: "moveInstance"; instance: InstanceResponse }
-  | { kind: "deleteInstance"; instance: InstanceResponse };
+  | { kind: "deleteInstance"; instance: InstanceResponse }
+  | { kind: "linkContainerAsset"; locationId: number }
+  | { kind: "unlinkContainerAsset"; locationId: number };
 
 // ── Main component ───────────────────────────────────────────────────────────
 
@@ -118,6 +120,8 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
   const [formParentId, setFormParentId] = useState<string>("");
   // For the move-instance modal: the target location id as a string.
   const [moveTargetId, setMoveTargetId] = useState<string>("");
+  // For the link-container-asset modal: the chosen instance id as a string.
+  const [linkInstanceId, setLinkInstanceId] = useState<string>("");
 
   // ── Location instances (Fix 3) ─────────────────────────────────────────────
   // Instances at the currently selected location (locations only).
@@ -131,6 +135,11 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
   useEffect(() => {
     definitionNamesRef.current = definitionNames;
   }, [definitionNames]);
+
+  // ── All instances (for container-asset picker) ─────────────────────────────
+  // Full list of all instances, loaded once for the link-container-asset modal.
+  const [allInstances, setAllInstances] = useState<InstanceResponse[]>([]);
+  const [allInstancesLoading, setAllInstancesLoading] = useState(false);
 
   const tree = useTree();
 
@@ -243,6 +252,47 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId, resource]);
 
+  // ── Load all instances (for the container-asset picker) ───────────────────
+  /**
+   * Fetches all instances (no location filter) and resolves definition names
+   * for all of them.  Called when the link-container-asset modal opens.
+   */
+  const loadAllInstances = useCallback(async () => {
+    setAllInstancesLoading(true);
+    try {
+      const { data, error } = await client.GET("/api/instances");
+      if (error || !data) {
+        setAllInstances([]);
+        return;
+      }
+      setAllInstances(data);
+
+      // Resolve any definition names we haven't cached yet.
+      const missingDefIds = [
+        ...new Set(data.map((i) => i.definition_id)),
+      ].filter((id) => !definitionNamesRef.current.has(id));
+
+      if (missingDefIds.length > 0) {
+        const results = await Promise.all(
+          missingDefIds.map((id) =>
+            client.GET("/api/definitions/{definition_id}", {
+              params: { path: { definition_id: id } },
+            }),
+          ),
+        );
+        setDefinitionNames((prev) => {
+          const next = new Map(prev);
+          results.forEach((r, idx) => {
+            if (r.data) next.set(missingDefIds[idx], r.data.name);
+          });
+          return next;
+        });
+      }
+    } finally {
+      setAllInstancesLoading(false);
+    }
+  }, []);
+
   // ── Modal helpers ──────────────────────────────────────────────────────────
   function openCreate(parentId: number | null) {
     setFormName("");
@@ -276,6 +326,19 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
   function openDeleteInstance(instance: InstanceResponse) {
     setActionError(null);
     setModal({ kind: "deleteInstance", instance });
+  }
+
+  function openLinkContainerAsset(locationId: number) {
+    setLinkInstanceId("");
+    setActionError(null);
+    setModal({ kind: "linkContainerAsset", locationId });
+    // Kick off the instance list load (non-blocking; spinner shows inside modal).
+    void loadAllInstances();
+  }
+
+  function openUnlinkContainerAsset(locationId: number) {
+    setActionError(null);
+    setModal({ kind: "unlinkContainerAsset", locationId });
   }
 
   function closeModal() {
@@ -487,6 +550,58 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
     }
   }
 
+  // ── Container-asset link / unlink handlers ─────────────────────────────────
+
+  async function handleLinkContainerAsset(locationId: number) {
+    if (!linkInstanceId) return;
+    setBusy(true);
+    setActionError(null);
+    try {
+      const { error, response } = await client.PATCH(
+        "/api/locations/{location_id}",
+        {
+          params: { path: { location_id: locationId } },
+          body: { item_instance_id: Number(linkInstanceId) },
+        },
+      );
+      if (error) {
+        if (response.status === 409) {
+          const msg =
+            typeof error === "object" && error !== null && "detail" in error
+              ? String((error as { detail: unknown }).detail)
+              : "This instance is already linked to another location.";
+          setActionError(msg);
+        } else {
+          setActionError("Failed to link container asset.");
+        }
+        return;
+      }
+      closeModal();
+      await loadTree();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUnlinkContainerAsset(locationId: number) {
+    setBusy(true);
+    setActionError(null);
+    try {
+      const { error } = await client.PATCH("/api/locations/{location_id}", {
+        params: { path: { location_id: locationId } },
+        body: { item_instance_id: null },
+      });
+      if (error) {
+        setActionError("Failed to unlink container asset.");
+        return;
+      }
+      closeModal();
+      await loadTree();
+    } finally {
+      setBusy(false);
+    }
+  }
+
   // ── Reparent helpers ───────────────────────────────────────────────────────
 
   /**
@@ -541,6 +656,31 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
     return [noneOption, ...nodes];
   }, [flatMap]);
 
+  /**
+   * Build a human-readable label for an instance:
+   *   "<Definition Name> — SN: <serial>" or "<Definition Name> — qty: <quantity>"
+   */
+  function instanceLabel(inst: InstanceResponse): string {
+    const defName = definitionNames.get(inst.definition_id) ?? `Def #${inst.definition_id}`;
+    const detail = inst.serial ? `SN: ${inst.serial}` : `qty: ${inst.quantity}`;
+    return `${defName} — ${detail}`;
+  }
+
+  /**
+   * Select options for the link-container-asset modal.
+   * Recomputes when allInstances or definitionNames change (i.e. after the
+   * instances + definition names load completes).
+   */
+  const linkInstanceOptions = useMemo(
+    () =>
+      allInstances
+        .slice()
+        .sort((a, b) => instanceLabel(a).localeCompare(instanceLabel(b)))
+        .map((inst) => ({ value: String(inst.id), label: instanceLabel(inst) })),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allInstances, definitionNames],
+  );
+
   // ── Selected node info ─────────────────────────────────────────────────────
   const selectedNode = selectedId !== null ? flatMap.get(selectedId) : null;
   const isLocation = resource === "locations";
@@ -550,6 +690,19 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
     selectedNode !== undefined &&
     "item_instance_id" in selectedNode &&
     selectedNode.item_instance_id !== null;
+
+  // The linked instance object (if any) for the detail panel display.
+  // Search locationInstances first (always populated when a location is selected),
+  // then fall back to allInstances (populated after the Link modal opens).
+  const linkedInstance = selectedIsContainerAsItem
+    ? (() => {
+        const targetId = (selectedNode as LocationTreeNode).item_instance_id;
+        return (
+          locationInstances.find((i) => i.id === targetId) ??
+          allInstances.find((i) => i.id === targetId)
+        );
+      })()
+    : undefined;
 
   // ── Mantine Tree node renderer ─────────────────────────────────────────────
   // Memoize so the array reference is stable between renders — prevents the
@@ -715,11 +868,37 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
               {selectedNode.description}
             </Text>
           )}
-          {selectedIsContainerAsItem && (
-            <Badge color="teal" variant="light" size="sm">
-              Container asset — Instance #
-              {(selectedNode as LocationTreeNode).item_instance_id}
-            </Badge>
+          {/* Container-asset link/unlink controls (locations only) */}
+          {isLocation && (
+            selectedIsContainerAsItem ? (
+              <Group gap="xs" align="center" data-testid="container-asset-linked">
+                <Badge color="teal" variant="light" size="sm">
+                  Container asset —{" "}
+                  {linkedInstance
+                    ? instanceLabel(linkedInstance)
+                    : `Instance #${(selectedNode as LocationTreeNode).item_instance_id}`}
+                </Badge>
+                <Button
+                  size="xs"
+                  variant="subtle"
+                  color="red"
+                  onClick={() => openUnlinkContainerAsset(selectedNode.id)}
+                  data-testid="unlink-container-btn"
+                >
+                  Unlink
+                </Button>
+              </Group>
+            ) : (
+              <Button
+                size="xs"
+                variant="light"
+                color="teal"
+                onClick={() => openLinkContainerAsset(selectedNode.id)}
+                data-testid="link-container-btn"
+              >
+                Link container asset
+              </Button>
+            )
           )}
           {/* Instances at this location (Fix 3 — locations only) */}
           {isLocation && (
@@ -1040,6 +1219,97 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
             >
               Delete
             </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* Link container asset modal */}
+      <Modal
+        opened={modal.kind === "linkContainerAsset"}
+        onClose={closeModal}
+        title="Link container asset"
+        size="sm"
+      >
+        <Stack gap="sm">
+          {actionError && (
+            <Alert
+              icon={<AlertCircle size={16} />}
+              color="red"
+              variant="light"
+              data-testid="link-container-error"
+            >
+              {actionError}
+            </Alert>
+          )}
+          {allInstancesLoading ? (
+            <Text size="sm" c="dimmed">Loading instances…</Text>
+          ) : (
+            <Select
+              label="Choose an instance to link as this location's container asset"
+              data={linkInstanceOptions}
+              value={linkInstanceId}
+              onChange={(v) => setLinkInstanceId(v ?? "")}
+              allowDeselect={false}
+              searchable
+              placeholder="Search by name or serial…"
+              data-testid="link-instance-select"
+            />
+          )}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeModal} disabled={busy}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() =>
+                modal.kind === "linkContainerAsset" &&
+                handleLinkContainerAsset(modal.locationId)
+              }
+              loading={busy}
+              disabled={!linkInstanceId}
+              data-testid="confirm-link-btn"
+            >
+              Link
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+
+      {/* Unlink container asset confirmation modal */}
+      <Modal
+        opened={modal.kind === "unlinkContainerAsset"}
+        onClose={closeModal}
+        title="Unlink container asset"
+        size="sm"
+      >
+        <Stack gap="sm">
+          {actionError && (
+            <Alert icon={<AlertCircle size={16} />} color="red" variant="light">
+              {actionError}
+            </Alert>
+          )}
+          {!actionError && (
+            <Text size="sm">
+              Remove the container-asset link from this location? The instance
+              record will not be deleted.
+            </Text>
+          )}
+          <Group justify="flex-end">
+            <Button variant="default" onClick={closeModal} disabled={busy}>
+              Cancel
+            </Button>
+            {!actionError && (
+              <Button
+                color="red"
+                onClick={() =>
+                  modal.kind === "unlinkContainerAsset" &&
+                  handleUnlinkContainerAsset(modal.locationId)
+                }
+                loading={busy}
+                data-testid="confirm-unlink-btn"
+              >
+                Unlink
+              </Button>
+            )}
           </Group>
         </Stack>
       </Modal>

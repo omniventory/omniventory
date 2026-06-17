@@ -1050,3 +1050,274 @@ describe("TreeBrowser — clicking blank space in the tree region clears selecti
     expect(client.DELETE).not.toHaveBeenCalled();
   });
 });
+
+// ── Container-asset link / unlink ─────────────────────────────────────────────
+
+/**
+ * Shared GET mock that serves the location tree, instances (all + by location),
+ * and definition names — used by the link/unlink test suite.
+ *
+ * The location tree contains:
+ *   Home (1) → Garage (2, no link), Toolbox (3, item_instance_id=42)
+ *
+ * A single instance exists: id=42, definition_id=5, serial="SN-TB-1".
+ */
+function makeFullGetMock() {
+  vi.mocked(client.GET).mockImplementation(async (path: string, opts?: unknown) => {
+    if (path === "/api/locations/tree") {
+      return {
+        data: locationTreeFixture,
+        response: new Response(null, { status: 200 }),
+      } as AnyClientResult;
+    }
+    if (path === "/api/instances") {
+      const params = (opts as { params?: { query?: { location_id?: number } } } | undefined)
+        ?.params?.query;
+      // No filter → return all instances (for the container-asset picker).
+      if (!params?.location_id) {
+        return {
+          data: [instanceForToolbox],
+          response: new Response(null, { status: 200 }),
+        } as AnyClientResult;
+      }
+      // Filtered by location → return matching instances.
+      if (params.location_id === 3) {
+        return {
+          data: [instanceForToolbox],
+          response: new Response(null, { status: 200 }),
+        } as AnyClientResult;
+      }
+      return { data: [], response: new Response(null, { status: 200 }) } as AnyClientResult;
+    }
+    if (path === "/api/definitions/{definition_id}") {
+      return {
+        data: definitionDrill,
+        response: new Response(null, { status: 200 }),
+      } as AnyClientResult;
+    }
+    return { data: [], response: new Response(null, { status: 200 }) } as AnyClientResult;
+  });
+}
+
+/** The instance that backs the Toolbox container-asset link. */
+const instanceForToolbox = {
+  id: 42,
+  definition_id: 5,
+  location_id: 3,
+  quantity: "1",
+  serial: "SN-TB-1",
+  model_number: null,
+  manufacturer: null,
+  warranty_expires: null,
+  warranty_details: null,
+  purchase_price: null,
+  purchase_date: null,
+  purchase_source: null,
+  created_at: "2025-01-01T00:00:00Z",
+};
+
+describe("TreeBrowser — link container asset (happy path)", () => {
+  beforeEach(() => {
+    makeFullGetMock();
+    vi.mocked(client.PATCH).mockResolvedValue({
+      data: { id: 2, name: "Garage", item_instance_id: 42 },
+      response: new Response(null, { status: 200 }),
+    } as AnyClientResult);
+  });
+
+  it("shows Link button when location has no item_instance_id", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Select "Garage" (id=2, item_instance_id=null)
+    fireEvent.click(screen.getByText("Garage"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("link-container-btn")).toBeDefined();
+    });
+    // Unlink button must NOT be visible
+    expect(screen.queryByTestId("unlink-container-btn")).toBeNull();
+  });
+
+  it("opens link modal with an instance Select picker (not a raw number input)", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    fireEvent.click(screen.getByText("Garage"));
+    const linkBtn = await screen.findByTestId("link-container-btn");
+    fireEvent.click(linkBtn);
+
+    // Modal opens — Select picker is present; no numeric text input
+    await waitFor(() => {
+      expect(screen.getByTestId("link-instance-select")).toBeDefined();
+    });
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+  });
+
+  it("picking an instance and clicking Link calls PATCH with item_instance_id", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    fireEvent.click(screen.getByText("Garage"));
+    const linkBtn = await screen.findByTestId("link-container-btn");
+    fireEvent.click(linkBtn);
+
+    // Wait for the Select to appear (allInstances loaded)
+    const selectInput = await screen.findByTestId("link-instance-select");
+    fireEvent.click(selectInput);
+
+    // The instance option should be present (definition name + serial)
+    await waitFor(() => {
+      const opt = [...document.querySelectorAll('[role="option"]')].find(
+        (el) => el.textContent?.includes("SN-TB-1"),
+      );
+      expect(opt).toBeDefined();
+    });
+    const opt = [...document.querySelectorAll('[role="option"]')].find(
+      (el) => el.textContent?.includes("SN-TB-1"),
+    );
+    fireEvent.click(opt!);
+
+    // Click Link
+    const confirmBtn = screen.getByTestId("confirm-link-btn");
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(client.PATCH).toHaveBeenCalledWith(
+        "/api/locations/{location_id}",
+        expect.objectContaining({
+          params: { path: { location_id: 2 } },
+          body: expect.objectContaining({ item_instance_id: 42 }),
+        }),
+      );
+    });
+  });
+});
+
+describe("TreeBrowser — link container asset 409 (already linked elsewhere)", () => {
+  beforeEach(() => {
+    makeFullGetMock();
+    vi.mocked(client.PATCH).mockResolvedValue({
+      error: { detail: "Instance 42 is already linked to location 5." },
+      response: new Response(null, { status: 409 }),
+    } as AnyClientResult);
+  });
+
+  it("shows the 409 error message inside the link modal", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    fireEvent.click(screen.getByText("Garage"));
+    const linkBtn = await screen.findByTestId("link-container-btn");
+    fireEvent.click(linkBtn);
+
+    const selectInput = await screen.findByTestId("link-instance-select");
+    fireEvent.click(selectInput);
+
+    await waitFor(() => {
+      const opt = [...document.querySelectorAll('[role="option"]')].find(
+        (el) => el.textContent?.includes("SN-TB-1"),
+      );
+      expect(opt).toBeDefined();
+    });
+    const opt = [...document.querySelectorAll('[role="option"]')].find(
+      (el) => el.textContent?.includes("SN-TB-1"),
+    );
+    fireEvent.click(opt!);
+
+    fireEvent.click(screen.getByTestId("confirm-link-btn"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("link-container-error")).toBeDefined();
+      expect(screen.getByText(/instance 42 is already linked/i)).toBeDefined();
+    });
+  });
+});
+
+describe("TreeBrowser — unlink container asset (happy path)", () => {
+  beforeEach(() => {
+    makeFullGetMock();
+    vi.mocked(client.PATCH).mockResolvedValue({
+      data: { id: 3, name: "Toolbox", item_instance_id: null },
+      response: new Response(null, { status: 200 }),
+    } as AnyClientResult);
+  });
+
+  it("shows Unlink button when location has item_instance_id set", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Toolbox"));
+
+    // Select "Toolbox" (id=3, item_instance_id=42)
+    fireEvent.click(screen.getByText("Toolbox"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("unlink-container-btn")).toBeDefined();
+    });
+    // Link button must NOT be visible for a linked location
+    expect(screen.queryByTestId("link-container-btn")).toBeNull();
+  });
+
+  it("linked location shows human-readable instance label instead of raw #ID", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Toolbox"));
+    fireEvent.click(screen.getByText("Toolbox"));
+
+    // The detail panel should show the instance badge with a human-readable label.
+    // locationInstances is loaded when the location is selected, so the linked
+    // instance (id=42, definition "Cordless Drill", serial "SN-TB-1") is resolved
+    // without needing to open the Link modal.
+    await waitFor(() => {
+      const badge = screen.getByTestId("container-asset-linked");
+      expect(badge).toBeDefined();
+      // Must show definition name + serial — NOT the raw "Instance #42" fallback.
+      expect(badge.textContent).toContain("Cordless Drill");
+      expect(badge.textContent).toContain("SN-TB-1");
+      expect(badge.textContent).not.toContain("Instance #42");
+    });
+  });
+
+  it("clicking Unlink → confirm calls PATCH with item_instance_id: null", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Toolbox"));
+    fireEvent.click(screen.getByText("Toolbox"));
+
+    const unlinkBtn = await screen.findByTestId("unlink-container-btn");
+    fireEvent.click(unlinkBtn);
+
+    // Confirmation modal appears
+    const confirmBtn = await screen.findByTestId("confirm-unlink-btn");
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(client.PATCH).toHaveBeenCalledWith(
+        "/api/locations/{location_id}",
+        expect.objectContaining({
+          params: { path: { location_id: 3 } },
+          body: expect.objectContaining({ item_instance_id: null }),
+        }),
+      );
+    });
+  });
+});
+
+describe("TreeBrowser — link/unlink controls hidden for categories", () => {
+  beforeEach(() => {
+    makeSuccessGetCategories();
+  });
+
+  it("neither Link nor Unlink button appears for a selected category", async () => {
+    renderCategories();
+    await waitFor(() => screen.getByText("Tools"));
+
+    fireEvent.click(screen.getByText("Tools"));
+
+    await waitFor(() => {
+      // The detail panel appears (Reparent button is there)
+      expect(screen.getByRole("button", { name: /reparent/i })).toBeDefined();
+    });
+
+    expect(screen.queryByTestId("link-container-btn")).toBeNull();
+    expect(screen.queryByTestId("unlink-container-btn")).toBeNull();
+    expect(screen.queryByTestId("container-asset-linked")).toBeNull();
+  });
+});
