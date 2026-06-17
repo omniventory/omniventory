@@ -18,5 +18,11 @@
   "entities": {
     "location": "位置",
     "category": "分类"
+  },
+  "notFound": {
+    "code": "404",
+    "title": "页面不存在",
+    "message": "您访问的页面不存在。",
+    "backHome": "返回首页"
   }
 }

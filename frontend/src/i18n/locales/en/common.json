@@ -18,5 +18,11 @@
   "entities": {
     "location": "location",
     "category": "category"
+  },
+  "notFound": {
+    "code": "404",
+    "title": "Page not found",
+    "message": "The page you are looking for does not exist.",
+    "backHome": "Back to home"
   }
 }

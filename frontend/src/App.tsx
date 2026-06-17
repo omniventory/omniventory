@@ -30,6 +30,7 @@ import { Locations } from "./pages/Locations";
 import { Categories } from "./pages/Categories";
 import { Items, ItemDetail } from "./pages/Items";
 import { InstanceDetail } from "./pages/InstanceDetail";
+import { NotFound } from "./pages/NotFound";
 import { client } from "./api/client";
 import i18n from "./i18n";
 import type { components } from "./api/schema";
@@ -107,6 +108,7 @@ function App() {
           <Route path="/items" element={<Items />} />
           <Route path="/items/:id" element={<ItemDetail />} />
           <Route path="/instances/:id" element={<InstanceDetail />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </AppShell>
     </BrowserRouter>

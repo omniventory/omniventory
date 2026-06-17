@@ -18,6 +18,7 @@ import { AppShell } from "../shell/AppShell.js";
 import { Dashboard } from "../pages/Dashboard.js";
 import { Locations } from "../pages/Locations.js";
 import { Categories } from "../pages/Categories.js";
+import { NotFound } from "../pages/NotFound.js";
 
 /** Mock the typed client module. */
 vi.mock("../api/client.js", () => ({
@@ -50,6 +51,7 @@ function renderAtPath(path: string) {
             <Route path="/" element={<Dashboard />} />
             <Route path="/locations" element={<Locations />} />
             <Route path="/categories" element={<Categories />} />
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </AppShell>
       </MantineProvider>
@@ -129,5 +131,39 @@ describe("Routing — nav links in shell", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: /logout/i })).toBeDefined();
     });
+  });
+});
+
+describe("Routing — 404 catch-all", () => {
+  beforeEach(() => {
+    vi.mocked(client.POST).mockResolvedValue({
+      data: { message: "Logged out" },
+      response: new Response(null, { status: 200 }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+  });
+
+  it("renders NotFound page for an unknown authed path", async () => {
+    renderAtPath("/this/path/does/not/exist");
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /page not found/i })).toBeDefined();
+    });
+  });
+
+  it("NotFound page shows a link back to home (/)", async () => {
+    renderAtPath("/unknown-route");
+    await waitFor(() => {
+      const homeLink = screen.getByRole("link", { name: /back to home/i });
+      expect(homeLink).toBeDefined();
+      expect((homeLink as HTMLAnchorElement).getAttribute("href")).toBe("/");
+    });
+  });
+
+  it("known routes do NOT render the NotFound page", async () => {
+    renderAtPath("/");
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: /dashboard/i })).toBeDefined();
+    });
+    expect(screen.queryByRole("heading", { name: /page not found/i })).toBeNull();
   });
 });

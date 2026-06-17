@@ -1,7 +1,8 @@
 /**
  * ErrorState — shown when an operation or data load fails.
+ * Renders as an ARIA-role alert so screen readers announce it immediately.
  */
-import { Alert, Text } from "@mantine/core";
+import { Alert } from "@mantine/core";
 import { AlertCircle } from "react-feather";
 import { useTranslation } from "react-i18next";
 
@@ -18,8 +19,10 @@ export function ErrorState({ message }: ErrorStateProps) {
       title={t("status.error")}
       color="red"
       variant="light"
+      radius="md"
+      role="alert"
     >
-      <Text size="sm">{displayMessage}</Text>
+      {displayMessage}
     </Alert>
   );
 }
