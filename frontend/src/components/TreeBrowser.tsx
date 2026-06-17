@@ -42,6 +42,7 @@ import { Plus, Edit2, Trash2, AlertCircle, Move } from "react-feather";
 import { useTranslation, Trans } from "react-i18next";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
+import { notifySuccess } from "./notify";
 import type { components } from "../api/schema";
 import { LoadingState } from "./LoadingState";
 import { ErrorState } from "./ErrorState";
@@ -373,6 +374,7 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
         }
       }
       closeModal();
+      notifySuccess(t("success.created"));
       await loadTree();
     } finally {
       setBusy(false);
@@ -407,6 +409,7 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
         }
       }
       closeModal();
+      notifySuccess(t("success.renamed"));
       await loadTree();
     } finally {
       setBusy(false);
@@ -442,6 +445,7 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
         }
       }
       closeModal();
+      notifySuccess(t("success.moved"));
       await loadTree();
     } finally {
       setBusy(false);
@@ -477,6 +481,7 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
       }
       setSelectedId(null);
       closeModal();
+      notifySuccess(t("success.deleted"));
       await loadTree();
     } finally {
       setBusy(false);
@@ -499,6 +504,7 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
         return;
       }
       closeModal();
+      notifySuccess(t("success.instanceMoved"));
       // Reload instances for the current location (instance left this location).
       if (selectedId !== null) await loadLocationInstances(selectedId);
     } finally {
@@ -518,6 +524,7 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
         return;
       }
       closeModal();
+      notifySuccess(t("success.instanceDeleted"));
       if (selectedId !== null) await loadLocationInstances(selectedId);
     } finally {
       setBusy(false);
@@ -543,6 +550,7 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
         return;
       }
       closeModal();
+      notifySuccess(t("success.containerLinked"));
       await loadTree();
     } finally {
       setBusy(false);
@@ -562,6 +570,7 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
         return;
       }
       closeModal();
+      notifySuccess(t("success.containerUnlinked"));
       await loadTree();
     } finally {
       setBusy(false);

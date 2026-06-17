@@ -69,5 +69,13 @@
   "instanceForm": {
     "createTitle": "Register new instance",
     "editTitle": "Edit instance"
+  },
+  "success": {
+    "created": "Item definition created.",
+    "updated": "Item definition updated.",
+    "deleted": "Item definition deleted.",
+    "instanceCreated": "Instance registered.",
+    "instanceUpdated": "Instance updated.",
+    "instanceDeleted": "Instance deleted."
   }
 }

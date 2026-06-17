@@ -12,5 +12,8 @@
   "languageEn": "EN",
   "languageZh": "中文",
   "userMenu": "用户菜单",
-  "language": "语言"
+  "language": "语言",
+  "success": {
+    "languageSaved": "语言偏好已保存。"
+  }
 }

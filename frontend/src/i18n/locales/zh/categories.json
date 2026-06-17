@@ -34,5 +34,11 @@
   "detail": {
     "reparentBtn": "移动",
     "deleteBtn": "删除"
+  },
+  "success": {
+    "created": "分类已创建。",
+    "renamed": "分类已重命名。",
+    "moved": "分类已移动。",
+    "deleted": "分类已删除。"
   }
 }

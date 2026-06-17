@@ -64,5 +64,15 @@
     "instancesTableDefinition": "Definition",
     "instancesTableSerial": "Serial",
     "instancesTableQty": "Qty"
+  },
+  "success": {
+    "created": "Location created.",
+    "renamed": "Location renamed.",
+    "moved": "Location moved.",
+    "deleted": "Location deleted.",
+    "instanceMoved": "Item moved to new location.",
+    "instanceDeleted": "Item deleted.",
+    "containerLinked": "Container asset linked.",
+    "containerUnlinked": "Container asset unlinked."
   }
 }

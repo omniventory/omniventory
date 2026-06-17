@@ -69,5 +69,13 @@
   "instanceForm": {
     "createTitle": "登记新实例",
     "editTitle": "编辑实例"
+  },
+  "success": {
+    "created": "物品定义已创建。",
+    "updated": "物品定义已更新。",
+    "deleted": "物品定义已删除。",
+    "instanceCreated": "实例已登记。",
+    "instanceUpdated": "实例已更新。",
+    "instanceDeleted": "实例已删除。"
   }
 }

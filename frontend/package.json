@@ -15,6 +15,7 @@
   "dependencies": {
     "@mantine/core": "^7.17.0",
     "@mantine/hooks": "^7.17.0",
+    "@mantine/notifications": "^7.17.8",
     "i18next": "^26.3.1",
     "i18next-browser-languagedetector": "^8.2.1",
     "openapi-fetch": "^0.13.5",

@@ -28,6 +28,7 @@ import { Edit2, Trash2, AlertCircle, ArrowLeft } from "react-feather";
 import { useTranslation, Trans } from "react-i18next";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
+import { notifySuccess } from "../components/notify";
 import type { components } from "../api/schema";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
@@ -179,6 +180,7 @@ export function InstanceDetail() {
         return;
       }
       setEditOpen(false);
+      notifySuccess(t("success.updated"));
       await loadAll();
     } finally {
       setBusy(false);
@@ -196,6 +198,7 @@ export function InstanceDetail() {
         setActionError(mapApiError(error));
         return;
       }
+      notifySuccess(t("success.deleted"));
       if (inst) {
         navigate(`/items/${inst.definition_id}`);
       } else {

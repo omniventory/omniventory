@@ -38,6 +38,7 @@ import { Plus, Edit2, Trash2, AlertCircle, ArrowLeft, Search } from "react-feath
 import { useTranslation, Trans } from "react-i18next";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
+import { notifySuccess } from "../components/notify";
 import type { components } from "../api/schema";
 import { PageShell } from "../components/PageShell";
 import { LoadingState } from "../components/LoadingState";
@@ -343,6 +344,7 @@ export function Items() {
         return;
       }
       closeDefModal();
+      notifySuccess(t("success.created"));
       await searchDefinitions();
     } finally {
       setDefBusy(false);
@@ -376,6 +378,7 @@ export function Items() {
         return;
       }
       closeDefModal();
+      notifySuccess(t("success.updated"));
       await searchDefinitions();
     } finally {
       setDefBusy(false);
@@ -398,6 +401,7 @@ export function Items() {
         return;
       }
       closeDefModal();
+      notifySuccess(t("success.deleted"));
       await searchDefinitions();
     } finally {
       setDefBusy(false);
@@ -725,6 +729,7 @@ export function ItemDetail() {
         return;
       }
       closeDefModal();
+      notifySuccess(t("success.updated"));
       await loadAll();
     } finally {
       setDefBusy(false);
@@ -746,6 +751,7 @@ export function ItemDetail() {
         setDefError(mapApiError(error));
         return;
       }
+      notifySuccess(t("success.deleted"));
       navigate("/items");
     } finally {
       setDefBusy(false);
@@ -814,6 +820,7 @@ export function ItemDetail() {
         return;
       }
       closeInstModal();
+      notifySuccess(t("success.instanceCreated"));
       await loadAll();
     } finally {
       setInstBusy(false);
@@ -850,6 +857,7 @@ export function ItemDetail() {
         return;
       }
       closeInstModal();
+      notifySuccess(t("success.instanceUpdated"));
       await loadAll();
     } finally {
       setInstBusy(false);
@@ -872,6 +880,7 @@ export function ItemDetail() {
         return;
       }
       closeInstModal();
+      notifySuccess(t("success.instanceDeleted"));
       await loadAll();
     } finally {
       setInstBusy(false);

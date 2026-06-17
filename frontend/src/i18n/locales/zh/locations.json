@@ -64,5 +64,15 @@
     "instancesTableDefinition": "定义",
     "instancesTableSerial": "序列号",
     "instancesTableQty": "数量"
+  },
+  "success": {
+    "created": "位置已创建。",
+    "renamed": "位置已重命名。",
+    "moved": "位置已移动。",
+    "deleted": "位置已删除。",
+    "instanceMoved": "物品已移至新位置。",
+    "instanceDeleted": "物品已删除。",
+    "containerLinked": "容器资产已关联。",
+    "containerUnlinked": "容器资产已取消关联。"
   }
 }

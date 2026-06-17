@@ -38,5 +38,9 @@
   "deleteModal": {
     "title": "Delete instance",
     "confirmation": "Delete instance <bold>#{{id}}</bold>? This cannot be undone."
+  },
+  "success": {
+    "updated": "Instance updated.",
+    "deleted": "Instance deleted."
   }
 }

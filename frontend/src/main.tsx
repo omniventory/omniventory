@@ -10,6 +10,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { MantineProvider, ColorSchemeScript } from "@mantine/core";
+import { Notifications } from "@mantine/notifications";
 import { I18nextProvider } from "react-i18next";
 
 // i18n must be initialized before the React tree renders.
@@ -18,6 +19,8 @@ import i18n from "./i18n";
 
 // Mantine core styles — must come before component styles
 import "@mantine/core/styles.css";
+// Notifications styles — must come after core styles
+import "@mantine/notifications/styles.css";
 
 import { theme } from "./theme";
 import App from "./App";
@@ -38,6 +41,7 @@ createRoot(rootElement).render(
     <ColorSchemeScript defaultColorScheme="auto" />
     <I18nextProvider i18n={i18n}>
       <MantineProvider theme={theme} defaultColorScheme="auto">
+        <Notifications position="top-center" />
         <App />
       </MantineProvider>
     </I18nextProvider>

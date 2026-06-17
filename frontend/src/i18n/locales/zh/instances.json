@@ -38,5 +38,9 @@
   "deleteModal": {
     "title": "删除实例",
     "confirmation": "删除实例 <bold>#{{id}}</bold>？此操作不可撤销。"
+  },
+  "success": {
+    "updated": "实例已更新。",
+    "deleted": "实例已删除。"
   }
 }

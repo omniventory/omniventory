@@ -25,6 +25,7 @@ import i18n from "../i18n";
 import { SUPPORTED_LANGUAGES, type LanguageCode } from "../i18n/languages";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
+import { notifySuccess } from "./notify";
 
 interface LanguageSwitcherProps {
   /**
@@ -61,6 +62,10 @@ export function LanguageSwitcher({ mode }: LanguageSwitcherProps) {
       if (apiError) {
         // Non-fatal: local change already applied above; surface error inline.
         setPatchError(mapApiError(apiError));
+      } else {
+        // Use i18n.t directly (not the hook's t) so the message is in the
+        // newly-selected language even within the same async execution frame.
+        notifySuccess(i18n.t("success.languageSaved", { ns: "nav" }));
       }
     }
   }

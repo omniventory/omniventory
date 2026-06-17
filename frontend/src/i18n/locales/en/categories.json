@@ -34,5 +34,11 @@
   "detail": {
     "reparentBtn": "Reparent",
     "deleteBtn": "Delete"
+  },
+  "success": {
+    "created": "Category created.",
+    "renamed": "Category renamed.",
+    "moved": "Category moved.",
+    "deleted": "Category deleted."
   }
 }
