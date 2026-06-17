@@ -160,7 +160,10 @@ function DefinitionFormModal({
   ];
   const locationOptions = [
     { value: "", label: "— None —" },
-    ...locations.map((l) => ({ value: String(l.id), label: l.name })),
+    ...locations.map((l) => {
+      const assetSuffix = l.container_asset_label ? ` — ${l.container_asset_label}` : "";
+      return { value: String(l.id), label: `${l.name}${assetSuffix}` };
+    }),
   ];
 
   return (

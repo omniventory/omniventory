@@ -633,10 +633,19 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
     if (modal.kind !== "reparent") return [rootOption];
 
     const excluded = collectDescendantIds(modal.nodeId);
+    const locationResource = resource === "locations";
     const nodes = [...flatMap.values()]
       .filter((n) => !excluded.has(n.id))
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map((n) => ({ value: String(n.id), label: n.name }));
+      .map((n) => {
+        const assetLabel =
+          locationResource &&
+          "container_asset_label" in n &&
+          n.container_asset_label
+            ? ` — ${n.container_asset_label}`
+            : "";
+        return { value: String(n.id), label: `${n.name}${assetLabel}` };
+      });
 
     return [rootOption, ...nodes];
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -650,11 +659,20 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
    */
   const moveLocationOptions = useMemo(() => {
     const noneOption = { value: "", label: "— None (no location) —" };
+    const locationResource = resource === "locations";
     const nodes = [...flatMap.values()]
       .sort((a, b) => a.name.localeCompare(b.name))
-      .map((n) => ({ value: String(n.id), label: n.name }));
+      .map((n) => {
+        const assetLabel =
+          locationResource &&
+          "container_asset_label" in n &&
+          n.container_asset_label
+            ? ` — ${n.container_asset_label}`
+            : "";
+        return { value: String(n.id), label: `${n.name}${assetLabel}` };
+      });
     return [noneOption, ...nodes];
-  }, [flatMap]);
+  }, [flatMap, resource]);
 
   /**
    * Build a human-readable label for an instance:
@@ -789,7 +807,8 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                     variant="light"
                     data-testid={`container-badge-${nodeId}`}
                   >
-                    Asset #{(nodeData as LocationTreeNode).item_instance_id}
+                    {(nodeData as LocationTreeNode).container_asset_label
+                      ?? `Asset #${(nodeData as LocationTreeNode).item_instance_id}`}
                   </Badge>
                 )}
                 {/* Action icons (show on hover or selection) */}

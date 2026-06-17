@@ -47,6 +47,7 @@ const locationTreeFixture = [
     description: null,
     parent_id: null,
     item_instance_id: null,
+    container_asset_label: null,
     created_at: "2025-01-01T00:00:00Z",
     children: [
       {
@@ -55,6 +56,7 @@ const locationTreeFixture = [
         description: "The garage",
         parent_id: 1,
         item_instance_id: null,
+        container_asset_label: null,
         created_at: "2025-01-01T00:00:00Z",
         children: [],
       },
@@ -65,6 +67,7 @@ const locationTreeFixture = [
         parent_id: 1,
         // container-as-item: this location IS a tracked asset
         item_instance_id: 42,
+        container_asset_label: "Lboxx-136 · SN SN-TB-1",
         created_at: "2025-01-01T00:00:00Z",
         children: [],
       },
@@ -1319,5 +1322,141 @@ describe("TreeBrowser — link/unlink controls hidden for categories", () => {
     expect(screen.queryByTestId("link-container-btn")).toBeNull();
     expect(screen.queryByTestId("unlink-container-btn")).toBeNull();
     expect(screen.queryByTestId("container-asset-linked")).toBeNull();
+  });
+});
+
+// ── Container asset labeling in tree badge and pickers ────────────────────────
+
+describe("TreeBrowser — container-as-item badge shows linked asset name (not raw #N)", () => {
+  beforeEach(() => {
+    makeSuccessGetLocations();
+  });
+
+  it("container location badge shows container_asset_label from tree node", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Toolbox"));
+
+    // Toolbox (id=3) has container_asset_label="Lboxx-136 · SN SN-TB-1"
+    const badge = screen.getByTestId("container-badge-3");
+    expect(badge).toBeDefined();
+    expect(badge.textContent).toContain("Lboxx-136");
+    expect(badge.textContent).toContain("SN-TB-1");
+    // Must NOT show raw "Asset #42"
+    expect(badge.textContent).not.toContain("Asset #42");
+  });
+
+  it("normal location does NOT show a container badge", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Garage (id=2) has item_instance_id=null → no badge
+    expect(screen.queryByTestId("container-badge-2")).toBeNull();
+  });
+
+  it("fallback badge shows #N when container_asset_label is null/absent", async () => {
+    // Simulate an API response where container_asset_label is not yet set (pre-load
+    // or old data) but item_instance_id is present.
+    vi.mocked(client.GET).mockResolvedValue({
+      data: [
+        {
+          id: 1,
+          name: "Home",
+          description: null,
+          parent_id: null,
+          item_instance_id: 99,
+          container_asset_label: null, // label not yet resolved
+          created_at: "2025-01-01T00:00:00Z",
+          children: [],
+        },
+      ],
+      response: new Response(null, { status: 200 }),
+    } as AnyClientResult);
+
+    renderLocations();
+    await waitFor(() => screen.getByText("Home"));
+
+    const badge = screen.getByTestId("container-badge-1");
+    expect(badge).toBeDefined();
+    // Fallback must show Asset #99
+    expect(badge.textContent).toContain("Asset #99");
+  });
+});
+
+describe("TreeBrowser — reparent picker annotates container-as-item locations", () => {
+  beforeEach(() => {
+    makeSuccessGetLocations();
+  });
+
+  it("reparent options for container-as-item location include the asset label", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Select "Garage" and open reparent modal
+    fireEvent.click(screen.getByText("Garage"));
+    const reparentBtn = await screen.findByRole("button", { name: /reparent/i });
+    fireEvent.click(reparentBtn);
+
+    const selectInput = await screen.findByTestId("reparent-select");
+    fireEvent.click(selectInput);
+
+    // The Toolbox option should show its asset label
+    await waitFor(() => {
+      const opts = [...document.querySelectorAll('[role="option"]')];
+      const toolboxOpt = opts.find((el) => el.textContent?.includes("Toolbox"));
+      expect(toolboxOpt).toBeDefined();
+      // Label must be appended
+      expect(toolboxOpt?.textContent).toContain("Lboxx-136");
+    });
+  });
+});
+
+describe("TreeBrowser — move-instance picker annotates container-as-item locations", () => {
+  beforeEach(() => {
+    vi.mocked(client.GET).mockImplementation(async (path: string, opts?: unknown) => {
+      if (path === "/api/locations/tree") {
+        return {
+          data: locationTreeFixture,
+          response: new Response(null, { status: 200 }),
+        } as AnyClientResult;
+      }
+      if (path === "/api/instances") {
+        const params = (opts as { params?: { query?: { location_id?: number } } })?.params?.query;
+        if (params?.location_id === 2) {
+          return {
+            data: [instanceAtGarage],
+            response: new Response(null, { status: 200 }),
+          } as AnyClientResult;
+        }
+        return { data: [], response: new Response(null, { status: 200 }) } as AnyClientResult;
+      }
+      if (path === "/api/definitions/{definition_id}") {
+        return { data: definitionDrill, response: new Response(null, { status: 200 }) } as AnyClientResult;
+      }
+      return { data: [], response: new Response(null, { status: 200 }) } as AnyClientResult;
+    });
+  });
+
+  it("move-instance target picker annotates container-as-item locations", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Select Garage (has an instance)
+    fireEvent.click(screen.getByText("Garage"));
+    await waitFor(() => {
+      expect(screen.getByTestId(`move-instance-${instanceAtGarage.id}`)).toBeDefined();
+    });
+
+    // Open move modal
+    fireEvent.click(screen.getByTestId(`move-instance-${instanceAtGarage.id}`));
+    const locationSelect = await screen.findByTestId("move-location-select");
+    fireEvent.click(locationSelect);
+
+    // Toolbox option should contain the asset label
+    await waitFor(() => {
+      const opts = [...document.querySelectorAll('[role="option"]')];
+      const toolboxOpt = opts.find((el) => el.textContent?.includes("Toolbox"));
+      expect(toolboxOpt).toBeDefined();
+      expect(toolboxOpt?.textContent).toContain("Lboxx-136");
+    });
   });
 });

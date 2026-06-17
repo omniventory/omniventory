@@ -25,10 +25,12 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.item_definition import ItemDefinition
 from app.models.location import Location
+from app.models.stock_instance import StockInstance
 from app.repositories.location import LocationRepository
 from app.repositories.stock_instance import StockInstanceRepository
-from app.schemas.location import LocationCreate, LocationTreeNode, LocationUpdate
+from app.schemas.location import LocationCreate, LocationResponse, LocationTreeNode, LocationUpdate
 from app.services.tree import TreeServiceMixin
 
 
@@ -45,6 +47,34 @@ class LocationService(TreeServiceMixin):
     # ---------------------------------------------------------------------- #
     # Helpers                                                                  #
     # ---------------------------------------------------------------------- #
+
+    def _build_container_label_map(self, instance_ids: list[int]) -> dict[int, str]:
+        """Return a map from instance_id → human-readable asset label.
+
+        Executes a single JOIN query to resolve definition name (+ serial if
+        present) for a given list of instance IDs.  The result is used to
+        populate ``container_asset_label`` on ``LocationResponse`` /
+        ``LocationTreeNode`` objects without an N+1 fetch pattern.
+
+        Label format:
+          - ``"<definition name>"`` when serial is absent.
+          - ``"<definition name> · SN <serial>"`` when serial is present.
+        """
+        if not instance_ids:
+            return {}
+
+        stmt = (
+            select(StockInstance.id, StockInstance.serial, ItemDefinition.name)
+            .join(ItemDefinition, StockInstance.definition_id == ItemDefinition.id)
+            .where(StockInstance.id.in_(instance_ids))
+        )
+        rows = self._db.execute(stmt).all()
+
+        result: dict[int, str] = {}
+        for inst_id, serial, def_name in rows:
+            label = def_name if not serial else f"{def_name} · SN {serial}"
+            result[inst_id] = label
+        return result
 
     def _get_or_404(self, location_id: int) -> Location:
         """Return a Location or raise HTTP 404."""
@@ -149,8 +179,20 @@ class LocationService(TreeServiceMixin):
         )
 
     def get(self, location_id: int) -> Location:
-        """Return a location by PK, or raise 404."""
+        """Return a location ORM object by PK, or raise 404 (internal use)."""
         return self._get_or_404(location_id)
+
+    def get_with_label(self, location_id: int) -> LocationResponse:
+        """Return a ``LocationResponse`` (with ``container_asset_label``) by PK.
+
+        Raises HTTP 404 if the location does not exist.
+        """
+        loc = self._get_or_404(location_id)
+        resp = LocationResponse.model_validate(loc)
+        if loc.item_instance_id is not None:
+            label_map = self._build_container_label_map([loc.item_instance_id])
+            resp.container_asset_label = label_map.get(loc.item_instance_id)
+        return resp
 
     def list_all(
         self,
@@ -158,9 +200,28 @@ class LocationService(TreeServiceMixin):
         q: str | None = None,
         parent_id: int | None = None,
         parent_id_filter: bool = False,
-    ) -> list[Location]:
-        """Return a filtered flat list of locations."""
-        return self._repo.list_all(q=q, parent_id=parent_id, parent_id_filter=parent_id_filter)
+    ) -> list[LocationResponse]:
+        """Return a filtered flat list of locations as ``LocationResponse`` DTOs.
+
+        Each response includes ``container_asset_label`` for container-as-item
+        locations (resolved in a single join query — no N+1).
+        """
+        locs = self._repo.list_all(q=q, parent_id=parent_id, parent_id_filter=parent_id_filter)
+
+        # Resolve container asset labels in one query.
+        container_instance_ids = [
+            loc.item_instance_id for loc in locs if loc.item_instance_id is not None
+        ]
+        label_map = self._build_container_label_map(container_instance_ids)
+
+        responses: list[LocationResponse] = []
+        for loc in locs:
+            resp = LocationResponse.model_validate(loc)
+            resp.container_asset_label = (
+                label_map.get(loc.item_instance_id) if loc.item_instance_id is not None else None
+            )
+            responses.append(resp)
+        return responses
 
     def update(self, location_id: int, data: LocationUpdate) -> Location:
         """Apply a partial update to a location.
@@ -209,10 +270,19 @@ class LocationService(TreeServiceMixin):
         """Build the full nested location tree.
 
         Fetches all locations in a single DB query and nests them in Python.
+        Resolves ``container_asset_label`` for all container-as-item nodes in
+        one additional join query (no N+1).
         Returns a list of root-level ``LocationTreeNode`` objects.
         """
         all_locations = self._repo.list_all()
-        return _build_tree(all_locations)
+
+        # Resolve container asset labels in one join query.
+        container_instance_ids = [
+            loc.item_instance_id for loc in all_locations if loc.item_instance_id is not None
+        ]
+        label_map = self._build_container_label_map(container_instance_ids)
+
+        return _build_tree(all_locations, label_map)
 
 
 # ---------------------------------------------------------------------------
@@ -220,7 +290,10 @@ class LocationService(TreeServiceMixin):
 # ---------------------------------------------------------------------------
 
 
-def _build_tree(locations: list[Location]) -> list[LocationTreeNode]:
+def _build_tree(
+    locations: list[Location],
+    label_map: dict[int, str] | None = None,
+) -> list[LocationTreeNode]:
     """Nest a flat list of Location rows into a recursive tree structure.
 
     Algorithm: two-pass Python — O(n).
@@ -232,7 +305,17 @@ def _build_tree(locations: list[Location]) -> list[LocationTreeNode]:
 
     Ordering within each level is by ``id`` (ascending), preserving insertion
     order from the DB query (which orders by ``id``).
+
+    Parameters
+    ----------
+    locations:
+        Flat list of all Location rows.
+    label_map:
+        Optional mapping of ``item_instance_id → container_asset_label``
+        (resolved by the service layer via a single join query).  When
+        provided, each node's ``container_asset_label`` is set accordingly.
     """
+    _label_map = label_map or {}
     node_map: dict[int, LocationTreeNode] = {}
     for loc in locations:
         # Build each node from the scalar columns only (ignore the ORM
@@ -244,6 +327,9 @@ def _build_tree(locations: list[Location]) -> list[LocationTreeNode]:
             description=loc.description,
             parent_id=loc.parent_id,
             item_instance_id=loc.item_instance_id,
+            container_asset_label=(
+                _label_map.get(loc.item_instance_id) if loc.item_instance_id is not None else None
+            ),
             created_at=loc.created_at,
             children=[],
         )

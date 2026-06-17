@@ -396,6 +396,9 @@ export interface paths {
          *
          *     - ``q``: case-insensitive substring match on the name.
          *     - ``parent_id``: when provided, return only locations with that parent.
+         *
+         *     Each response includes ``container_asset_label`` (the linked asset's human-
+         *     readable identity) for container-as-item locations.
          */
         get: operations["list_locations_api_locations_get"];
         put?: never;
@@ -740,8 +743,13 @@ export interface components {
         /**
          * LocationResponse
          * @description Public representation of a Location (flat, no children).
+         *
+         *     ``container_asset_label`` is a computed field injected by the service
+         *     layer; it is NOT directly read from the ORM object via from_attributes.
          */
         LocationResponse: {
+            /** Container Asset Label */
+            container_asset_label?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -761,6 +769,9 @@ export interface components {
         /**
          * LocationTreeNode
          * @description Recursive tree node for GET /locations/tree.
+         *
+         *     ``container_asset_label`` is a computed field injected by the service
+         *     layer; it is NOT directly read from the ORM object via from_attributes.
          */
         LocationTreeNode: {
             /**
@@ -768,6 +779,8 @@ export interface components {
              * @default []
              */
             children: components["schemas"]["LocationTreeNode"][];
+            /** Container Asset Label */
+            container_asset_label?: string | null;
             /**
              * Created At
              * Format: date-time

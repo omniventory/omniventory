@@ -633,3 +633,117 @@ describe("ItemDetail page — instance list renders", () => {
     });
   });
 });
+
+// ── InstanceFormModal — container-as-item location labels ─────────────────────
+
+const locationToolbox = {
+  id: 2,
+  name: "Toolbox",
+  description: "A tracked toolbox",
+  parent_id: null,
+  item_instance_id: 42,
+  container_asset_label: "Lboxx-136 · SN SN-TB-1",
+  created_at: "2025-01-01T00:00:00Z",
+};
+
+const locationGarageWithLabel = {
+  ...locationGarage,
+  container_asset_label: null,
+};
+
+/** Render helper that uses the given locations fixture (for container-label tests). */
+function renderItemDetailWithLocations(
+  defId: number,
+  locationsList: object[],
+) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vi.mocked(client.GET).mockImplementation(async (path: any) => {
+    if (path === "/api/definitions/{definition_id}") {
+      return { data: defDrill, response: new Response(null, { status: 200 }) };
+    }
+    if (path === "/api/instances") {
+      return { data: [], response: new Response(null, { status: 200 }) };
+    }
+    if (path === "/api/kinds") {
+      return { data: [kindDurable], response: new Response(null, { status: 200 }) };
+    }
+    if (path === "/api/categories") {
+      return { data: [categoryTools], response: new Response(null, { status: 200 }) };
+    }
+    if (path === "/api/locations") {
+      return { data: locationsList, response: new Response(null, { status: 200 }) };
+    }
+    if (path === "/api/definitions") {
+      return { data: [defDrill], response: new Response(null, { status: 200 }) };
+    }
+    return { data: null, error: { detail: "Not found" }, response: new Response(null, { status: 404 }) };
+  });
+
+  return render(
+    <MemoryRouter initialEntries={[`/items/${defId}`]}>
+      <MantineProvider>
+        <Routes>
+          <Route path="/items/:id" element={<ItemDetail />} />
+        </Routes>
+      </MantineProvider>
+    </MemoryRouter>,
+  );
+}
+
+describe("InstanceFormModal — location picker shows container asset labels", () => {
+  it("container-as-item location option includes the asset label", async () => {
+    renderItemDetailWithLocations(42, [locationGarageWithLabel, locationToolbox]);
+    // Wait for page to load
+    await waitFor(() => {
+      expect(screen.getAllByText("Cordless Drill").length).toBeGreaterThan(0);
+    });
+
+    // Open the "Register instance" modal
+    const registerBtn = await screen.findByTestId("register-instance-btn");
+    fireEvent.click(registerBtn);
+
+    // Wait for the modal to be open (serial input appears)
+    await screen.findByTestId("inst-serial-input");
+
+    // Open the Location select (data-testid on the input)
+    const locationSelect = await screen.findByTestId("inst-location-select");
+    fireEvent.click(locationSelect);
+
+    // Wait for dropdown options to appear
+    await waitFor(() => {
+      const opts = [...document.querySelectorAll('[role="option"]')];
+      // Filter to location options only (those containing "Garage" or "Toolbox" or "None")
+      expect(opts.some((el) => el.textContent?.includes("Garage"))).toBe(true);
+    });
+
+    const opts = [...document.querySelectorAll('[role="option"]')];
+    // Toolbox option should contain the asset label
+    const toolboxOpt = opts.find((el) => el.textContent?.includes("Toolbox"));
+    expect(toolboxOpt).toBeDefined();
+    expect(toolboxOpt?.textContent).toContain("Lboxx-136");
+  });
+
+  it("normal location option shows only the location name (no asset label)", async () => {
+    renderItemDetailWithLocations(42, [locationGarageWithLabel, locationToolbox]);
+    await waitFor(() => {
+      expect(screen.getAllByText("Cordless Drill").length).toBeGreaterThan(0);
+    });
+
+    const registerBtn = await screen.findByTestId("register-instance-btn");
+    fireEvent.click(registerBtn);
+    await screen.findByTestId("inst-serial-input");
+
+    const locationSelect = await screen.findByTestId("inst-location-select");
+    fireEvent.click(locationSelect);
+
+    await waitFor(() => {
+      const opts = [...document.querySelectorAll('[role="option"]')];
+      expect(opts.some((el) => el.textContent?.includes("Garage"))).toBe(true);
+    });
+
+    const opts = [...document.querySelectorAll('[role="option"]')];
+    const garageOpt = opts.find((el) => el.textContent?.trim() === "Garage");
+    // Garage option must exist with just the name (no " — " separator)
+    expect(garageOpt).toBeDefined();
+  });
+});

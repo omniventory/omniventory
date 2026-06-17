@@ -91,7 +91,10 @@ export function InstanceFormModal({
   }));
   const locationOptions = [
     { value: "", label: "— None —" },
-    ...locations.map((l) => ({ value: String(l.id), label: l.name })),
+    ...locations.map((l) => {
+      const assetSuffix = l.container_asset_label ? ` — ${l.container_asset_label}` : "";
+      return { value: String(l.id), label: `${l.name}${assetSuffix}` };
+    }),
   ];
 
   return (
@@ -122,6 +125,7 @@ export function InstanceFormModal({
           value={form.location_id}
           onChange={(v) => setForm((f) => ({ ...f, location_id: v ?? "" }))}
           clearable
+          data-testid="inst-location-select"
         />
         <TextInput
           label="Serial"

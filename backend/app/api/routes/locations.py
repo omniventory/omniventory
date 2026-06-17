@@ -64,10 +64,13 @@ def list_locations(
 
     - ``q``: case-insensitive substring match on the name.
     - ``parent_id``: when provided, return only locations with that parent.
+
+    Each response includes ``container_asset_label`` (the linked asset's human-
+    readable identity) for container-as-item locations.
     """
     parent_id_filter = parent_id is not None
-    locs = service.list_all(q=q, parent_id=parent_id, parent_id_filter=parent_id_filter)
-    return [LocationResponse.model_validate(loc) for loc in locs]
+    # service.list_all() now returns list[LocationResponse] directly (with labels).
+    return service.list_all(q=q, parent_id=parent_id, parent_id_filter=parent_id_filter)
 
 
 @router.post("", response_model=LocationResponse, status_code=status.HTTP_201_CREATED)
@@ -80,7 +83,7 @@ def create_location(
     """Create a new location."""
     loc = service.create(body)
     db.commit()
-    db.refresh(loc)
+    # New locations have no item_instance_id, so container_asset_label is None.
     return LocationResponse.model_validate(loc)
 
 
@@ -91,8 +94,7 @@ def get_location(
     service: Annotated[LocationService, Depends(_get_service)],
 ) -> LocationResponse:
     """Return a single location by id."""
-    loc = service.get(location_id)
-    return LocationResponse.model_validate(loc)
+    return service.get_with_label(location_id)
 
 
 @router.patch("/{location_id}", response_model=LocationResponse)
@@ -107,10 +109,9 @@ def update_location(
 
     Reparenting (changing ``parent_id``) is cycle-checked in the service layer.
     """
-    loc = service.update(location_id, body)
+    service.update(location_id, body)
     db.commit()
-    db.refresh(loc)
-    return LocationResponse.model_validate(loc)
+    return service.get_with_label(location_id)
 
 
 @router.delete("/{location_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -911,8 +911,19 @@
         "type": "object"
       },
       "LocationResponse": {
-        "description": "Public representation of a Location (flat, no children).",
+        "description": "Public representation of a Location (flat, no children).\n\n``container_asset_label`` is a computed field injected by the service\nlayer; it is NOT directly read from the ORM object via from_attributes.",
         "properties": {
+          "container_asset_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Asset Label"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -972,7 +983,7 @@
         "type": "object"
       },
       "LocationTreeNode": {
-        "description": "Recursive tree node for GET /locations/tree.",
+        "description": "Recursive tree node for GET /locations/tree.\n\n``container_asset_label`` is a computed field injected by the service\nlayer; it is NOT directly read from the ORM object via from_attributes.",
         "properties": {
           "children": {
             "default": [],
@@ -981,6 +992,17 @@
             },
             "title": "Children",
             "type": "array"
+          },
+          "container_asset_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Container Asset Label"
           },
           "created_at": {
             "format": "date-time",
@@ -2221,7 +2243,7 @@
     },
     "/api/locations": {
       "get": {
-        "description": "Return a flat list of locations, optionally filtered.\n\n- ``q``: case-insensitive substring match on the name.\n- ``parent_id``: when provided, return only locations with that parent.",
+        "description": "Return a flat list of locations, optionally filtered.\n\n- ``q``: case-insensitive substring match on the name.\n- ``parent_id``: when provided, return only locations with that parent.\n\nEach response includes ``container_asset_label`` (the linked asset's human-\nreadable identity) for container-as-item locations.",
         "operationId": "list_locations_api_locations_get",
         "parameters": [
           {
