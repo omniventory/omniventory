@@ -2,12 +2,19 @@
  * Application entry point.
  *
  * Wraps the React tree in:
+ *   - i18n singleton (initializes synchronously on import; must come first)
  *   - MantineProvider (theme tokens from theme.ts)
  *   - ColorSchemeScript (prevents flash-of-wrong-theme on load)
+ *   - I18nextProvider (provides the i18n instance to the React tree)
  */
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { MantineProvider, ColorSchemeScript } from "@mantine/core";
+import { I18nextProvider } from "react-i18next";
+
+// i18n must be initialized before the React tree renders.
+// The module is synchronous (bundled resources, initAsync: false).
+import i18n from "./i18n";
 
 // Mantine core styles — must come before component styles
 import "@mantine/core/styles.css";
@@ -29,8 +36,10 @@ createRoot(rootElement).render(
      * React tree; the effect is the same.
      */}
     <ColorSchemeScript defaultColorScheme="auto" />
-    <MantineProvider theme={theme} defaultColorScheme="auto">
-      <App />
-    </MantineProvider>
+    <I18nextProvider i18n={i18n}>
+      <MantineProvider theme={theme} defaultColorScheme="auto">
+        <App />
+      </MantineProvider>
+    </I18nextProvider>
   </StrictMode>,
 );

@@ -6,7 +6,25 @@
  * file provides minimal stubs so tests don't crash.
  *
  * Referenced from vite.config.ts → test.setupFiles.
+ *
+ * i18n pinning: we force the language to 'en' before every test suite so
+ * that assertions matching English copy are deterministic.  Tests that
+ * exercise language-switching must explicitly call i18n.changeLanguage('zh')
+ * (and can rely on the afterEach reset in their own describe block).
  */
+
+// Initialize i18n (synchronous; registers the i18next singleton).
+import i18n from "../i18n";
+import { beforeEach } from "vitest";
+
+// Pin to English before each test file runs.
+// Using beforeEach ensures any test that switches language gets reset.
+beforeEach(async () => {
+  // Clear any leftover omniventory_lang in localStorage so the detector
+  // does not override our pin.
+  localStorage.removeItem("omniventory_lang");
+  await i18n.changeLanguage("en");
+});
 
 /** Stub window.matchMedia (Mantine's color-scheme hook uses it). */
 Object.defineProperty(window, "matchMedia", {
