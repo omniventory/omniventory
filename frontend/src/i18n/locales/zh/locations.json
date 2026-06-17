@@ -1,3 +1,77 @@
 {
-  "_ns": "locations"
+  "tree": {
+    "loadError": "加载位置树失败。",
+    "empty": "暂无位置，请在上方创建。",
+    "addRoot": "添加位置",
+    "addChild": "添加子位置",
+    "addChildUnder": "在 {{name}} 下添加子位置",
+    "rename": "重命名 {{name}}",
+    "delete": "删除 {{name}}",
+    "moveInstance": "移动物品实例 {{id}}",
+    "deleteInstance": "删除物品实例 {{id}}",
+    "instancesSection": "此位置的物品",
+    "instancesEmpty": "此处没有物品，可以删除该位置。",
+    "instancesLoading": "加载中……",
+    "containerAsset": "容器资产",
+    "linkContainerBtn": "关联容器资产",
+    "unlinkContainerBtn": "取消关联"
+  },
+  "modals": {
+    "create": {
+      "titleChild": "添加子位置",
+      "titleRoot": "添加位置",
+      "nameLabel": "名称"
+    },
+    "rename": {
+      "title": "重命名位置",
+      "newNameLabel": "新名称"
+    },
+    "reparent": {
+      "title": "移动位置",
+      "parentLabel": "新的上级位置（选择「根节点」以移至顶层）",
+      "rootOption": "— （根节点 / 无上级）"
+    },
+    "delete": {
+      "title": "删除位置",
+      "confirmation": "删除 <bold>{{name}}</bold>？若位置非空则无法删除。"
+    },
+    "moveInstance": {
+      "title": "将物品移至其他位置",
+      "locationLabel": "新位置",
+      "noneOption": "— 无（不指定位置）—"
+    },
+    "deleteInstance": {
+      "title": "删除物品",
+      "confirmation": "永久删除此物品实例？此操作不可撤销。"
+    },
+    "linkContainerAsset": {
+      "title": "关联容器资产",
+      "instanceLabel": "选择一个实例作为此位置的容器资产",
+      "instancePlaceholder": "按名称或序列号搜索……",
+      "loadingInstances": "加载实例中……"
+    },
+    "unlinkContainerAsset": {
+      "title": "取消关联容器资产",
+      "confirmation": "移除此位置的容器资产关联？实例记录不会被删除。"
+    }
+  },
+  "detail": {
+    "reparentBtn": "移动",
+    "deleteBtn": "删除",
+    "instancesTableDefinition": "定义",
+    "instancesTableSerial": "序列号",
+    "instancesTableQty": "数量"
+  },
+  "errors": {
+    "createFailed": "创建位置失败。",
+    "renameFailed": "重命名位置失败。",
+    "reparentFailed": "移动位置失败。",
+    "deleteFailed": "删除位置失败。",
+    "deleteGuard": "无法删除：位置不为空。",
+    "moveFailed": "移动实例失败。",
+    "deleteInstanceFailed": "删除实例失败。",
+    "linkFailed": "关联容器资产失败。",
+    "linkConflict": "此实例已关联至其他位置。",
+    "unlinkFailed": "取消关联容器资产失败。"
+  }
 }

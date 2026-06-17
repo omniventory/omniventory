@@ -1,3 +1,67 @@
 {
-  "_ns": "items"
+  "page": {
+    "title": "物品"
+  },
+  "search": {
+    "placeholder": "按名称搜索……",
+    "allCategories": "所有分类"
+  },
+  "list": {
+    "empty": "暂无物品，请在上方创建。",
+    "newItemBtn": "新建物品",
+    "colName": "名称",
+    "colKind": "类型",
+    "colUnit": "单位",
+    "colCategory": "分类",
+    "editAriaLabel": "编辑 {{name}}",
+    "deleteAriaLabel": "删除 {{name}}"
+  },
+  "loadError": "加载物品定义失败。",
+  "notFound": "未找到物品定义。",
+  "detail": {
+    "backLink": "返回物品列表",
+    "editBtn": "编辑",
+    "deleteBtn": "删除",
+    "kindLabel": "类型：",
+    "unitLabel": "单位：",
+    "categoryLabel": "分类：",
+    "defaultLocationLabel": "默认位置：",
+    "instancesTitle": "实例",
+    "registerInstanceBtn": "登记实例",
+    "instanceSearchPlaceholder": "按序列号、型号、制造商搜索……",
+    "instancesEmpty": "暂无实例，请在上方登记。",
+    "colSerial": "序列号",
+    "colQty": "数量",
+    "colLocation": "位置",
+    "colManufacturer": "制造商",
+    "colWarranty": "保修",
+    "editInstanceAriaLabel": "编辑实例 {{id}}",
+    "deleteInstanceAriaLabel": "删除实例 {{id}}"
+  },
+  "defForm": {
+    "createTitle": "新建物品定义",
+    "editTitle": "编辑物品定义",
+    "nameLabel": "名称",
+    "descriptionLabel": "描述",
+    "categoryLabel": "分类",
+    "kindLabel": "类型",
+    "kindPlaceholder": "默认：耐用品",
+    "unitLabel": "单位",
+    "unitPlaceholder": "个",
+    "defaultLocationLabel": "默认位置",
+    "noneOption": "— 无 —"
+  },
+  "deleteDefModal": {
+    "title": "删除物品定义",
+    "confirmation": "删除 <bold>{{name}}</bold>？此操作不可撤销。",
+    "confirmationWithInstances": "删除 <bold>{{name}}</bold> 及其所有实例？此操作不可撤销。"
+  },
+  "deleteInstanceModal": {
+    "title": "删除实例",
+    "confirmation": "删除实例 <bold>#{{id}}</bold>？此操作不可撤销。"
+  },
+  "instanceForm": {
+    "createTitle": "登记新实例",
+    "editTitle": "编辑实例"
+  }
 }

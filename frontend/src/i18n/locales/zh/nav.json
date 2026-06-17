@@ -1,3 +1,12 @@
 {
-  "_ns": "nav"
+  "dashboard": "仪表板",
+  "dashboardPlaceholder": "库存仪表板将在此显示。",
+  "locations": "位置",
+  "categories": "分类",
+  "items": "物品",
+  "navigation": "导航",
+  "toggleNavigation": "切换导航",
+  "toggleColorScheme": "切换配色方案",
+  "logout": "退出登录",
+  "appName": "Omniventory"
 }

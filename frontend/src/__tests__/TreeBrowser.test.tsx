@@ -101,7 +101,7 @@ function renderLocations() {
   return render(
     <MemoryRouter>
       <MantineProvider>
-        <TreeBrowser resource="locations" label="Location" />
+        <TreeBrowser resource="locations" />
       </MantineProvider>
     </MemoryRouter>,
   );
@@ -111,7 +111,7 @@ function renderCategories() {
   return render(
     <MemoryRouter>
       <MantineProvider>
-        <TreeBrowser resource="categories" label="Category" labelPlural="Categories" />
+        <TreeBrowser resource="categories" />
       </MantineProvider>
     </MemoryRouter>,
   );

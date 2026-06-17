@@ -4,13 +4,15 @@
  * Delegates all rendering and CRUD logic to the shared TreeBrowser component,
  * parameterised with resource="categories".
  */
+import { useTranslation } from "react-i18next";
 import { PageShell } from "../components/PageShell";
 import { TreeBrowser } from "../components/TreeBrowser";
 
 export function Categories() {
+  const { t } = useTranslation("nav");
   return (
-    <PageShell title="Categories">
-      <TreeBrowser resource="categories" label="Category" labelPlural="Categories" />
+    <PageShell title={t("categories")}>
+      <TreeBrowser resource="categories" />
     </PageShell>
   );
 }

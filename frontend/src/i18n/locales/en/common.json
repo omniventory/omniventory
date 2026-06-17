@@ -1,3 +1,18 @@
 {
-  "_ns": "common"
+  "actions": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "move": "Move",
+    "link": "Link",
+    "unlink": "Unlink"
+  },
+  "status": {
+    "loading": "Loading…",
+    "nothingHere": "Nothing here yet.",
+    "somethingWentWrong": "Something went wrong.",
+    "error": "Error"
+  }
 }

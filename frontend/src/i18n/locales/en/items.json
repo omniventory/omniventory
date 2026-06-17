@@ -1,3 +1,67 @@
 {
-  "_ns": "items"
+  "page": {
+    "title": "Items"
+  },
+  "search": {
+    "placeholder": "Search by name…",
+    "allCategories": "All categories"
+  },
+  "list": {
+    "empty": "No items yet. Create one above.",
+    "newItemBtn": "New item",
+    "colName": "Name",
+    "colKind": "Kind",
+    "colUnit": "Unit",
+    "colCategory": "Category",
+    "editAriaLabel": "Edit {{name}}",
+    "deleteAriaLabel": "Delete {{name}}"
+  },
+  "loadError": "Failed to load definitions.",
+  "notFound": "Item definition not found.",
+  "detail": {
+    "backLink": "Back to Items",
+    "editBtn": "Edit",
+    "deleteBtn": "Delete",
+    "kindLabel": "Kind: ",
+    "unitLabel": "Unit: ",
+    "categoryLabel": "Category: ",
+    "defaultLocationLabel": "Default location: ",
+    "instancesTitle": "Instances",
+    "registerInstanceBtn": "Register instance",
+    "instanceSearchPlaceholder": "Search by serial, model, manufacturer…",
+    "instancesEmpty": "No instances yet. Register one above.",
+    "colSerial": "Serial",
+    "colQty": "Qty",
+    "colLocation": "Location",
+    "colManufacturer": "Manufacturer",
+    "colWarranty": "Warranty",
+    "editInstanceAriaLabel": "Edit instance {{id}}",
+    "deleteInstanceAriaLabel": "Delete instance {{id}}"
+  },
+  "defForm": {
+    "createTitle": "New item definition",
+    "editTitle": "Edit item definition",
+    "nameLabel": "Name",
+    "descriptionLabel": "Description",
+    "categoryLabel": "Category",
+    "kindLabel": "Kind",
+    "kindPlaceholder": "Default: durable",
+    "unitLabel": "Unit",
+    "unitPlaceholder": "pcs",
+    "defaultLocationLabel": "Default Location",
+    "noneOption": "— None —"
+  },
+  "deleteDefModal": {
+    "title": "Delete item definition",
+    "confirmation": "Delete <bold>{{name}}</bold>? This cannot be undone.",
+    "confirmationWithInstances": "Delete <bold>{{name}}</bold> and all its instances? This cannot be undone."
+  },
+  "deleteInstanceModal": {
+    "title": "Delete instance",
+    "confirmation": "Delete instance <bold>#{{id}}</bold>? This cannot be undone."
+  },
+  "instanceForm": {
+    "createTitle": "Register new instance",
+    "editTitle": "Edit instance"
+  }
 }

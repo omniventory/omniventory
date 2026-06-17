@@ -28,6 +28,7 @@ import {
 import { useDisclosure } from "@mantine/hooks";
 import { NavLink as RouterNavLink, useLocation } from "react-router-dom";
 import { Sun, Moon, LogOut, Layout, MapPin, Tag, Package } from "react-feather";
+import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
 
 interface AppShellProps {
@@ -77,29 +78,30 @@ function NavItem({
 
 /** Sidebar / nav content — real links to all M1 top-level routes. */
 function NavContent({ onClose }: { onClose?: () => void }) {
+  const { t } = useTranslation("nav");
   return (
     <Stack gap={4} p="xs">
       <NavItem
         to="/"
-        label="Dashboard"
+        label={t("dashboard")}
         icon={<Layout size={16} />}
         onClick={onClose}
       />
       <NavItem
         to="/locations"
-        label="Locations"
+        label={t("locations")}
         icon={<MapPin size={16} />}
         onClick={onClose}
       />
       <NavItem
         to="/categories"
-        label="Categories"
+        label={t("categories")}
         icon={<Tag size={16} />}
         onClick={onClose}
       />
       <NavItem
         to="/items"
-        label="Items"
+        label={t("items")}
         icon={<Package size={16} />}
         onClick={onClose}
       />
@@ -117,6 +119,7 @@ function HeaderContent({
   onBurgerToggle: () => void;
   onLogout: () => void;
 }) {
+  const { t } = useTranslation("nav");
   const { setColorScheme } = useMantineColorScheme();
   const computed = useComputedColorScheme("dark");
 
@@ -133,10 +136,10 @@ function HeaderContent({
           onClick={onBurgerToggle}
           hiddenFrom="sm"
           size="sm"
-          aria-label="Toggle navigation"
+          aria-label={t("toggleNavigation")}
         />
         <Text fw={700} size="lg">
-          Omniventory
+          {t("appName")}
         </Text>
       </Group>
 
@@ -146,7 +149,7 @@ function HeaderContent({
           variant="default"
           size="lg"
           onClick={toggleColorScheme}
-          aria-label="Toggle color scheme"
+          aria-label={t("toggleColorScheme")}
         >
           {computed === "dark" ? <Sun size={16} /> : <Moon size={16} />}
         </ActionIcon>
@@ -154,7 +157,7 @@ function HeaderContent({
           variant="default"
           size="lg"
           onClick={onLogout}
-          aria-label="Logout"
+          aria-label={t("logout")}
         >
           <LogOut size={16} />
         </ActionIcon>
@@ -164,6 +167,7 @@ function HeaderContent({
 }
 
 export function AppShell({ children, onLogout }: AppShellProps) {
+  const { t } = useTranslation("nav");
   const [drawerOpened, { toggle: toggleDrawer, close: closeDrawer }] =
     useDisclosure(false);
 
@@ -180,7 +184,7 @@ export function AppShell({ children, onLogout }: AppShellProps) {
         onClose={closeDrawer}
         size="xs"
         padding="md"
-        title="Navigation"
+        title={t("navigation")}
         hiddenFrom="sm"
         zIndex={1000}
       >

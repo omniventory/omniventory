@@ -1,3 +1,77 @@
 {
-  "_ns": "locations"
+  "tree": {
+    "loadError": "Failed to load location tree.",
+    "empty": "No locations yet. Create one above.",
+    "addRoot": "Add location",
+    "addChild": "Add child location",
+    "addChildUnder": "Add child location under {{name}}",
+    "rename": "Rename {{name}}",
+    "delete": "Delete {{name}}",
+    "moveInstance": "Move instance {{id}}",
+    "deleteInstance": "Delete instance {{id}}",
+    "instancesSection": "Items at this location",
+    "instancesEmpty": "No items here. This location can be deleted.",
+    "instancesLoading": "Loading…",
+    "containerAsset": "Container asset",
+    "linkContainerBtn": "Link container asset",
+    "unlinkContainerBtn": "Unlink"
+  },
+  "modals": {
+    "create": {
+      "titleChild": "Add child location",
+      "titleRoot": "Add location",
+      "nameLabel": "Name"
+    },
+    "rename": {
+      "title": "Rename location",
+      "newNameLabel": "New name"
+    },
+    "reparent": {
+      "title": "Move location",
+      "parentLabel": "New parent location (choose \"root\" to move to top level)",
+      "rootOption": "— (root / no parent)"
+    },
+    "delete": {
+      "title": "Delete location",
+      "confirmation": "Delete <bold>{{name}}</bold>? This is blocked if the location is not empty."
+    },
+    "moveInstance": {
+      "title": "Move item to another location",
+      "locationLabel": "New location",
+      "noneOption": "— None (no location) —"
+    },
+    "deleteInstance": {
+      "title": "Delete item",
+      "confirmation": "Permanently delete this item instance? This cannot be undone."
+    },
+    "linkContainerAsset": {
+      "title": "Link container asset",
+      "instanceLabel": "Choose an instance to link as this location's container asset",
+      "instancePlaceholder": "Search by name or serial…",
+      "loadingInstances": "Loading instances…"
+    },
+    "unlinkContainerAsset": {
+      "title": "Unlink container asset",
+      "confirmation": "Remove the container-asset link from this location? The instance record will not be deleted."
+    }
+  },
+  "detail": {
+    "reparentBtn": "Reparent",
+    "deleteBtn": "Delete",
+    "instancesTableDefinition": "Definition",
+    "instancesTableSerial": "Serial",
+    "instancesTableQty": "Qty"
+  },
+  "errors": {
+    "createFailed": "Failed to create location.",
+    "renameFailed": "Failed to rename location.",
+    "reparentFailed": "Failed to reparent location.",
+    "deleteFailed": "Failed to delete location.",
+    "deleteGuard": "Cannot delete: location is not empty.",
+    "moveFailed": "Failed to move instance.",
+    "deleteInstanceFailed": "Failed to delete instance.",
+    "linkFailed": "Failed to link container asset.",
+    "linkConflict": "This instance is already linked to another location.",
+    "unlinkFailed": "Failed to unlink container asset."
+  }
 }

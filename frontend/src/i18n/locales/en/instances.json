@@ -1,3 +1,42 @@
 {
-  "_ns": "instances"
+  "form": {
+    "definitionLabel": "Item Definition",
+    "locationLabel": "Location",
+    "serialLabel": "Serial",
+    "quantityLabel": "Quantity",
+    "quantitySerialHint": "Serial is set — quantity forced to 1",
+    "modelNumberLabel": "Model Number",
+    "manufacturerLabel": "Manufacturer",
+    "warrantyExpiresLabel": "Warranty Expires",
+    "warrantyExpiresPlaceholder": "YYYY-MM-DD",
+    "warrantyDetailsLabel": "Warranty Details",
+    "purchasePriceLabel": "Purchase Price",
+    "purchasePricePlaceholder": "e.g. 149.99",
+    "purchaseDateLabel": "Purchase Date",
+    "purchaseDatePlaceholder": "YYYY-MM-DD",
+    "purchaseSourceLabel": "Purchase Source",
+    "noneOption": "— None —"
+  },
+  "detail": {
+    "serialTitle": "Serial: {{serial}}",
+    "instanceTitle": "Instance #{{id}}",
+    "editBtn": "Edit",
+    "deleteBtn": "Delete",
+    "quantityField": "Quantity",
+    "locationField": "Location",
+    "serialField": "Serial",
+    "modelNumberField": "Model Number",
+    "manufacturerField": "Manufacturer",
+    "warrantyExpiresField": "Warranty Expires",
+    "warrantyDetailsField": "Warranty Details",
+    "purchasePriceField": "Purchase Price",
+    "purchaseDateField": "Purchase Date",
+    "purchaseSourceField": "Purchase Source",
+    "createdField": "Created"
+  },
+  "loadError": "Instance not found.",
+  "deleteModal": {
+    "title": "Delete instance",
+    "confirmation": "Delete instance <bold>#{{id}}</bold>? This cannot be undone."
+  }
 }

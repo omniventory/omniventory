@@ -38,6 +38,7 @@ import {
 } from "@mantine/core";
 import type { TreeNodeData } from "@mantine/core";
 import { Plus, Edit2, Trash2, AlertCircle, Move } from "react-feather";
+import { useTranslation, Trans } from "react-i18next";
 import { client } from "../api/client";
 import type { components } from "../api/schema";
 import { LoadingState } from "./LoadingState";
@@ -98,14 +99,12 @@ type ModalState =
 
 interface TreeBrowserProps {
   resource: TreeResource;
-  /** Singular display label (e.g. "Location"). */
-  label: string;
-  /** Plural display label (e.g. "Locations"). Defaults to label + "s". */
-  labelPlural?: string;
 }
 
-export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) {
-  const plural = labelPlural ?? `${label}s`;
+export function TreeBrowser({ resource }: TreeBrowserProps) {
+  const ns = resource; // "locations" or "categories"
+  const { t } = useTranslation(ns);
+
   const [treeData, setTreeData] = useState<AnyTreeNode[]>([]);
   const [flatMap, setFlatMap] = useState<Map<number, AnyTreeNode>>(new Map());
   const [loading, setLoading] = useState(true);
@@ -165,7 +164,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
       if (resource === "locations") {
         const { data, error } = await client.GET("/api/locations/tree");
         if (error || !data) {
-          setLoadError("Failed to load location tree.");
+          setLoadError(t("tree.loadError"));
         } else {
           const nodes = data as LocationTreeNode[];
           setTreeData(nodes);
@@ -174,7 +173,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
       } else {
         const { data, error } = await client.GET("/api/categories/tree");
         if (error || !data) {
-          setLoadError("Failed to load category tree.");
+          setLoadError(t("tree.loadError"));
         } else {
           const nodes = data as CategoryTreeNode[];
           setTreeData(nodes);
@@ -184,7 +183,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
     } finally {
       setLoading(false);
     }
-  }, [resource]);
+  }, [resource, t]);
 
   useEffect(() => {
     loadTree();
@@ -359,7 +358,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           body: { name: formName.trim(), parent_id: parentId },
         });
         if (error) {
-          setActionError("Failed to create location.");
+          setActionError(t("errors.createFailed"));
           return;
         }
       } else {
@@ -367,7 +366,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           body: { name: formName.trim(), parent_id: parentId },
         });
         if (error) {
-          setActionError("Failed to create category.");
+          setActionError(t("errors.createFailed"));
           return;
         }
       }
@@ -389,7 +388,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           body: { name: formName.trim() },
         });
         if (error) {
-          setActionError("Failed to rename location.");
+          setActionError(t("errors.renameFailed"));
           return;
         }
       } else {
@@ -401,7 +400,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           },
         );
         if (error) {
-          setActionError("Failed to rename category.");
+          setActionError(t("errors.renameFailed"));
           return;
         }
       }
@@ -424,10 +423,12 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           body: { parent_id: newParentId },
         });
         if (error) {
+          // Step 5 will rewire this to use mapApiError. For now preserve
+          // the existing behaviour: read detail if present, else static fallback.
           const msg =
             typeof error === "object" && error !== null && "detail" in error
               ? String((error as { detail: unknown }).detail)
-              : "Failed to reparent location.";
+              : t("errors.reparentFailed");
           setActionError(msg);
           return;
         }
@@ -443,7 +444,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           const msg =
             typeof error === "object" && error !== null && "detail" in error
               ? String((error as { detail: unknown }).detail)
-              : "Failed to reparent category.";
+              : t("errors.reparentFailed");
           setActionError(msg);
           return;
         }
@@ -468,13 +469,14 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
         );
         if (error) {
           if (response.status === 409) {
+            // Step 5 will rewire this to use mapApiError.
             const msg =
               typeof error === "object" && error !== null && "detail" in error
                 ? String((error as { detail: unknown }).detail)
-                : "Cannot delete: location is not empty.";
+                : t("errors.deleteGuard");
             setActionError(msg);
           } else {
-            setActionError("Failed to delete location.");
+            setActionError(t("errors.deleteFailed"));
           }
           return;
         }
@@ -490,10 +492,10 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
             const msg =
               typeof error === "object" && error !== null && "detail" in error
                 ? String((error as { detail: unknown }).detail)
-                : "Cannot delete: category is not empty.";
+                : t("errors.deleteGuard");
             setActionError(msg);
           } else {
-            setActionError("Failed to delete category.");
+            setActionError(t("errors.deleteFailed"));
           }
           return;
         }
@@ -518,10 +520,11 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
         body: { location_id: newLocationId },
       });
       if (error) {
+        // Step 5 will rewire this to use mapApiError.
         const msg =
           typeof error === "object" && error !== null && "detail" in error
             ? String((error as { detail: unknown }).detail)
-            : "Failed to move instance.";
+            : t("errors.moveFailed");
         setActionError(msg);
         return;
       }
@@ -541,7 +544,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
         params: { path: { instance_id: instance.id } },
       });
       if (error) {
-        setActionError("Failed to delete instance.");
+        setActionError(t("errors.deleteInstanceFailed"));
         return;
       }
       closeModal();
@@ -567,13 +570,14 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
       );
       if (error) {
         if (response.status === 409) {
+          // Step 5 will rewire this to use mapApiError.
           const msg =
             typeof error === "object" && error !== null && "detail" in error
               ? String((error as { detail: unknown }).detail)
-              : "This instance is already linked to another location.";
+              : t("errors.linkConflict");
           setActionError(msg);
         } else {
-          setActionError("Failed to link container asset.");
+          setActionError(t("errors.linkFailed"));
         }
         return;
       }
@@ -593,7 +597,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
         body: { item_instance_id: null },
       });
       if (error) {
-        setActionError("Failed to unlink container asset.");
+        setActionError(t("errors.unlinkFailed"));
         return;
       }
       closeModal();
@@ -630,7 +634,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
    * Memoised on flatMap + modal so it only recomputes when the picker opens.
    */
   const reparentOptions = useMemo(() => {
-    const rootOption = { value: "", label: "— (root / no parent)" };
+    const rootOption = { value: "", label: t("modals.reparent.rootOption") };
     if (modal.kind !== "reparent") return [rootOption];
 
     const excluded = collectDescendantIds(modal.nodeId);
@@ -650,7 +654,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
 
     return [rootOption, ...nodes];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flatMap, modal]);
+  }, [flatMap, modal, t]);
 
   /**
    * Build the Select option list for the move-instance modal.
@@ -659,7 +663,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
    * Only relevant when resource === "locations".
    */
   const moveLocationOptions = useMemo(() => {
-    const noneOption = { value: "", label: "— None (no location) —" };
+    const noneOption = { value: "", label: t("modals.moveInstance.noneOption") };
     const locationResource = resource === "locations";
     const nodes = [...flatMap.values()]
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -673,7 +677,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
         return { value: String(n.id), label: `${n.name}${assetLabel}` };
       });
     return [noneOption, ...nodes];
-  }, [flatMap, resource]);
+  }, [flatMap, resource, t]);
 
   /**
    * Build a human-readable label for an instance:
@@ -733,6 +737,11 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
   if (loading) return <LoadingState />;
   if (loadError) return <ErrorState message={loadError} />;
 
+  // Derived labels used in the toolbar button
+  const addBtnLabel = selectedId !== null
+    ? t("tree.addChild")
+    : t("tree.addRoot");
+
   return (
     <Stack gap="md">
       {/* Top toolbar */}
@@ -743,15 +752,13 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           onClick={() => openCreate(selectedId)}
           data-testid="create-root-btn"
         >
-          {selectedId !== null
-            ? `Add child ${label.toLowerCase()}`
-            : `Add ${label.toLowerCase()}`}
+          {addBtnLabel}
         </Button>
       </Group>
 
       {/* Tree — clicking blank space (not a node row or its buttons) clears selection */}
       {treeData.length === 0 ? (
-        <EmptyState message={`No ${plural.toLowerCase()} yet. Create one above.`} />
+        <EmptyState message={t("tree.empty")} />
       ) : (
         <div
           data-testid="tree-region"
@@ -817,7 +824,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                   <ActionIcon
                     size="xs"
                     variant="subtle"
-                    aria-label={`Add child ${label.toLowerCase()} under ${node.label as string}`}
+                    aria-label={t("tree.addChildUnder", { name: node.label as string })}
                     onClick={(e) => {
                       e.stopPropagation();
                       openCreate(nodeId);
@@ -828,7 +835,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                   <ActionIcon
                     size="xs"
                     variant="subtle"
-                    aria-label={`Rename ${node.label as string}`}
+                    aria-label={t("tree.rename", { name: node.label as string })}
                     onClick={(e) => {
                       e.stopPropagation();
                       openRename(nodeId, node.label as string);
@@ -840,7 +847,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                     size="xs"
                     variant="subtle"
                     color="red"
-                    aria-label={`Delete ${node.label as string}`}
+                    aria-label={t("tree.delete", { name: node.label as string })}
                     onClick={(e) => {
                       e.stopPropagation();
                       openDelete(nodeId, node.label as string);
@@ -871,7 +878,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                   openReparent(selectedNode.id, selectedNode.parent_id)
                 }
               >
-                Reparent
+                {t("detail.reparentBtn")}
               </Button>
               <Button
                 size="xs"
@@ -879,7 +886,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                 color="red"
                 onClick={() => openDelete(selectedNode.id, selectedNode.name)}
               >
-                Delete
+                {t("detail.deleteBtn")}
               </Button>
             </Group>
           </Group>
@@ -893,7 +900,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
             selectedIsContainerAsItem ? (
               <Group gap="xs" align="center" data-testid="container-asset-linked">
                 <Badge color="teal" variant="light" size="sm">
-                  Container asset —{" "}
+                  {t("tree.containerAsset")} —{" "}
                   {linkedInstance
                     ? instanceLabel(linkedInstance)
                     : `Instance #${(selectedNode as LocationTreeNode).item_instance_id}`}
@@ -905,7 +912,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                   onClick={() => openUnlinkContainerAsset(selectedNode.id)}
                   data-testid="unlink-container-btn"
                 >
-                  Unlink
+                  {t("tree.unlinkContainerBtn")}
                 </Button>
               </Group>
             ) : (
@@ -916,7 +923,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                 onClick={() => openLinkContainerAsset(selectedNode.id)}
                 data-testid="link-container-btn"
               >
-                Link container asset
+                {t("tree.linkContainerBtn")}
               </Button>
             )
           )}
@@ -925,13 +932,13 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
             <>
               <Divider my="xs" />
               <Text size="xs" fw={500} c="dimmed" data-testid="instances-section-label">
-                Items at this location
+                {t("tree.instancesSection")}
               </Text>
               {instancesLoading ? (
-                <Text size="xs" c="dimmed">Loading…</Text>
+                <Text size="xs" c="dimmed">{t("tree.instancesLoading")}</Text>
               ) : locationInstances.length === 0 ? (
                 <Text size="xs" c="dimmed" data-testid="instances-empty">
-                  No items here. This location can be deleted.
+                  {t("tree.instancesEmpty")}
                 </Text>
               ) : (
                 <Table
@@ -943,13 +950,13 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                   <Table.Thead>
                     <Table.Tr>
                       <Table.Th>
-                        <Text size="xs">Definition</Text>
+                        <Text size="xs">{t("detail.instancesTableDefinition")}</Text>
                       </Table.Th>
                       <Table.Th>
-                        <Text size="xs">Serial</Text>
+                        <Text size="xs">{t("detail.instancesTableSerial")}</Text>
                       </Table.Th>
                       <Table.Th>
-                        <Text size="xs">Qty</Text>
+                        <Text size="xs">{t("detail.instancesTableQty")}</Text>
                       </Table.Th>
                       <Table.Th />
                     </Table.Tr>
@@ -976,7 +983,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                             <ActionIcon
                               size="xs"
                               variant="subtle"
-                              aria-label={`Move instance ${inst.id}`}
+                              aria-label={t("tree.moveInstance", { id: inst.id })}
                               onClick={() => openMoveInstance(inst)}
                               data-testid={`move-instance-${inst.id}`}
                             >
@@ -986,7 +993,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                               size="xs"
                               variant="subtle"
                               color="red"
-                              aria-label={`Delete instance ${inst.id}`}
+                              aria-label={t("tree.deleteInstance", { id: inst.id })}
                               onClick={() => openDeleteInstance(inst)}
                               data-testid={`delete-instance-${inst.id}`}
                             >
@@ -1012,8 +1019,8 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
         onClose={closeModal}
         title={
           modal.kind === "create" && modal.parentId !== null
-            ? `Add child ${label.toLowerCase()}`
-            : `Add ${label.toLowerCase()}`
+            ? t("modals.create.titleChild")
+            : t("modals.create.titleRoot")
         }
         size="sm"
       >
@@ -1024,7 +1031,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
             </Alert>
           )}
           <TextInput
-            label="Name"
+            label={t("modals.create.nameLabel")}
             value={formName}
             onChange={(e) => setFormName(e.currentTarget.value)}
             data-autofocus
@@ -1032,7 +1039,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           />
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal} disabled={busy}>
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             <Button
               onClick={() =>
@@ -1041,7 +1048,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
               loading={busy}
               disabled={!formName.trim()}
             >
-              Create
+              {t("common:actions.create", "Create")}
             </Button>
           </Group>
         </Stack>
@@ -1051,7 +1058,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
       <Modal
         opened={modal.kind === "rename"}
         onClose={closeModal}
-        title={`Rename ${label.toLowerCase()}`}
+        title={t("modals.rename.title")}
         size="sm"
       >
         <Stack gap="sm">
@@ -1061,7 +1068,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
             </Alert>
           )}
           <TextInput
-            label="New name"
+            label={t("modals.rename.newNameLabel")}
             value={formName}
             onChange={(e) => setFormName(e.currentTarget.value)}
             data-autofocus
@@ -1069,7 +1076,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           />
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal} disabled={busy}>
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             <Button
               onClick={() =>
@@ -1078,7 +1085,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
               loading={busy}
               disabled={!formName.trim()}
             >
-              Save
+              {t("common:actions.save", "Save")}
             </Button>
           </Group>
         </Stack>
@@ -1088,7 +1095,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
       <Modal
         opened={modal.kind === "reparent"}
         onClose={closeModal}
-        title={`Move ${label.toLowerCase()}`}
+        title={t("modals.reparent.title")}
         size="sm"
       >
         <Stack gap="sm">
@@ -1098,7 +1105,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
             </Alert>
           )}
           <Select
-            label={`New parent ${label.toLowerCase()} (choose "root" to move to top level)`}
+            label={t("modals.reparent.parentLabel")}
             data={reparentOptions}
             value={formParentId}
             onChange={(v) => setFormParentId(v ?? "")}
@@ -1108,7 +1115,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           />
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal} disabled={busy}>
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             <Button
               onClick={() =>
@@ -1116,7 +1123,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
               }
               loading={busy}
             >
-              Move
+              {t("common:actions.move", "Move")}
             </Button>
           </Group>
         </Stack>
@@ -1126,7 +1133,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
       <Modal
         opened={modal.kind === "delete"}
         onClose={closeModal}
-        title={`Delete ${label.toLowerCase()}`}
+        title={t("modals.delete.title")}
         size="sm"
       >
         <Stack gap="sm">
@@ -1142,16 +1149,17 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           )}
           {!actionError && (
             <Text size="sm">
-              Delete{" "}
-              <b>
-                {modal.kind === "delete" ? modal.nodeName : ""}
-              </b>
-              ? This is blocked if the {label.toLowerCase()} is not empty.
+              <Trans
+                i18nKey="modals.delete.confirmation"
+                ns={ns}
+                values={{ name: modal.kind === "delete" ? modal.nodeName : "" }}
+                components={{ bold: <b /> }}
+              />
             </Text>
           )}
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal} disabled={busy}>
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             {!actionError && (
               <Button
@@ -1162,7 +1170,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                 loading={busy}
                 data-testid="confirm-delete-btn"
               >
-                Delete
+                {t("common:actions.delete", "Delete")}
               </Button>
             )}
           </Group>
@@ -1173,7 +1181,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
       <Modal
         opened={modal.kind === "moveInstance"}
         onClose={closeModal}
-        title="Move item to another location"
+        title={t("modals.moveInstance.title")}
         size="sm"
       >
         <Stack gap="sm">
@@ -1183,7 +1191,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
             </Alert>
           )}
           <Select
-            label="New location"
+            label={t("modals.moveInstance.locationLabel")}
             data={moveLocationOptions}
             value={moveTargetId}
             onChange={(v) => setMoveTargetId(v ?? "")}
@@ -1193,7 +1201,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           />
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal} disabled={busy}>
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             <Button
               onClick={() =>
@@ -1202,7 +1210,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
               loading={busy}
               data-testid="confirm-move-btn"
             >
-              Move
+              {t("common:actions.move", "Move")}
             </Button>
           </Group>
         </Stack>
@@ -1212,7 +1220,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
       <Modal
         opened={modal.kind === "deleteInstance"}
         onClose={closeModal}
-        title="Delete item"
+        title={t("modals.deleteInstance.title")}
         size="sm"
       >
         <Stack gap="sm">
@@ -1222,11 +1230,11 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
             </Alert>
           )}
           <Text size="sm">
-            Permanently delete this item instance? This cannot be undone.
+            {t("modals.deleteInstance.confirmation")}
           </Text>
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal} disabled={busy}>
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             <Button
               color="red"
@@ -1237,7 +1245,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
               loading={busy}
               data-testid="confirm-delete-instance-btn"
             >
-              Delete
+              {t("common:actions.delete", "Delete")}
             </Button>
           </Group>
         </Stack>
@@ -1247,7 +1255,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
       <Modal
         opened={modal.kind === "linkContainerAsset"}
         onClose={closeModal}
-        title="Link container asset"
+        title={t("modals.linkContainerAsset.title")}
         size="sm"
       >
         <Stack gap="sm">
@@ -1262,22 +1270,22 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
             </Alert>
           )}
           {allInstancesLoading ? (
-            <Text size="sm" c="dimmed">Loading instances…</Text>
+            <Text size="sm" c="dimmed">{t("modals.linkContainerAsset.loadingInstances")}</Text>
           ) : (
             <Select
-              label="Choose an instance to link as this location's container asset"
+              label={t("modals.linkContainerAsset.instanceLabel")}
               data={linkInstanceOptions}
               value={linkInstanceId}
               onChange={(v) => setLinkInstanceId(v ?? "")}
               allowDeselect={false}
               searchable
-              placeholder="Search by name or serial…"
+              placeholder={t("modals.linkContainerAsset.instancePlaceholder")}
               data-testid="link-instance-select"
             />
           )}
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal} disabled={busy}>
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             <Button
               onClick={() =>
@@ -1288,7 +1296,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
               disabled={!linkInstanceId}
               data-testid="confirm-link-btn"
             >
-              Link
+              {t("common:actions.link", "Link")}
             </Button>
           </Group>
         </Stack>
@@ -1298,7 +1306,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
       <Modal
         opened={modal.kind === "unlinkContainerAsset"}
         onClose={closeModal}
-        title="Unlink container asset"
+        title={t("modals.unlinkContainerAsset.title")}
         size="sm"
       >
         <Stack gap="sm">
@@ -1309,13 +1317,12 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
           )}
           {!actionError && (
             <Text size="sm">
-              Remove the container-asset link from this location? The instance
-              record will not be deleted.
+              {t("modals.unlinkContainerAsset.confirmation")}
             </Text>
           )}
           <Group justify="flex-end">
             <Button variant="default" onClick={closeModal} disabled={busy}>
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             {!actionError && (
               <Button
@@ -1327,7 +1334,7 @@ export function TreeBrowser({ resource, label, labelPlural }: TreeBrowserProps) 
                 loading={busy}
                 data-testid="confirm-unlink-btn"
               >
-                Unlink
+                {t("common:actions.unlink", "Unlink")}
               </Button>
             )}
           </Group>

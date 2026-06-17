@@ -18,6 +18,7 @@ import {
   Alert,
 } from "@mantine/core";
 import { AlertCircle } from "react-feather";
+import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
 
 interface LoginProps {
@@ -25,6 +26,7 @@ interface LoginProps {
 }
 
 export function Login({ onSuccess }: LoginProps) {
+  const { t } = useTranslation("auth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -42,7 +44,7 @@ export function Login({ onSuccess }: LoginProps) {
     setLoading(false);
 
     if (apiError) {
-      setError("Invalid email or password.");
+      setError(t("login.errorInvalidCredentials"));
       return;
     }
 
@@ -63,10 +65,10 @@ export function Login({ onSuccess }: LoginProps) {
           <Stack gap="lg">
             <Stack gap={4}>
               <Title order={2} ta="center">
-                Omniventory
+                {t("login.title")}
               </Title>
               <Text c="dimmed" size="sm" ta="center">
-                Sign in to your inventory
+                {t("login.subtitle")}
               </Text>
             </Stack>
 
@@ -82,8 +84,8 @@ export function Login({ onSuccess }: LoginProps) {
             )}
 
             <TextInput
-              label="Email"
-              placeholder="admin@example.com"
+              label={t("login.emailLabel")}
+              placeholder={t("login.emailPlaceholder")}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.currentTarget.value)}
@@ -92,8 +94,8 @@ export function Login({ onSuccess }: LoginProps) {
             />
 
             <PasswordInput
-              label="Password"
-              placeholder="Your password"
+              label={t("login.passwordLabel")}
+              placeholder={t("login.passwordPlaceholder")}
               value={password}
               onChange={(e) => setPassword(e.currentTarget.value)}
               required
@@ -101,7 +103,7 @@ export function Login({ onSuccess }: LoginProps) {
             />
 
             <Button type="submit" fullWidth loading={loading}>
-              Sign in
+              {t("login.submit")}
             </Button>
           </Stack>
         </form>

@@ -21,6 +21,7 @@ import {
   Alert,
 } from "@mantine/core";
 import { AlertCircle } from "react-feather";
+import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
 
 interface SetupProps {
@@ -29,6 +30,7 @@ interface SetupProps {
 }
 
 export function Setup({ onSuccess }: SetupProps) {
+  const { t } = useTranslation("auth");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -46,9 +48,12 @@ export function Setup({ onSuccess }: SetupProps) {
     setLoading(false);
 
     if (apiError) {
+      // Step 5 will rewire this to use mapApiError(apiError).
+      // For now, preserve the existing behaviour: read detail if present,
+      // else show the static fallback.
       const detail =
         (apiError as { detail?: string }).detail ??
-        "Setup failed. Please try again.";
+        t("setup.fallbackError");
       setError(detail);
       return;
     }
@@ -63,10 +68,10 @@ export function Setup({ onSuccess }: SetupProps) {
           <Stack gap="lg">
             <Stack gap={4}>
               <Title order={2} ta="center">
-                Omniventory
+                {t("setup.title")}
               </Title>
               <Text c="dimmed" size="sm" ta="center">
-                Create your admin account to get started.
+                {t("setup.subtitle")}
               </Text>
             </Stack>
 
@@ -82,8 +87,8 @@ export function Setup({ onSuccess }: SetupProps) {
             )}
 
             <TextInput
-              label="Email"
-              placeholder="admin@example.com"
+              label={t("setup.emailLabel")}
+              placeholder={t("setup.emailPlaceholder")}
               type="email"
               value={email}
               onChange={(e) => setEmail(e.currentTarget.value)}
@@ -92,8 +97,8 @@ export function Setup({ onSuccess }: SetupProps) {
             />
 
             <PasswordInput
-              label="Password"
-              placeholder="Choose a strong password"
+              label={t("setup.passwordLabel")}
+              placeholder={t("setup.passwordPlaceholder")}
               value={password}
               onChange={(e) => setPassword(e.currentTarget.value)}
               required
@@ -101,7 +106,7 @@ export function Setup({ onSuccess }: SetupProps) {
             />
 
             <Button type="submit" fullWidth loading={loading}>
-              Create admin account
+              {t("setup.submit")}
             </Button>
           </Stack>
         </form>

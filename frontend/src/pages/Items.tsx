@@ -33,6 +33,7 @@ import {
   ActionIcon,
 } from "@mantine/core";
 import { Plus, Edit2, Trash2, AlertCircle, ArrowLeft, Search } from "react-feather";
+import { useTranslation, Trans } from "react-i18next";
 import { client } from "../api/client";
 import type { components } from "../api/schema";
 import { PageShell } from "../components/PageShell";
@@ -151,16 +152,17 @@ function DefinitionFormModal({
   categories,
   locations,
 }: DefinitionFormModalProps) {
+  const { t } = useTranslation("items");
   const kindOptions = kinds.map((k) => ({
     value: String(k.id),
     label: k.name,
   }));
   const categoryOptions = [
-    { value: "", label: "— None —" },
+    { value: "", label: t("defForm.noneOption") },
     ...categories.map((c) => ({ value: String(c.id), label: c.name })),
   ];
   const locationOptions = [
-    { value: "", label: "— None —" },
+    { value: "", label: t("defForm.noneOption") },
     ...locations.map((l) => {
       const assetSuffix = l.container_asset_label ? ` — ${l.container_asset_label}` : "";
       return { value: String(l.id), label: `${l.name}${assetSuffix}` };
@@ -176,7 +178,7 @@ function DefinitionFormModal({
           </Alert>
         )}
         <TextInput
-          label="Name"
+          label={t("defForm.nameLabel")}
           required
           value={form.name}
           onChange={(e) => setForm((f) => ({ ...f, name: e.currentTarget.value }))}
@@ -184,7 +186,7 @@ function DefinitionFormModal({
           data-testid="def-name-input"
         />
         <Textarea
-          label="Description"
+          label={t("defForm.descriptionLabel")}
           value={form.description}
           onChange={(e) =>
             setForm((f) => ({ ...f, description: e.currentTarget.value }))
@@ -193,7 +195,7 @@ function DefinitionFormModal({
           minRows={2}
         />
         <Select
-          label="Category"
+          label={t("defForm.categoryLabel")}
           data={categoryOptions}
           value={form.category_id}
           onChange={(v) => setForm((f) => ({ ...f, category_id: v ?? "" }))}
@@ -201,21 +203,21 @@ function DefinitionFormModal({
           data-testid="def-category-select"
         />
         <Select
-          label="Kind"
+          label={t("defForm.kindLabel")}
           data={kindOptions}
           value={form.kind_id}
           onChange={(v) => setForm((f) => ({ ...f, kind_id: v ?? "" }))}
-          placeholder="Default: durable"
+          placeholder={t("defForm.kindPlaceholder")}
           data-testid="def-kind-select"
         />
         <TextInput
-          label="Unit"
+          label={t("defForm.unitLabel")}
           value={form.unit}
           onChange={(e) => setForm((f) => ({ ...f, unit: e.currentTarget.value }))}
-          placeholder="pcs"
+          placeholder={t("defForm.unitPlaceholder")}
         />
         <Select
-          label="Default Location"
+          label={t("defForm.defaultLocationLabel")}
           data={locationOptions}
           value={form.default_location_id}
           onChange={(v) => setForm((f) => ({ ...f, default_location_id: v ?? "" }))}
@@ -223,7 +225,7 @@ function DefinitionFormModal({
         />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose} disabled={busy}>
-            Cancel
+            {t("common:actions.cancel", "Cancel")}
           </Button>
           <Button
             onClick={onSubmit}
@@ -231,7 +233,7 @@ function DefinitionFormModal({
             disabled={!form.name.trim()}
             data-testid="def-submit-btn"
           >
-            Save
+            {t("common:actions.save", "Save")}
           </Button>
         </Group>
       </Stack>
@@ -242,6 +244,7 @@ function DefinitionFormModal({
 // ── Items page (definition list) ──────────────────────────────────────────────
 
 export function Items() {
+  const { t } = useTranslation("items");
   const [definitions, setDefinitions] = useState<DefinitionResponse[]>([]);
   const [kinds, setKinds] = useState<KindResponse[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
@@ -269,7 +272,7 @@ export function Items() {
         client.GET("/api/locations", { params: { query: {} } }),
       ]);
       if (defsRes.error) {
-        setLoadError("Failed to load definitions.");
+        setLoadError(t("loadError"));
         return;
       }
       setDefinitions(defsRes.data ?? []);
@@ -279,7 +282,7 @@ export function Items() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   // Re-search definitions when q or category filter changes
   const searchDefinitions = useCallback(async () => {
@@ -425,17 +428,17 @@ export function Items() {
   if (loadError) return <ErrorState message={loadError} />;
 
   const categoryFilterOptions = [
-    { value: "", label: "All categories" },
+    { value: "", label: t("search.allCategories") },
     ...categories.map((c) => ({ value: String(c.id), label: c.name })),
   ];
 
   return (
-    <PageShell title="Items">
+    <PageShell title={t("page.title")}>
       <Stack gap="md">
         {/* Search + category filter + create button */}
         <Group wrap="nowrap" align="flex-end">
           <TextInput
-            placeholder="Search by name…"
+            placeholder={t("search.placeholder")}
             leftSection={<Search size={14} />}
             value={q}
             onChange={(e) => setQ(e.currentTarget.value)}
@@ -446,7 +449,7 @@ export function Items() {
             data={categoryFilterOptions}
             value={categoryFilter}
             onChange={(v) => setCategoryFilter(v ?? "")}
-            placeholder="All categories"
+            placeholder={t("search.allCategories")}
             style={{ minWidth: 160 }}
             data-testid="def-category-filter"
           />
@@ -455,21 +458,21 @@ export function Items() {
             onClick={openCreateDef}
             data-testid="create-def-btn"
           >
-            New item
+            {t("list.newItemBtn")}
           </Button>
         </Group>
 
         {/* Definition list */}
         {definitions.length === 0 ? (
-          <EmptyState message="No items yet. Create one above." />
+          <EmptyState message={t("list.empty")} />
         ) : (
           <Table highlightOnHover>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Name</Table.Th>
-                <Table.Th>Kind</Table.Th>
-                <Table.Th>Unit</Table.Th>
-                <Table.Th>Category</Table.Th>
+                <Table.Th>{t("list.colName")}</Table.Th>
+                <Table.Th>{t("list.colKind")}</Table.Th>
+                <Table.Th>{t("list.colUnit")}</Table.Th>
+                <Table.Th>{t("list.colCategory")}</Table.Th>
                 <Table.Th />
               </Table.Tr>
             </Table.Thead>
@@ -501,7 +504,7 @@ export function Items() {
                       <ActionIcon
                         size="xs"
                         variant="subtle"
-                        aria-label={`Edit ${def.name}`}
+                        aria-label={t("list.editAriaLabel", { name: def.name })}
                         onClick={() => openEditDef(def)}
                         data-testid={`edit-def-${def.id}`}
                       >
@@ -511,7 +514,7 @@ export function Items() {
                         size="xs"
                         variant="subtle"
                         color="red"
-                        aria-label={`Delete ${def.name}`}
+                        aria-label={t("list.deleteAriaLabel", { name: def.name })}
                         onClick={() => openDeleteDef(def)}
                         data-testid={`delete-def-${def.id}`}
                       >
@@ -529,7 +532,7 @@ export function Items() {
       {/* Create definition modal */}
       <DefinitionFormModal
         opened={defModal.kind === "create"}
-        title="New item definition"
+        title={t("defForm.createTitle")}
         form={defForm}
         setForm={setDefForm}
         onSubmit={handleCreateDef}
@@ -544,7 +547,7 @@ export function Items() {
       {/* Edit definition modal */}
       <DefinitionFormModal
         opened={defModal.kind === "edit"}
-        title="Edit item definition"
+        title={t("defForm.editTitle")}
         form={defForm}
         setForm={setDefForm}
         onSubmit={handleEditDef}
@@ -560,7 +563,7 @@ export function Items() {
       <Modal
         opened={defModal.kind === "delete"}
         onClose={closeDefModal}
-        title="Delete item definition"
+        title={t("deleteDefModal.title")}
         size="sm"
       >
         <Stack gap="sm">
@@ -571,14 +574,17 @@ export function Items() {
           )}
           {!defError && (
             <Text size="sm">
-              Delete{" "}
-              <b>{defModal.kind === "delete" ? defModal.def.name : ""}</b>? This
-              cannot be undone.
+              <Trans
+                i18nKey="deleteDefModal.confirmation"
+                ns="items"
+                values={{ name: defModal.kind === "delete" ? defModal.def.name : "" }}
+                components={{ bold: <b /> }}
+              />
             </Text>
           )}
           <Group justify="flex-end">
             <Button variant="default" onClick={closeDefModal} disabled={defBusy}>
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             {!defError && (
               <Button
@@ -587,7 +593,7 @@ export function Items() {
                 loading={defBusy}
                 data-testid="confirm-delete-def-btn"
               >
-                Delete
+                {t("common:actions.delete", "Delete")}
               </Button>
             )}
           </Group>
@@ -600,6 +606,7 @@ export function Items() {
 // ── ItemDetail page (definition detail + instances) ───────────────────────────
 
 export function ItemDetail() {
+  const { t } = useTranslation("items");
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const defId = Number(id);
@@ -648,7 +655,7 @@ export function ItemDetail() {
           client.GET("/api/definitions", { params: { query: {} } }),
         ]);
       if (defRes.error) {
-        setLoadError("Item definition not found.");
+        setLoadError(t("notFound"));
         return;
       }
       setDef(defRes.data ?? null);
@@ -660,7 +667,7 @@ export function ItemDetail() {
     } finally {
       setLoading(false);
     }
-  }, [defId]);
+  }, [defId, t]);
 
   useEffect(() => {
     loadAll();
@@ -891,7 +898,7 @@ export function ItemDetail() {
 
   if (loading) return <LoadingState />;
   if (loadError) return <ErrorState message={loadError} />;
-  if (!def) return <ErrorState message="Item definition not found." />;
+  if (!def) return <ErrorState message={t("notFound")} />;
 
   const catName =
     def.category_id != null
@@ -909,7 +916,7 @@ export function ItemDetail() {
         <Anchor component={Link} to="/items" size="sm" c="dimmed">
           <Group gap={4}>
             <ArrowLeft size={14} />
-            Back to Items
+            {t("detail.backLink")}
           </Group>
         </Anchor>
       </Group>
@@ -925,7 +932,7 @@ export function ItemDetail() {
             onClick={openEditDef}
             data-testid="edit-def-btn"
           >
-            Edit
+            {t("detail.editBtn")}
           </Button>
           <Button
             size="xs"
@@ -938,7 +945,7 @@ export function ItemDetail() {
             }}
             data-testid="delete-def-btn"
           >
-            Delete
+            {t("detail.deleteBtn")}
           </Button>
         </Group>
       </Group>
@@ -952,21 +959,21 @@ export function ItemDetail() {
         )}
         <Group gap="lg" wrap="wrap">
           <Group gap={4} wrap="nowrap" component="span">
-            <Text size="sm" span fw={500}>Kind: </Text>
+            <Text size="sm" span fw={500}>{t("detail.kindLabel")}</Text>
             <Badge size="xs" variant="light">
               {def.kind.name}
             </Badge>
           </Group>
           <Text size="sm">
-            <Text span fw={500}>Unit: </Text>
+            <Text span fw={500}>{t("detail.unitLabel")}</Text>
             {def.unit}
           </Text>
           <Text size="sm">
-            <Text span fw={500}>Category: </Text>
+            <Text span fw={500}>{t("detail.categoryLabel")}</Text>
             {catName}
           </Text>
           <Text size="sm">
-            <Text span fw={500}>Default location: </Text>
+            <Text span fw={500}>{t("detail.defaultLocationLabel")}</Text>
             {locName}
           </Text>
         </Group>
@@ -977,20 +984,20 @@ export function ItemDetail() {
       {/* Instances section */}
       <Stack gap="sm">
         <Group justify="space-between" wrap="nowrap">
-          <Title order={4}>Instances</Title>
+          <Title order={4}>{t("detail.instancesTitle")}</Title>
           <Button
             size="xs"
             leftSection={<Plus size={12} />}
             onClick={openCreateInst}
             data-testid="register-instance-btn"
           >
-            Register instance
+            {t("detail.registerInstanceBtn")}
           </Button>
         </Group>
 
         {/* Instance search */}
         <TextInput
-          placeholder="Search by serial, model, manufacturer…"
+          placeholder={t("detail.instanceSearchPlaceholder")}
           leftSection={<Search size={14} />}
           value={instanceQ}
           onChange={(e) => setInstanceQ(e.currentTarget.value)}
@@ -998,16 +1005,16 @@ export function ItemDetail() {
         />
 
         {instances.length === 0 ? (
-          <EmptyState message="No instances yet. Register one above." />
+          <EmptyState message={t("detail.instancesEmpty")} />
         ) : (
           <Table highlightOnHover>
             <Table.Thead>
               <Table.Tr>
-                <Table.Th>Serial</Table.Th>
-                <Table.Th>Qty</Table.Th>
-                <Table.Th>Location</Table.Th>
-                <Table.Th>Manufacturer</Table.Th>
-                <Table.Th>Warranty</Table.Th>
+                <Table.Th>{t("detail.colSerial")}</Table.Th>
+                <Table.Th>{t("detail.colQty")}</Table.Th>
+                <Table.Th>{t("detail.colLocation")}</Table.Th>
+                <Table.Th>{t("detail.colManufacturer")}</Table.Th>
+                <Table.Th>{t("detail.colWarranty")}</Table.Th>
                 <Table.Th />
               </Table.Tr>
             </Table.Thead>
@@ -1049,7 +1056,7 @@ export function ItemDetail() {
                       <ActionIcon
                         size="xs"
                         variant="subtle"
-                        aria-label={`Edit instance ${inst.id}`}
+                        aria-label={t("detail.editInstanceAriaLabel", { id: inst.id })}
                         onClick={() => openEditInst(inst)}
                         data-testid={`edit-inst-${inst.id}`}
                       >
@@ -1059,7 +1066,7 @@ export function ItemDetail() {
                         size="xs"
                         variant="subtle"
                         color="red"
-                        aria-label={`Delete instance ${inst.id}`}
+                        aria-label={t("detail.deleteInstanceAriaLabel", { id: inst.id })}
                         onClick={() => openDeleteInst(inst)}
                         data-testid={`delete-inst-${inst.id}`}
                       >
@@ -1077,7 +1084,7 @@ export function ItemDetail() {
       {/* Edit definition modal */}
       <DefinitionFormModal
         opened={defModal.kind === "edit"}
-        title="Edit item definition"
+        title={t("defForm.editTitle")}
         form={defForm}
         setForm={setDefForm}
         onSubmit={handleEditDef}
@@ -1093,7 +1100,7 @@ export function ItemDetail() {
       <Modal
         opened={defModal.kind === "delete"}
         onClose={closeDefModal}
-        title="Delete item definition"
+        title={t("deleteDefModal.title")}
         size="sm"
       >
         <Stack gap="sm">
@@ -1104,13 +1111,17 @@ export function ItemDetail() {
           )}
           {!defError && (
             <Text size="sm">
-              Delete <b>{def.name}</b> and all its instances? This cannot be
-              undone.
+              <Trans
+                i18nKey="deleteDefModal.confirmationWithInstances"
+                ns="items"
+                values={{ name: def.name }}
+                components={{ bold: <b /> }}
+              />
             </Text>
           )}
           <Group justify="flex-end">
             <Button variant="default" onClick={closeDefModal} disabled={defBusy}>
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             {!defError && (
               <Button
@@ -1119,7 +1130,7 @@ export function ItemDetail() {
                 loading={defBusy}
                 data-testid="confirm-delete-def-btn"
               >
-                Delete
+                {t("common:actions.delete", "Delete")}
               </Button>
             )}
           </Group>
@@ -1129,7 +1140,7 @@ export function ItemDetail() {
       {/* Create instance modal */}
       <InstanceFormModal
         opened={instModal.kind === "create"}
-        title="Register new instance"
+        title={t("instanceForm.createTitle")}
         form={instForm}
         setForm={setInstForm}
         onSubmit={handleCreateInst}
@@ -1144,7 +1155,7 @@ export function ItemDetail() {
       {/* Edit instance modal */}
       <InstanceFormModal
         opened={instModal.kind === "edit"}
-        title="Edit instance"
+        title={t("instanceForm.editTitle")}
         form={instForm}
         setForm={setInstForm}
         onSubmit={handleEditInst}
@@ -1160,7 +1171,7 @@ export function ItemDetail() {
       <Modal
         opened={instModal.kind === "delete"}
         onClose={closeInstModal}
-        title="Delete instance"
+        title={t("deleteInstanceModal.title")}
         size="sm"
       >
         <Stack gap="sm">
@@ -1171,9 +1182,12 @@ export function ItemDetail() {
           )}
           {!instError && (
             <Text size="sm">
-              Delete instance{" "}
-              <b>#{instModal.kind === "delete" ? instModal.inst.id : ""}</b>?
-              This cannot be undone.
+              <Trans
+                i18nKey="deleteInstanceModal.confirmation"
+                ns="items"
+                values={{ id: instModal.kind === "delete" ? instModal.inst.id : "" }}
+                components={{ bold: <b /> }}
+              />
             </Text>
           )}
           <Group justify="flex-end">
@@ -1182,7 +1196,7 @@ export function ItemDetail() {
               onClick={closeInstModal}
               disabled={instBusy}
             >
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             {!instError && (
               <Button
@@ -1191,7 +1205,7 @@ export function ItemDetail() {
                 loading={instBusy}
                 data-testid="confirm-delete-inst-btn"
               >
-                Delete
+                {t("common:actions.delete", "Delete")}
               </Button>
             )}
           </Group>

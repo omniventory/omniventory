@@ -1,3 +1,18 @@
 {
-  "_ns": "common"
+  "actions": {
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "edit": "编辑",
+    "create": "创建",
+    "move": "移动",
+    "link": "关联",
+    "unlink": "取消关联"
+  },
+  "status": {
+    "loading": "加载中……",
+    "nothingHere": "暂无内容。",
+    "somethingWentWrong": "出现错误。",
+    "error": "错误"
+  }
 }

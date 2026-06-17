@@ -1,3 +1,12 @@
 {
-  "_ns": "nav"
+  "dashboard": "Dashboard",
+  "dashboardPlaceholder": "Your inventory dashboard will appear here.",
+  "locations": "Locations",
+  "categories": "Categories",
+  "items": "Items",
+  "navigation": "Navigation",
+  "toggleNavigation": "Toggle navigation",
+  "toggleColorScheme": "Toggle color scheme",
+  "logout": "Logout",
+  "appName": "Omniventory"
 }

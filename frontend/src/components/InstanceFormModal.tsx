@@ -19,6 +19,7 @@ import {
   Alert,
 } from "@mantine/core";
 import { AlertCircle } from "react-feather";
+import { useTranslation } from "react-i18next";
 import type { components } from "../api/schema";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -72,6 +73,8 @@ export function InstanceFormModal({
   locations,
   lockDefinition,
 }: InstanceFormModalProps) {
+  const { t } = useTranslation("instances");
+
   // Client-side serial ⇒ quantity = 1 rule (§7.3):
   // When serial is non-empty, force quantity to "1" and disable the field.
   const serialPresent = form.serial.trim().length > 0;
@@ -90,7 +93,7 @@ export function InstanceFormModal({
     label: d.name,
   }));
   const locationOptions = [
-    { value: "", label: "— None —" },
+    { value: "", label: t("form.noneOption") },
     ...locations.map((l) => {
       const assetSuffix = l.container_asset_label ? ` — ${l.container_asset_label}` : "";
       return { value: String(l.id), label: `${l.name}${assetSuffix}` };
@@ -111,7 +114,7 @@ export function InstanceFormModal({
           </Alert>
         )}
         <Select
-          label="Item Definition"
+          label={t("form.definitionLabel")}
           required
           data={defOptions}
           value={form.definition_id}
@@ -120,7 +123,7 @@ export function InstanceFormModal({
           data-testid="inst-definition-select"
         />
         <Select
-          label="Location"
+          label={t("form.locationLabel")}
           data={locationOptions}
           value={form.location_id}
           onChange={(v) => setForm((f) => ({ ...f, location_id: v ?? "" }))}
@@ -128,32 +131,32 @@ export function InstanceFormModal({
           data-testid="inst-location-select"
         />
         <TextInput
-          label="Serial"
+          label={t("form.serialLabel")}
           value={form.serial}
           onChange={(e) => handleSerialChange(e.currentTarget.value)}
           data-testid="inst-serial-input"
         />
         <NumberInput
-          label="Quantity"
+          label={t("form.quantityLabel")}
           value={form.quantity}
           onChange={(v) => setForm((f) => ({ ...f, quantity: String(v) }))}
           min={0}
           allowDecimal
           disabled={serialPresent}
           description={
-            serialPresent ? "Serial is set — quantity forced to 1" : undefined
+            serialPresent ? t("form.quantitySerialHint") : undefined
           }
           data-testid="inst-quantity-input"
         />
         <TextInput
-          label="Model Number"
+          label={t("form.modelNumberLabel")}
           value={form.model_number}
           onChange={(e) =>
             setForm((f) => ({ ...f, model_number: e.currentTarget.value }))
           }
         />
         <TextInput
-          label="Manufacturer"
+          label={t("form.manufacturerLabel")}
           value={form.manufacturer}
           onChange={(e) =>
             setForm((f) => ({ ...f, manufacturer: e.currentTarget.value }))
@@ -161,15 +164,15 @@ export function InstanceFormModal({
           data-testid="inst-manufacturer-input"
         />
         <TextInput
-          label="Warranty Expires"
-          placeholder="YYYY-MM-DD"
+          label={t("form.warrantyExpiresLabel")}
+          placeholder={t("form.warrantyExpiresPlaceholder")}
           value={form.warranty_expires}
           onChange={(e) =>
             setForm((f) => ({ ...f, warranty_expires: e.currentTarget.value }))
           }
         />
         <Textarea
-          label="Warranty Details"
+          label={t("form.warrantyDetailsLabel")}
           value={form.warranty_details}
           onChange={(e) =>
             setForm((f) => ({ ...f, warranty_details: e.currentTarget.value }))
@@ -178,23 +181,23 @@ export function InstanceFormModal({
           minRows={2}
         />
         <TextInput
-          label="Purchase Price"
-          placeholder="e.g. 149.99"
+          label={t("form.purchasePriceLabel")}
+          placeholder={t("form.purchasePricePlaceholder")}
           value={form.purchase_price}
           onChange={(e) =>
             setForm((f) => ({ ...f, purchase_price: e.currentTarget.value }))
           }
         />
         <TextInput
-          label="Purchase Date"
-          placeholder="YYYY-MM-DD"
+          label={t("form.purchaseDateLabel")}
+          placeholder={t("form.purchaseDatePlaceholder")}
           value={form.purchase_date}
           onChange={(e) =>
             setForm((f) => ({ ...f, purchase_date: e.currentTarget.value }))
           }
         />
         <TextInput
-          label="Purchase Source"
+          label={t("form.purchaseSourceLabel")}
           value={form.purchase_source}
           onChange={(e) =>
             setForm((f) => ({ ...f, purchase_source: e.currentTarget.value }))
@@ -202,7 +205,7 @@ export function InstanceFormModal({
         />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose} disabled={busy}>
-            Cancel
+            {t("common:actions.cancel", "Cancel")}
           </Button>
           <Button
             onClick={onSubmit}
@@ -210,7 +213,7 @@ export function InstanceFormModal({
             disabled={!form.definition_id}
             data-testid="inst-submit-btn"
           >
-            Save
+            {t("common:actions.save", "Save")}
           </Button>
         </Group>
       </Stack>

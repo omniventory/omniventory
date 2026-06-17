@@ -25,6 +25,7 @@ import {
   Paper,
 } from "@mantine/core";
 import { Edit2, Trash2, AlertCircle, ArrowLeft } from "react-feather";
+import { useTranslation, Trans } from "react-i18next";
 import { client } from "../api/client";
 import type { components } from "../api/schema";
 import { LoadingState } from "../components/LoadingState";
@@ -114,6 +115,7 @@ function DetailField({
 // ── InstanceDetail ────────────────────────────────────────────────────────────
 
 export function InstanceDetail() {
+  const { t } = useTranslation("instances");
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const instId = Number(id);
@@ -139,7 +141,7 @@ export function InstanceDetail() {
         params: { path: { instance_id: instId } },
       });
       if (instRes.error || !instRes.data) {
-        setLoadError("Instance not found.");
+        setLoadError(t("loadError"));
         return;
       }
       const instance = instRes.data;
@@ -158,7 +160,7 @@ export function InstanceDetail() {
     } finally {
       setLoading(false);
     }
-  }, [instId]);
+  }, [instId, t]);
 
   useEffect(() => {
     loadAll();
@@ -226,7 +228,7 @@ export function InstanceDetail() {
 
   if (loading) return <LoadingState />;
   if (loadError) return <ErrorState message={loadError} />;
-  if (!inst) return <ErrorState message="Instance not found." />;
+  if (!inst) return <ErrorState message={t("loadError")} />;
 
   const locName =
     inst.location_id != null
@@ -255,7 +257,9 @@ export function InstanceDetail() {
       <Group justify="space-between" wrap="nowrap">
         <Stack gap={2}>
           <Title order={2}>
-            {inst.serial ? `Serial: ${inst.serial}` : `Instance #${inst.id}`}
+            {inst.serial
+              ? t("detail.serialTitle", { serial: inst.serial })
+              : t("detail.instanceTitle", { id: inst.id })}
           </Title>
           {def && (
             <Group gap={6} wrap="nowrap">
@@ -274,7 +278,7 @@ export function InstanceDetail() {
             onClick={openEdit}
             data-testid="edit-inst-btn"
           >
-            Edit
+            {t("detail.editBtn")}
           </Button>
           <Button
             size="xs"
@@ -287,7 +291,7 @@ export function InstanceDetail() {
             }}
             data-testid="delete-inst-btn"
           >
-            Delete
+            {t("detail.deleteBtn")}
           </Button>
         </Group>
       </Group>
@@ -297,18 +301,18 @@ export function InstanceDetail() {
       {/* Detail fields */}
       <Paper p="md" withBorder>
         <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md">
-          <DetailField label="Quantity" value={formatQuantity(inst.quantity)} />
-          <DetailField label="Location" value={locName} />
-          <DetailField label="Serial" value={inst.serial} />
-          <DetailField label="Model Number" value={inst.model_number} />
-          <DetailField label="Manufacturer" value={inst.manufacturer} />
-          <DetailField label="Warranty Expires" value={inst.warranty_expires} />
-          <DetailField label="Warranty Details" value={inst.warranty_details} />
-          <DetailField label="Purchase Price" value={inst.purchase_price} />
-          <DetailField label="Purchase Date" value={inst.purchase_date} />
-          <DetailField label="Purchase Source" value={inst.purchase_source} />
+          <DetailField label={t("detail.quantityField")} value={formatQuantity(inst.quantity)} />
+          <DetailField label={t("detail.locationField")} value={locName} />
+          <DetailField label={t("detail.serialField")} value={inst.serial} />
+          <DetailField label={t("detail.modelNumberField")} value={inst.model_number} />
+          <DetailField label={t("detail.manufacturerField")} value={inst.manufacturer} />
+          <DetailField label={t("detail.warrantyExpiresField")} value={inst.warranty_expires} />
+          <DetailField label={t("detail.warrantyDetailsField")} value={inst.warranty_details} />
+          <DetailField label={t("detail.purchasePriceField")} value={inst.purchase_price} />
+          <DetailField label={t("detail.purchaseDateField")} value={inst.purchase_date} />
+          <DetailField label={t("detail.purchaseSourceField")} value={inst.purchase_source} />
           <DetailField
-            label="Created"
+            label={t("detail.createdField")}
             value={new Date(inst.created_at).toLocaleDateString()}
           />
         </SimpleGrid>
@@ -317,7 +321,7 @@ export function InstanceDetail() {
       {/* Edit modal */}
       <InstanceFormModal
         opened={editOpen}
-        title="Edit instance"
+        title={t("items:instanceForm.editTitle")}
         form={form}
         setForm={setForm}
         onSubmit={handleEdit}
@@ -336,7 +340,7 @@ export function InstanceDetail() {
       <Modal
         opened={deleteOpen}
         onClose={() => setDeleteOpen(false)}
-        title="Delete instance"
+        title={t("deleteModal.title")}
         size="sm"
       >
         <Stack gap="sm">
@@ -347,7 +351,12 @@ export function InstanceDetail() {
           )}
           {!actionError && (
             <Text size="sm">
-              Delete instance <b>#{inst.id}</b>? This cannot be undone.
+              <Trans
+                i18nKey="deleteModal.confirmation"
+                ns="instances"
+                values={{ id: inst.id }}
+                components={{ bold: <b /> }}
+              />
             </Text>
           )}
           <Group justify="flex-end">
@@ -356,7 +365,7 @@ export function InstanceDetail() {
               onClick={() => setDeleteOpen(false)}
               disabled={busy}
             >
-              Cancel
+              {t("common:actions.cancel", "Cancel")}
             </Button>
             {!actionError && (
               <Button
@@ -365,7 +374,7 @@ export function InstanceDetail() {
                 loading={busy}
                 data-testid="confirm-delete-inst-btn"
               >
-                Delete
+                {t("common:actions.delete", "Delete")}
               </Button>
             )}
           </Group>
