@@ -18,11 +18,12 @@ Only authenticated routes depend on ``get_current_user``.  Public endpoints
 (e.g. ``/health``, ``/auth/login``) must NOT use this dependency.
 """
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, Request
 from sqlalchemy.orm import Session
 
 from app.auth import sessions as session_auth
 from app.config import get_settings
+from app.core.errors import AppError, ErrorCode
 from app.db.session import get_db
 from app.models.user import User
 from app.repositories.user import UserRepository
@@ -60,24 +61,27 @@ def get_current_user(
     session_id: str | None = request.cookies.get(settings.session_cookie_name)
 
     if not session_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
+        raise AppError(
+            ErrorCode.NOT_AUTHENTICATED,
+            status_code=401,
+            message="Not authenticated",
         )
 
     session = session_auth.verify(db, session_id)
     if session is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session expired or invalid",
+        raise AppError(
+            ErrorCode.SESSION_INVALID,
+            status_code=401,
+            message="Session expired or invalid",
         )
 
     repo = UserRepository(db)
     user = repo.get_by_id(session.user_id)
     if user is None or not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found or inactive",
+        raise AppError(
+            ErrorCode.ACCOUNT_INACTIVE,
+            status_code=401,
+            message="User not found or inactive",
         )
 
     return user

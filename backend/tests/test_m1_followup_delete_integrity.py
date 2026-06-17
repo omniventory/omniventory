@@ -268,14 +268,15 @@ class TestDefinitionDeleteGuard:
         assert resp.status_code == 409
 
     def test_delete_definition_409_detail_mentions_instances(self, test_client: TestClient) -> None:
-        """The 409 detail message mentions stock instances."""
+        """The 409 error code indicates item definition has instances."""
         defn = _create_definition(test_client, "Saw")
         _create_instance(test_client, defn["id"])
         resp = test_client.delete(f"/api/definitions/{defn['id']}")
         assert resp.status_code == 409
-        detail = resp.json().get("detail", "")
-        # Should mention the definition name and the block reason.
-        assert "instance" in detail.lower()
+        body = resp.json()
+        # Should use the new uniform error envelope with stable code.
+        assert body.get("code") == "item_definition.has_instances"
+        assert "instance" in body.get("message", "").lower()
 
     def test_delete_definition_after_instance_deleted_returns_204(
         self, test_client: TestClient
@@ -383,9 +384,8 @@ class TestDefinitionDeleteServiceGuard:
     """ItemDefinitionService.delete() raises 409 when instances exist."""
 
     def test_service_delete_409_when_instance_exists(self, db_session: Session) -> None:
-        """Service.delete raises HTTP 409 when the definition has instances."""
-        from fastapi import HTTPException
-
+        """Service.delete raises AppError 409 when the definition has instances."""
+        from app.core.errors import AppError, ErrorCode
         from app.models.item_definition import ItemDefinition
         from app.models.stock_instance import StockInstance
         from app.services.item_definition import ItemDefinitionService
@@ -398,9 +398,10 @@ class TestDefinitionDeleteServiceGuard:
         db_session.commit()
 
         svc = ItemDefinitionService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc.delete(defn.id)
         assert exc_info.value.status_code == 409
+        assert exc_info.value.code == ErrorCode.ITEM_DEFINITION_HAS_INSTANCES
 
     def test_service_delete_succeeds_when_no_instances(self, db_session: Session) -> None:
         """Service.delete succeeds (no error) when no instances reference the definition."""

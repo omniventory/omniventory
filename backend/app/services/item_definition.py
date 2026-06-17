@@ -16,9 +16,9 @@ All DB access goes through the repositories; no raw queries in this layer.
 
 from __future__ import annotations
 
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.errors import AppError, ErrorCode
 from app.models.item_definition import ItemDefinition
 from app.models.item_kind import ItemKind
 from app.repositories.category import CategoryRepository
@@ -50,9 +50,11 @@ class ItemDefinitionService:
         """Return an ItemDefinition or raise HTTP 404."""
         defn = self._repo.get(definition_id)
         if defn is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Item definition {definition_id} not found.",
+            raise AppError(
+                ErrorCode.ITEM_DEFINITION_NOT_FOUND,
+                status_code=404,
+                params={"id": definition_id},
+                message=f"Item definition {definition_id} not found.",
             )
         return defn
 
@@ -62,15 +64,16 @@ class ItemDefinitionService:
         - If ``kind_id`` is None, look up the seeded ``durable`` kind and
           return its id (default-kind resolution, M1.md §2 / §9 Step 3).
         - If ``kind_id`` is provided, verify it exists in ``item_kinds``;
-          raise HTTP 422 if not.
+          raise AppError(item_kind.not_found) if not.
         """
         if kind_id is None:
             durable = self._kind_repo.get_by_code(_DURABLE_CODE)
             if durable is None:
                 # Should never happen after migration 0006 seeding.
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail=(
+                raise AppError(
+                    ErrorCode.INTERNAL_ERROR,
+                    status_code=500,
+                    message=(
                         "Default kind 'durable' is missing from item_kinds. "
                         "Ensure migration 0006 has been applied."
                     ),
@@ -80,26 +83,32 @@ class ItemDefinitionService:
         # Validate that the supplied kind_id exists.
         kind_row = self._db.get(ItemKind, kind_id)
         if kind_row is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"Item kind with id={kind_id} does not exist.",
+            raise AppError(
+                ErrorCode.ITEM_KIND_NOT_FOUND,
+                status_code=422,
+                params={"id": kind_id},
+                message=f"Item kind with id={kind_id} does not exist.",
             )
         return kind_id
 
     def _assert_category_exists(self, category_id: int) -> None:
-        """Raise HTTP 404 if the category does not exist."""
+        """Raise 404 if the category does not exist."""
         if self._cat_repo.get(category_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Category {category_id} not found.",
+            raise AppError(
+                ErrorCode.CATEGORY_NOT_FOUND,
+                status_code=404,
+                params={"id": category_id},
+                message=f"Category {category_id} not found.",
             )
 
     def _assert_location_exists(self, location_id: int) -> None:
-        """Raise HTTP 404 if the location does not exist."""
+        """Raise 404 if the location does not exist."""
         if self._loc_repo.get(location_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Location {location_id} not found.",
+            raise AppError(
+                ErrorCode.LOCATION_NOT_FOUND,
+                status_code=404,
+                params={"id": location_id},
+                message=f"Location {location_id} not found.",
             )
 
     # ---------------------------------------------------------------------- #
@@ -186,9 +195,11 @@ class ItemDefinitionService:
         """
         defn = self._get_or_404(definition_id)
         if self._inst_repo.has_instances_for_definition(definition_id):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
+            raise AppError(
+                ErrorCode.ITEM_DEFINITION_HAS_INSTANCES,
+                status_code=409,
+                params={"id": definition_id},
+                message=(
                     f"Item definition '{defn.name}' (id={definition_id}) cannot be "
                     "deleted because it still has stock instances referencing it. "
                     "Delete or reassign the instances first."

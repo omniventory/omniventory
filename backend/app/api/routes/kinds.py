@@ -17,11 +17,19 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.context import RequestContext, get_authenticated_context
+from app.core.errors import ErrorResponse
 from app.db.session import get_db
 from app.repositories.item_kind import ItemKindRepository
 from app.schemas.item_kind import KindResponse
 
-router = APIRouter(prefix="/kinds", tags=["kinds"])
+_ERROR_RESPONSES: dict[int | str, dict[str, object]] = {
+    401: {"model": ErrorResponse},
+    404: {"model": ErrorResponse},
+    409: {"model": ErrorResponse},
+    422: {"model": ErrorResponse},
+}
+
+router = APIRouter(prefix="/kinds", tags=["kinds"], responses=_ERROR_RESPONSES)
 
 
 def _get_repo(db: Session = Depends(get_db)) -> ItemKindRepository:

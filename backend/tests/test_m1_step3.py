@@ -561,16 +561,16 @@ class TestInvalidKindIdRejected:
         assert resp.status_code == 422
 
     def test_service_rejects_invalid_kind_id_unit(self, db_session: Session) -> None:
-        """ItemDefinitionService raises 422 for a non-existent kind_id (unit test)."""
-        from fastapi import HTTPException
-
+        """ItemDefinitionService raises AppError 422 for a non-existent kind_id (unit test)."""
+        from app.core.errors import AppError, ErrorCode
         from app.schemas.item_definition import DefinitionCreate
         from app.services.item_definition import ItemDefinitionService
 
         svc = ItemDefinitionService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc.create(DefinitionCreate(name="Bad", kind_id=9999))
         assert exc_info.value.status_code == 422
+        assert exc_info.value.code == ErrorCode.ITEM_KIND_NOT_FOUND
 
 
 # ---------------------------------------------------------------------------
@@ -840,16 +840,16 @@ class TestItemDefinitionService:
         assert defn.kind_id == durable.id
 
     def test_create_with_invalid_kind_id_raises_422(self, db_session: Session) -> None:
-        """Service.create raises 422 for a non-existent kind_id."""
-        from fastapi import HTTPException
-
+        """Service.create raises AppError 422 for a non-existent kind_id."""
+        from app.core.errors import AppError, ErrorCode
         from app.schemas.item_definition import DefinitionCreate
         from app.services.item_definition import ItemDefinitionService
 
         svc = ItemDefinitionService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc.create(DefinitionCreate(name="Bad", kind_id=9999))
         assert exc_info.value.status_code == 422
+        assert exc_info.value.code == ErrorCode.ITEM_KIND_NOT_FOUND
 
     def test_update_without_kind_id_does_not_change_kind(self, db_session: Session) -> None:
         """PATCH without kind_id in payload does not change the kind."""
@@ -868,26 +868,26 @@ class TestItemDefinitionService:
         assert updated.kind_id == consumable.id  # unchanged
 
     def test_get_nonexistent_raises_404(self, db_session: Session) -> None:
-        """Service.get raises 404 for a non-existent definition."""
-        from fastapi import HTTPException
-
+        """Service.get raises AppError 404 for a non-existent definition."""
+        from app.core.errors import AppError, ErrorCode
         from app.services.item_definition import ItemDefinitionService
 
         svc = ItemDefinitionService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc.get(9999)
         assert exc_info.value.status_code == 404
+        assert exc_info.value.code == ErrorCode.ITEM_DEFINITION_NOT_FOUND
 
     def test_delete_nonexistent_raises_404(self, db_session: Session) -> None:
-        """Service.delete raises 404 for a non-existent definition."""
-        from fastapi import HTTPException
-
+        """Service.delete raises AppError 404 for a non-existent definition."""
+        from app.core.errors import AppError, ErrorCode
         from app.services.item_definition import ItemDefinitionService
 
         svc = ItemDefinitionService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc.delete(9999)
         assert exc_info.value.status_code == 404
+        assert exc_info.value.code == ErrorCode.ITEM_DEFINITION_NOT_FOUND
 
 
 # ---------------------------------------------------------------------------

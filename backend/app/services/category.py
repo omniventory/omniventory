@@ -14,9 +14,9 @@ ensuring no copy-paste divergence (M1.md §10 Step-2 checkpoint).
 
 from __future__ import annotations
 
-from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.errors import AppError, ErrorCode
 from app.models.category import Category
 from app.repositories.category import CategoryRepository
 from app.schemas.category import CategoryCreate, CategoryTreeNode, CategoryUpdate
@@ -40,18 +40,22 @@ class CategoryService(TreeServiceMixin):
         """Return a Category or raise HTTP 404."""
         cat = self._repo.get(category_id)
         if cat is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Category {category_id} not found.",
+            raise AppError(
+                ErrorCode.CATEGORY_NOT_FOUND,
+                status_code=404,
+                params={"id": category_id},
+                message=f"Category {category_id} not found.",
             )
         return cat
 
     def _assert_parent_exists(self, parent_id: int) -> None:
         """Raise HTTP 404 if the proposed parent does not exist."""
         if self._repo.get(parent_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Parent category {parent_id} not found.",
+            raise AppError(
+                ErrorCode.CATEGORY_PARENT_NOT_FOUND,
+                status_code=404,
+                params={"id": parent_id},
+                message=f"Parent category {parent_id} not found.",
             )
 
     # ---------------------------------------------------------------------- #

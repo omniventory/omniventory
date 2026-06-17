@@ -28,11 +28,19 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.context import RequestContext, get_authenticated_context
+from app.core.errors import ErrorResponse
 from app.db.session import get_db
 from app.schemas.stock_instance import InstanceCreate, InstanceResponse, InstanceUpdate
 from app.services.stock_instance import StockInstanceService
 
-router = APIRouter(prefix="/instances", tags=["instances"])
+_ERROR_RESPONSES: dict[int | str, dict[str, object]] = {
+    401: {"model": ErrorResponse},
+    404: {"model": ErrorResponse},
+    409: {"model": ErrorResponse},
+    422: {"model": ErrorResponse},
+}
+
+router = APIRouter(prefix="/instances", tags=["instances"], responses=_ERROR_RESPONSES)
 
 
 def _get_service(db: Session = Depends(get_db)) -> StockInstanceService:

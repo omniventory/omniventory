@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from fastapi import HTTPException, status
+from app.core.errors import AppError, ErrorCode
 
 
 class _TreeRepoProtocol(Protocol):
@@ -89,16 +89,20 @@ class TreeServiceMixin:
             "category").  Defaults to "node".
         """
         if proposed_parent_id == node_id:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"A {kind} cannot be its own parent (cycle detected).",
+            raise AppError(
+                ErrorCode.TREE_CYCLE,
+                status_code=409,
+                params={"kind": kind},
+                message=f"A {kind} cannot be its own parent (cycle detected).",
             )
         descendants = self._repo.get_descendants(node_id)
         descendant_ids = {d.id for d in descendants}
         if proposed_parent_id in descendant_ids:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
+            raise AppError(
+                ErrorCode.TREE_CYCLE,
+                status_code=409,
+                params={"kind": kind},
+                message=(
                     f"Reparenting {kind} {node_id} under {kind} "
                     f"{proposed_parent_id} would create a cycle."
                 ),
@@ -123,9 +127,11 @@ class TreeServiceMixin:
             Human-readable entity label (e.g. "location", "category").
         """
         if self._repo.has_children(node_id):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
+            raise AppError(
+                ErrorCode.TREE_DELETE_HAS_CHILDREN,
+                status_code=409,
+                params={"kind": kind},
+                message=(
                     f"{kind.capitalize()} '{node_name}' (id={node_id}) cannot be "
                     f"deleted because it still has child {kind}s. "
                     "Delete or reparent them first."

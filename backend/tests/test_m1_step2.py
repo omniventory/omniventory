@@ -329,7 +329,7 @@ class TestCategoryTreeCyclePrevention:
         node = _create_category(test_client, "A")
         resp = test_client.patch(f"/api/categories/{node['id']}", json={"parent_id": node["id"]})
         assert resp.status_code == 409
-        assert "cycle" in resp.json()["detail"].lower()
+        assert resp.json()["code"] == "tree.cycle"
 
     def test_reparent_under_direct_child_is_rejected(self, test_client: TestClient) -> None:
         """Parent → Child: reparenting Parent under Child is rejected (cycle)."""
@@ -338,7 +338,7 @@ class TestCategoryTreeCyclePrevention:
 
         resp = test_client.patch(f"/api/categories/{parent['id']}", json={"parent_id": child["id"]})
         assert resp.status_code == 409
-        assert "cycle" in resp.json()["detail"].lower()
+        assert resp.json()["code"] == "tree.cycle"
 
     def test_reparent_under_distant_descendant_is_rejected(self, test_client: TestClient) -> None:
         """A → B → C: reparenting A under C (deep descendant) is rejected."""
@@ -348,7 +348,7 @@ class TestCategoryTreeCyclePrevention:
 
         resp = test_client.patch(f"/api/categories/{a['id']}", json={"parent_id": c["id"]})
         assert resp.status_code == 409
-        assert "cycle" in resp.json()["detail"].lower()
+        assert resp.json()["code"] == "tree.cycle"
 
     def test_valid_reparent_succeeds(self, test_client: TestClient) -> None:
         """Reparenting a node to a valid (non-descendant) node succeeds."""
@@ -371,9 +371,8 @@ class TestCategoryTreeCyclePrevention:
         assert resp.json()["parent_id"] is None
 
     def test_service_cycle_check_self(self, db_session: Session) -> None:
-        """CategoryService._assert_no_cycle raises 409 on self-reference (unit test)."""
-        from fastapi import HTTPException
-
+        """CategoryService._assert_no_cycle raises AppError 409 on self-reference (unit test)."""
+        from app.core.errors import AppError, ErrorCode
         from app.repositories.category import CategoryRepository
         from app.services.category import CategoryService
 
@@ -382,14 +381,14 @@ class TestCategoryTreeCyclePrevention:
         db_session.commit()
 
         svc = CategoryService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc._assert_no_cycle(cat.id, cat.id)
         assert exc_info.value.status_code == 409
+        assert exc_info.value.code == ErrorCode.TREE_CYCLE
 
     def test_service_cycle_check_descendant(self, db_session: Session) -> None:
-        """CategoryService._assert_no_cycle raises 409 for a descendant parent."""
-        from fastapi import HTTPException
-
+        """CategoryService._assert_no_cycle raises AppError 409 for a descendant parent."""
+        from app.core.errors import AppError, ErrorCode
         from app.repositories.category import CategoryRepository
         from app.services.category import CategoryService
 
@@ -402,9 +401,10 @@ class TestCategoryTreeCyclePrevention:
         db_session.commit()
 
         svc = CategoryService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc._assert_no_cycle(a.id, c.id)
         assert exc_info.value.status_code == 409
+        assert exc_info.value.code == ErrorCode.TREE_CYCLE
 
 
 # ---------------------------------------------------------------------------
@@ -422,7 +422,7 @@ class TestCategoryDeleteGuard:
 
         resp = test_client.delete(f"/api/categories/{parent['id']}")
         assert resp.status_code == 409
-        assert "child" in resp.json()["detail"].lower()
+        assert resp.json()["code"] == "tree.delete_has_children"
 
     def test_delete_becomes_allowed_after_child_removed(self, test_client: TestClient) -> None:
         """After the child is deleted, the parent can be deleted too."""
@@ -438,9 +438,8 @@ class TestCategoryDeleteGuard:
         assert resp_parent.status_code == 204
 
     def test_service_delete_guard_unit(self, db_session: Session) -> None:
-        """CategoryService.delete raises 409 (via _assert_deletable) for a non-empty node."""
-        from fastapi import HTTPException
-
+        """CategoryService.delete raises AppError 409 (via _assert_deletable) for a non-empty node."""
+        from app.core.errors import AppError, ErrorCode
         from app.repositories.category import CategoryRepository
         from app.services.category import CategoryService
 
@@ -451,9 +450,10 @@ class TestCategoryDeleteGuard:
         db_session.commit()
 
         svc = CategoryService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc.delete(parent.id)
         assert exc_info.value.status_code == 409
+        assert exc_info.value.code == ErrorCode.TREE_DELETE_HAS_CHILDREN
 
 
 # ---------------------------------------------------------------------------
@@ -858,16 +858,16 @@ class TestCategoryService:
     """CategoryService unit tests (no HTTP, tests business logic directly)."""
 
     def test_create_validates_parent_exists(self, db_session: Session) -> None:
-        """Service.create with non-existent parent raises 404."""
-        from fastapi import HTTPException
-
+        """Service.create with non-existent parent raises AppError 404."""
+        from app.core.errors import AppError, ErrorCode
         from app.schemas.category import CategoryCreate
         from app.services.category import CategoryService
 
         svc = CategoryService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc.create(CategoryCreate(name="Child", parent_id=9999))
         assert exc_info.value.status_code == 404
+        assert exc_info.value.code == ErrorCode.CATEGORY_PARENT_NOT_FOUND
 
     def test_get_tree_build_correctness(self, db_session: Session) -> None:
         """get_tree() builds a correctly nested tree."""
@@ -958,8 +958,7 @@ class TestTreeServiceMixinShared:
 
     def test_location_cycle_guard_still_works_via_mixin(self, db_session: Session) -> None:
         """Location cycle guard still passes through the shared mixin after Step-2 refactor."""
-        from fastapi import HTTPException
-
+        from app.core.errors import AppError, ErrorCode
         from app.repositories.location import LocationRepository
         from app.services.location import LocationService
 
@@ -970,14 +969,14 @@ class TestTreeServiceMixinShared:
         db_session.commit()
 
         svc = LocationService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc._assert_no_cycle(a.id, b.id)
         assert exc_info.value.status_code == 409
+        assert exc_info.value.code == ErrorCode.TREE_CYCLE
 
     def test_location_delete_guard_still_works_via_mixin(self, db_session: Session) -> None:
         """Location delete guard still passes through the shared mixin after Step-2 refactor."""
-        from fastapi import HTTPException
-
+        from app.core.errors import AppError, ErrorCode
         from app.repositories.location import LocationRepository
         from app.services.location import LocationService
 
@@ -988,6 +987,7 @@ class TestTreeServiceMixinShared:
         db_session.commit()
 
         svc = LocationService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc.delete(parent.id)
         assert exc_info.value.status_code == 409
+        assert exc_info.value.code == ErrorCode.TREE_DELETE_HAS_CHILDREN

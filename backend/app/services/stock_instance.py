@@ -24,10 +24,10 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.errors import AppError, ErrorCode
 from app.models.stock_instance import StockInstance
 from app.repositories.item_definition import ItemDefinitionRepository
 from app.repositories.location import LocationRepository
@@ -51,45 +51,52 @@ class StockInstanceService:
     # ---------------------------------------------------------------------- #
 
     def _get_or_404(self, instance_id: int) -> StockInstance:
-        """Return a StockInstance or raise HTTP 404."""
+        """Return a StockInstance or raise 404."""
         inst = self._repo.get(instance_id)
         if inst is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Stock instance {instance_id} not found.",
+            raise AppError(
+                ErrorCode.STOCK_INSTANCE_NOT_FOUND,
+                status_code=404,
+                params={"id": instance_id},
+                message=f"Stock instance {instance_id} not found.",
             )
         return inst
 
     def _assert_serial_qty_1(self, serial: str | None, quantity: Decimal) -> None:
-        """Raise HTTP 422 if serial is set but quantity != 1.
+        """Raise 422 if serial is set but quantity != 1.
 
         Service-layer enforcement of the serial⇒qty=1 constraint (M1.md §2 /
         §3.5).  The DB CHECK is a second safety net for direct writes that
         bypass the service layer.
         """
         if serial is not None and quantity != _ONE:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=(
+            raise AppError(
+                ErrorCode.STOCK_INSTANCE_SERIAL_REQUIRES_QTY_ONE,
+                status_code=422,
+                message=(
                     "When a serial number is provided, quantity must be exactly 1 "
                     f"(serial={serial!r}, quantity={quantity})."
                 ),
             )
 
     def _assert_definition_exists(self, definition_id: int) -> None:
-        """Raise HTTP 404 if the definition does not exist."""
+        """Raise 404 if the definition does not exist."""
         if self._def_repo.get(definition_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Item definition {definition_id} not found.",
+            raise AppError(
+                ErrorCode.ITEM_DEFINITION_NOT_FOUND,
+                status_code=404,
+                params={"id": definition_id},
+                message=f"Item definition {definition_id} not found.",
             )
 
     def _assert_location_exists(self, location_id: int) -> None:
-        """Raise HTTP 404 if the location does not exist."""
+        """Raise 404 if the location does not exist."""
         if self._loc_repo.get(location_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Location {location_id} not found.",
+            raise AppError(
+                ErrorCode.LOCATION_NOT_FOUND,
+                status_code=404,
+                params={"id": location_id},
+                message=f"Location {location_id} not found.",
             )
 
     def _assert_serial_unique(
@@ -118,9 +125,11 @@ class StockInstanceService:
             stmt = stmt.where(StockInstance.id != exclude_instance_id)
         conflict = self._db.scalars(stmt).first()
         if conflict is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
+            raise AppError(
+                ErrorCode.STOCK_INSTANCE_SERIAL_DUPLICATE,
+                status_code=409,
+                params={"serial": serial},
+                message=(
                     f"Serial number {serial!r} is already registered for definition "
                     f"{definition_id} (instance id={conflict.id}). "
                     "Serial numbers must be unique per item definition."

@@ -27,7 +27,7 @@ the TestClient's HTTP transport without needing TLS.  The production
 flag logic directly (without needing HTTPS infrastructure).
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -35,6 +35,7 @@ from app.api.deps import get_current_user
 from app.auth import sessions as session_auth
 from app.auth.passwords import dummy_verify, hash_password, verify_password
 from app.config import get_settings
+from app.core.errors import AppError, ErrorCode, ErrorResponse
 from app.db.session import get_db
 from app.models.app_config import AppConfig
 from app.models.user import User
@@ -48,7 +49,14 @@ from app.schemas.auth import (
     UserResponse,
 )
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+_ERROR_RESPONSES: dict[int | str, dict[str, object]] = {
+    401: {"model": ErrorResponse},
+    404: {"model": ErrorResponse},
+    409: {"model": ErrorResponse},
+    422: {"model": ErrorResponse},
+}
+
+router = APIRouter(prefix="/auth", tags=["auth"], responses=_ERROR_RESPONSES)
 
 
 def _set_session_cookie(response: Response, session_id: str) -> None:
@@ -107,21 +115,24 @@ def login(
         # Consume time comparable to a real hash verification to prevent
         # user-enumeration via response timing.
         dummy_verify(body.password)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
+        raise AppError(
+            ErrorCode.INVALID_CREDENTIALS,
+            status_code=401,
+            message="Invalid credentials",
         )
 
     if not verify_password(body.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
+        raise AppError(
+            ErrorCode.INVALID_CREDENTIALS,
+            status_code=401,
+            message="Invalid credentials",
         )
 
     if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Account is disabled",
+        raise AppError(
+            ErrorCode.ACCOUNT_DISABLED,
+            status_code=401,
+            message="Account is disabled",
         )
 
     session = session_auth.create(db, user.id)
@@ -211,9 +222,10 @@ def setup(
     # expensive password hash and return immediately.
     sentinel_exists = db.get(AppConfig, _ONBOARDING_SENTINEL_KEY) is not None
     if sentinel_exists or repo.count() > 0:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Setup already complete: an admin user already exists.",
+        raise AppError(
+            ErrorCode.SETUP_ALREADY_COMPLETE,
+            status_code=409,
+            message="Setup already complete: an admin user already exists.",
         )
 
     # Insert both the user and the sentinel atomically.  If another concurrent
@@ -233,9 +245,10 @@ def setup(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Setup already complete: an admin user already exists.",
+        raise AppError(
+            ErrorCode.SETUP_ALREADY_COMPLETE,
+            status_code=409,
+            message="Setup already complete: an admin user already exists.",
         ) from None
 
     db.refresh(user)

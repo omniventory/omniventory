@@ -6,14 +6,22 @@ module-import time — all side-effectful work happens inside the factory
 function, which is called explicitly (e.g. by the ASGI server or by tests).
 """
 
+import logging
 import secrets
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import APIRouter, FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.requests import Request
+
+from app.core.errors import AppError, ErrorCode, ErrorResponse
+
+logger = logging.getLogger(__name__)
 
 # Path to the directory where the Vite build output lands inside the container.
 # When running in dev / tests with no built frontend this directory won't exist
@@ -167,6 +175,62 @@ def create_app() -> FastAPI:
         redoc_url=f"{settings.api_prefix}/redoc",
         openapi_url=f"{settings.api_prefix}/openapi.json",
     )
+
+    # ------------------------------------------------------------------ #
+    # Exception handlers — uniform ErrorResponse envelope for every path   #
+    # ------------------------------------------------------------------ #
+
+    @app.exception_handler(AppError)
+    async def _app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+        """Convert AppError to the flat ErrorResponse envelope."""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=exc.to_response().model_dump(),
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_exception_handler(
+        request: Request, exc: StarletteHTTPException
+    ) -> JSONResponse:
+        """Convert stray HTTPException (e.g. SPA 404) to the uniform envelope.
+
+        Code is ``http.<status>`` so even un-migrated raise sites obey the
+        envelope shape.
+        """
+        code = f"http.{exc.status_code}"
+        message = str(exc.detail) if exc.detail else f"HTTP {exc.status_code}"
+        return JSONResponse(
+            status_code=exc.status_code,
+            content=ErrorResponse(code=code, message=message, params=None).model_dump(),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_error_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        """Convert Pydantic 422 to validation.invalid_input with a machine-readable fields list."""
+        fields = [{"loc": list(err["loc"]), "type": err["type"]} for err in exc.errors()]
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                code=ErrorCode.INVALID_INPUT,
+                message="Request validation failed.",
+                params={"fields": fields},
+            ).model_dump(),
+        )
+
+    @app.exception_handler(Exception)
+    async def _internal_error_handler(request: Request, exc: Exception) -> JSONResponse:
+        """Safety-net 500 handler — emits internal.error without leaking details."""
+        logger.exception("Unhandled exception: %s", exc)
+        return JSONResponse(
+            status_code=500,
+            content=ErrorResponse(
+                code=ErrorCode.INTERNAL_ERROR,
+                message="An internal error occurred.",
+                params=None,
+            ).model_dump(),
+        )
 
     # ------------------------------------------------------------------ #
     # Root API router — all routes live under settings.api_prefix          #

@@ -21,10 +21,10 @@ All DB access goes through ``LocationRepository`` (and
 
 from __future__ import annotations
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.errors import AppError, ErrorCode
 from app.models.item_definition import ItemDefinition
 from app.models.location import Location
 from app.models.stock_instance import StockInstance
@@ -80,26 +80,32 @@ class LocationService(TreeServiceMixin):
         """Return a Location or raise HTTP 404."""
         loc = self._repo.get(location_id)
         if loc is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Location {location_id} not found.",
+            raise AppError(
+                ErrorCode.LOCATION_NOT_FOUND,
+                status_code=404,
+                params={"id": location_id},
+                message=f"Location {location_id} not found.",
             )
         return loc
 
     def _assert_parent_exists(self, parent_id: int) -> None:
         """Raise HTTP 404 if the proposed parent does not exist."""
         if self._repo.get(parent_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Parent location {parent_id} not found.",
+            raise AppError(
+                ErrorCode.LOCATION_PARENT_NOT_FOUND,
+                status_code=404,
+                params={"id": parent_id},
+                message=f"Parent location {parent_id} not found.",
             )
 
     def _assert_instance_exists(self, instance_id: int) -> None:
         """Raise HTTP 404 if the stock instance does not exist."""
         if self._inst_repo.get(instance_id) is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Stock instance {instance_id} not found.",
+            raise AppError(
+                ErrorCode.STOCK_INSTANCE_NOT_FOUND,
+                status_code=404,
+                params={"id": instance_id},
+                message=f"Stock instance {instance_id} not found.",
             )
 
     def _assert_instance_id_unique(
@@ -119,9 +125,11 @@ class LocationService(TreeServiceMixin):
             stmt = stmt.where(Location.id != exclude_location_id)
         existing = self._db.scalars(stmt).first()
         if existing is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
+            raise AppError(
+                ErrorCode.LOCATION_CONTAINER_LINK_CONFLICT,
+                status_code=409,
+                params={"id": instance_id},
+                message=(
                     f"Stock instance {instance_id} is already linked to location "
                     f"'{existing.name}' (id={existing.id}). "
                     "Unlink it there first."
@@ -141,9 +149,11 @@ class LocationService(TreeServiceMixin):
 
         # 2. Assigned stock instances.
         if self._inst_repo.has_instances_at_location(loc.id):
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
+            raise AppError(
+                ErrorCode.LOCATION_DELETE_IN_USE,
+                status_code=409,
+                params={"id": loc.id},
+                message=(
                     f"Location '{loc.name}' (id={loc.id}) cannot be deleted "
                     "because it has stock instances assigned to it. "
                     "Move or delete the instances first."
@@ -152,9 +162,11 @@ class LocationService(TreeServiceMixin):
 
         # 3. Linked as a container-as-item.
         if loc.item_instance_id is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
+            raise AppError(
+                ErrorCode.LOCATION_DELETE_IN_USE,
+                status_code=409,
+                params={"id": loc.id},
+                message=(
                     f"Location '{loc.name}' (id={loc.id}) cannot be deleted "
                     "because it is linked as a container to stock instance "
                     f"{loc.item_instance_id}. Unlink it first."

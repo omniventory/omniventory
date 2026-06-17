@@ -472,10 +472,10 @@ class TestSerialQtyConstraint:
     # ------ Service layer unit tests ------
 
     def test_service_rejects_serial_qty_gt_1(self, db_session: Session) -> None:
-        """StockInstanceService raises 422 for serial + quantity > 1 (unit test)."""
-        from fastapi import HTTPException
+        """StockInstanceService raises AppError 422 for serial + quantity > 1 (unit test)."""
         from sqlalchemy import select
 
+        from app.core.errors import AppError, ErrorCode
         from app.models.item_definition import ItemDefinition
         from app.models.item_kind import ItemKind
         from app.schemas.stock_instance import InstanceCreate
@@ -489,11 +489,12 @@ class TestSerialQtyConstraint:
         db_session.flush()
 
         svc = StockInstanceService(db_session)
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc.create(
                 InstanceCreate(definition_id=defn.id, serial="SN-001", quantity=Decimal("3"))
             )
         assert exc_info.value.status_code == 422
+        assert exc_info.value.code == ErrorCode.STOCK_INSTANCE_SERIAL_REQUIRES_QTY_ONE
 
     # ------ DB layer (CHECK constraint) ------
 
@@ -823,10 +824,10 @@ class TestContainerAsItem:
         assert resp.status_code == 204
 
     def test_service_container_uniqueness_unit(self, db_session: Session) -> None:
-        """LocationService raises 409 when trying to link two locations to the same instance."""
-        from fastapi import HTTPException
+        """LocationService raises AppError 409 when trying to link two locations to the same instance."""
         from sqlalchemy import select
 
+        from app.core.errors import AppError, ErrorCode
         from app.models.item_definition import ItemDefinition
         from app.models.item_kind import ItemKind
         from app.models.location import Location
@@ -855,9 +856,10 @@ class TestContainerAsItem:
         db_session.commit()
 
         # Attempt to link loc_b to the same instance.
-        with pytest.raises(HTTPException) as exc_info:
+        with pytest.raises(AppError) as exc_info:
             svc.update(loc_b.id, LocationUpdate(item_instance_id=inst.id))
         assert exc_info.value.status_code == 409
+        assert exc_info.value.code == ErrorCode.LOCATION_CONTAINER_LINK_CONFLICT
 
     def test_location_response_includes_item_instance_id(self, test_client: TestClient) -> None:
         """GET /locations/{id} response includes item_instance_id field."""
