@@ -815,3 +815,160 @@ describe("InstanceFormModal — location picker shows container asset labels", (
     expect(garageOpt).toBeDefined();
   });
 });
+
+// ── Kind label localization tests ─────────────────────────────────────────────
+
+describe("Kind labels — localization via stable code", () => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
+  });
+
+  it("renders English kind labels (Durable/Consumable) in en locale", async () => {
+    await i18n.changeLanguage("en");
+    mockItemsListLoad();
+    renderItems();
+
+    await waitFor(() => {
+      expect(screen.getByText("Cordless Drill")).toBeDefined();
+    });
+    // Durable badge for kindDurable
+    expect(screen.getByText("Durable")).toBeDefined();
+    // Consumable badge for kindConsumable
+    expect(screen.getByText("Consumable")).toBeDefined();
+  });
+
+  it("renders Chinese kind labels (耐用品/消耗品) in zh locale — Items list", async () => {
+    await i18n.changeLanguage("zh");
+    mockItemsListLoad();
+    renderItems();
+
+    await waitFor(() => {
+      expect(screen.getByText("Cordless Drill")).toBeDefined();
+    });
+    // Must show zh labels, not English
+    expect(screen.getByText("耐用品")).toBeDefined();
+    expect(screen.getByText("消耗品")).toBeDefined();
+    expect(screen.queryByText("Durable")).toBeNull();
+    expect(screen.queryByText("Consumable")).toBeNull();
+  });
+
+  it("renders Chinese kind label (耐用品) in zh locale — InstanceDetail", async () => {
+    await i18n.changeLanguage("zh");
+    renderInstanceDetail(1);
+
+    await waitFor(() => {
+      // The kind badge on InstanceDetail must show zh label
+      expect(screen.getByText("耐用品")).toBeDefined();
+    });
+    expect(screen.queryByText("Durable")).toBeNull();
+  });
+
+  it("falls back to backend name (not raw key) for unknown kind code", async () => {
+    // Use a custom/unknown kind code that has no i18n key
+    const kindUnknown = {
+      id: 99,
+      code: "custom_kind",
+      name: "My Custom Kind",
+      is_system: false,
+      created_at: "2025-01-01T00:00:00Z",
+    };
+    const defWithUnknownKind = {
+      ...defDrill,
+      id: 99,
+      name: "Custom Item",
+      kind_id: 99,
+      kind: kindUnknown,
+    };
+
+    vi.mocked(client.GET).mockImplementation(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (path: any) => {
+        if (path === "/api/definitions")
+          return { data: [defWithUnknownKind], response: new Response(null, { status: 200 }) };
+        if (path === "/api/kinds")
+          return { data: [kindUnknown], response: new Response(null, { status: 200 }) };
+        if (path === "/api/categories")
+          return { data: [], response: new Response(null, { status: 200 }) };
+        if (path === "/api/locations")
+          return { data: [], response: new Response(null, { status: 200 }) };
+        return { data: null, error: { detail: "Not found" }, response: new Response(null, { status: 404 }) };
+      },
+    );
+
+    renderItems();
+
+    await waitFor(() => {
+      expect(screen.getByText("Custom Item")).toBeDefined();
+    });
+
+    // The badge must show the backend name "My Custom Kind", NOT the raw key "items:kinds.custom_kind"
+    expect(screen.getByText("My Custom Kind")).toBeDefined();
+    expect(screen.queryByText("items:kinds.custom_kind")).toBeNull();
+  });
+
+  it("renders Chinese kind label (耐用品) in zh locale — ItemDetail kind Badge", async () => {
+    await i18n.changeLanguage("zh");
+    renderItemDetail(42);
+
+    await waitFor(() => {
+      // The kind Badge inside the definition detail must show the Chinese label
+      expect(screen.getByText("耐用品")).toBeDefined();
+    });
+    // English label must NOT appear (the badge is the only kind render on this page)
+    expect(screen.queryByText("Durable")).toBeNull();
+  });
+
+  it("falls back to backend name (not raw key) for unknown code — ItemDetail kind Badge", async () => {
+    const kindUnknown = {
+      id: 99,
+      code: "totally_unknown_kind",
+      name: "Special Kind",
+      is_system: false,
+      created_at: "2025-01-01T00:00:00Z",
+    };
+    const defWithUnknownKind = {
+      ...defDrill,
+      id: 42,
+      kind_id: 99,
+      kind: kindUnknown,
+    };
+
+    // Set up the mock BEFORE rendering (do NOT use renderItemDetail helper as it
+    // would overwrite this mock with its own implementation).
+    vi.mocked(client.GET).mockImplementation(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      async (path: any) => {
+        if (path === "/api/definitions/{definition_id}")
+          return { data: defWithUnknownKind, response: new Response(null, { status: 200 }) };
+        if (path === "/api/instances")
+          return { data: [], response: new Response(null, { status: 200 }) };
+        if (path === "/api/kinds")
+          return { data: [kindUnknown], response: new Response(null, { status: 200 }) };
+        if (path === "/api/categories")
+          return { data: [categoryTools], response: new Response(null, { status: 200 }) };
+        if (path === "/api/locations")
+          return { data: [locationGarage], response: new Response(null, { status: 200 }) };
+        if (path === "/api/definitions")
+          return { data: [defWithUnknownKind], response: new Response(null, { status: 200 }) };
+        return { data: null, error: { detail: "Not found" }, response: new Response(null, { status: 404 }) };
+      },
+    );
+
+    render(
+      <MemoryRouter initialEntries={["/items/42"]}>
+        <MantineProvider>
+          <Routes>
+            <Route path="/items/:id" element={<ItemDetail />} />
+          </Routes>
+        </MantineProvider>
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => {
+      // The kind Badge must show the backend name, NOT a raw i18n key
+      expect(screen.getByText("Special Kind")).toBeDefined();
+    });
+    expect(screen.queryByText("items:kinds.totally_unknown_kind")).toBeNull();
+    expect(screen.queryByText("kinds.totally_unknown_kind")).toBeNull();
+  });
+});

@@ -245,7 +245,7 @@ export function InstanceDetail() {
             <Group gap={6} wrap="nowrap">
               <Text size="sm" c="dimmed">{def.name}</Text>
               <Badge size="xs" variant="light">
-                {def.kind.name}
+                {t(`items:kinds.${def.kind.code}`, { defaultValue: def.kind.name })}
               </Badge>
             </Group>
           )}

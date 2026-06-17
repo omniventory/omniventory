@@ -38,6 +38,11 @@
     "editInstanceAriaLabel": "编辑实例 {{id}}",
     "deleteInstanceAriaLabel": "删除实例 {{id}}"
   },
+  "kinds": {
+    "durable": "耐用品",
+    "consumable": "消耗品",
+    "perishable": "易腐品"
+  },
   "defForm": {
     "createTitle": "新建物品定义",
     "editTitle": "编辑物品定义",

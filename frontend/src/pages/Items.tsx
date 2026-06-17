@@ -135,7 +135,7 @@ function DefinitionFormModal({
   const { t } = useTranslation("items");
   const kindOptions = kinds.map((k) => ({
     value: String(k.id),
-    label: k.name,
+    label: t(`kinds.${k.code}`, { defaultValue: k.name }),
   }));
   const categoryOptions = [
     { value: "", label: t("defForm.noneOption") },
@@ -466,7 +466,7 @@ export function Items() {
                   </Table.Td>
                   <Table.Td>
                     <Badge size="xs" variant="light">
-                      {def.kind.name}
+                      {t(`kinds.${def.kind.code}`, { defaultValue: def.kind.name })}
                     </Badge>
                   </Table.Td>
                   <Table.Td>
@@ -941,7 +941,7 @@ export function ItemDetail() {
           <Group gap={4} wrap="nowrap" component="span">
             <Text size="sm" span fw={500}>{t("detail.kindLabel")}</Text>
             <Badge size="xs" variant="light">
-              {def.kind.name}
+              {t(`kinds.${def.kind.code}`, { defaultValue: def.kind.name })}
             </Badge>
           </Group>
           <Text size="sm">

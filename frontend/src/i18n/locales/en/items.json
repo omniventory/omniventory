@@ -38,6 +38,11 @@
     "editInstanceAriaLabel": "Edit instance {{id}}",
     "deleteInstanceAriaLabel": "Delete instance {{id}}"
   },
+  "kinds": {
+    "durable": "Durable",
+    "consumable": "Consumable",
+    "perishable": "Perishable"
+  },
   "defForm": {
     "createTitle": "New item definition",
     "editTitle": "Edit item definition",
