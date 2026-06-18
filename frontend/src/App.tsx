@@ -42,6 +42,20 @@ function App() {
   const [authState, setAuthState] = useState<AuthState>("loading");
   const [user, setUser] = useState<UserData | null>(null);
 
+  async function applyAuthedUser(u: UserData) {
+    // Gate wiring (§7.3): apply the account's preferred_language when set.
+    // Writing to localStorage ensures a reload before me re-resolves shows
+    // the right language (the detector reads it before the me call completes).
+    const preferredLang = u.preferred_language;
+    if (preferredLang) {
+      localStorage.setItem("omniventory_lang", preferredLang);
+      await i18n.changeLanguage(preferredLang);
+    }
+    // Store the user for presentation (shell UserButton) — presentation only.
+    setUser(u);
+    setAuthState("authed");
+  }
+
   useEffect(() => {
     async function checkState() {
       // Step 1: check if first-run setup is required.
@@ -63,18 +77,7 @@ function App() {
         return;
       }
 
-      // Gate wiring (§7.3): apply the account's preferred_language when set.
-      // Writing to localStorage ensures a reload before me re-resolves shows
-      // the right language (the detector reads it before the me call completes).
-      const preferredLang = meData.user.preferred_language;
-      if (preferredLang) {
-        localStorage.setItem("omniventory_lang", preferredLang);
-        await i18n.changeLanguage(preferredLang);
-      }
-
-      // Store the user for presentation (shell UserButton) — presentation only.
-      setUser(meData.user);
-      setAuthState("authed");
+      await applyAuthedUser(meData.user);
     }
 
     checkState().catch(() => setAuthState("anon"));
@@ -94,7 +97,7 @@ function App() {
   }
 
   if (authState === "anon") {
-    return <Login onSuccess={() => setAuthState("authed")} />;
+    return <Login onSuccess={(u) => { void applyAuthedUser(u); }} />;
   }
 
   // Authenticated: mount BrowserRouter INSIDE the auth gate (§2 locked decision).

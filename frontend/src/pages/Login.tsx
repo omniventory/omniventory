@@ -18,9 +18,12 @@ import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
 import { AuthLayout } from "../components/AuthLayout";
+import type { components } from "../api/schema";
+
+type UserResponse = components["schemas"]["UserResponse"];
 
 interface LoginProps {
-  onSuccess: () => void;
+  onSuccess: (user: UserResponse) => void;
 }
 
 export function Login({ onSuccess }: LoginProps) {
@@ -35,7 +38,7 @@ export function Login({ onSuccess }: LoginProps) {
     setLoading(true);
     setError(null);
 
-    const { error: apiError } = await client.POST("/api/auth/login", {
+    const { data, error: apiError } = await client.POST("/api/auth/login", {
       body: { email, password },
     });
 
@@ -46,7 +49,9 @@ export function Login({ onSuccess }: LoginProps) {
       return;
     }
 
-    onSuccess();
+    if (data) {
+      onSuccess(data);
+    }
   }
 
   return (
