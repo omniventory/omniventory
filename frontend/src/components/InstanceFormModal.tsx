@@ -151,32 +151,36 @@ export function InstanceFormModal({
         <TextInput
           label={t("form.modelNumberLabel")}
           value={form.model_number}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, model_number: e.currentTarget.value }))
-          }
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            setForm((f) => ({ ...f, model_number: value }));
+          }}
         />
         <TextInput
           label={t("form.manufacturerLabel")}
           value={form.manufacturer}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, manufacturer: e.currentTarget.value }))
-          }
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            setForm((f) => ({ ...f, manufacturer: value }));
+          }}
           data-testid="inst-manufacturer-input"
         />
         <TextInput
           label={t("form.warrantyExpiresLabel")}
           placeholder={t("form.warrantyExpiresPlaceholder")}
           value={form.warranty_expires}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, warranty_expires: e.currentTarget.value }))
-          }
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            setForm((f) => ({ ...f, warranty_expires: value }));
+          }}
         />
         <Textarea
           label={t("form.warrantyDetailsLabel")}
           value={form.warranty_details}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, warranty_details: e.currentTarget.value }))
-          }
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            setForm((f) => ({ ...f, warranty_details: value }));
+          }}
           autosize
           minRows={2}
         />
@@ -184,24 +188,27 @@ export function InstanceFormModal({
           label={t("form.purchasePriceLabel")}
           placeholder={t("form.purchasePricePlaceholder")}
           value={form.purchase_price}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, purchase_price: e.currentTarget.value }))
-          }
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            setForm((f) => ({ ...f, purchase_price: value }));
+          }}
         />
         <TextInput
           label={t("form.purchaseDateLabel")}
           placeholder={t("form.purchaseDatePlaceholder")}
           value={form.purchase_date}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, purchase_date: e.currentTarget.value }))
-          }
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            setForm((f) => ({ ...f, purchase_date: value }));
+          }}
         />
         <TextInput
           label={t("form.purchaseSourceLabel")}
           value={form.purchase_source}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, purchase_source: e.currentTarget.value }))
-          }
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            setForm((f) => ({ ...f, purchase_source: value }));
+          }}
         />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose} disabled={busy}>

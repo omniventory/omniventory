@@ -164,16 +164,20 @@ function DefinitionFormModal({
           label={t("defForm.nameLabel")}
           required
           value={form.name}
-          onChange={(e) => setForm((f) => ({ ...f, name: e.currentTarget.value }))}
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            setForm((f) => ({ ...f, name: value }));
+          }}
           data-autofocus
           data-testid="def-name-input"
         />
         <Textarea
           label={t("defForm.descriptionLabel")}
           value={form.description}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, description: e.currentTarget.value }))
-          }
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            setForm((f) => ({ ...f, description: value }));
+          }}
           autosize
           minRows={2}
         />
@@ -196,7 +200,10 @@ function DefinitionFormModal({
         <TextInput
           label={t("defForm.unitLabel")}
           value={form.unit}
-          onChange={(e) => setForm((f) => ({ ...f, unit: e.currentTarget.value }))}
+          onChange={(e) => {
+            const value = e.currentTarget.value;
+            setForm((f) => ({ ...f, unit: value }));
+          }}
           placeholder={t("defForm.unitPlaceholder")}
         />
         <Select

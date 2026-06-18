@@ -972,3 +972,124 @@ describe("Kind labels — localization via stable code", () => {
     expect(screen.queryByText("kinds.totally_unknown_kind")).toBeNull();
   });
 });
+
+// ── Regression tests: consecutive onChange must not crash (synthetic event bug) ─
+
+describe("DefinitionFormModal — consecutive onChange does not crash (regression)", () => {
+  beforeEach(() => {
+    mockItemsListLoad([]);
+    vi.mocked(client.POST).mockResolvedValue({
+      data: defDrill,
+      response: new Response(null, { status: 201 }),
+    } as AnyResult);
+  });
+
+  it("typing two characters in name field does not throw (second change triggers lazy updater path)", async () => {
+    renderItems();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("create-def-btn")).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("create-def-btn"));
+
+    const nameInput = await screen.findByTestId("def-name-input");
+
+    // First change — React eager-state optimization may execute updater immediately
+    fireEvent.change(nameInput, { target: { value: "a" } });
+    // Second change — triggers the deferred reducer path where currentTarget was null before fix
+    fireEvent.change(nameInput, { target: { value: "ab" } });
+
+    // No crash; the input reflects the second value
+    await waitFor(() => {
+      expect((nameInput as HTMLInputElement).value).toBe("ab");
+    });
+  });
+
+  it("clearing the name field after typing does not crash", async () => {
+    renderItems();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("create-def-btn")).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByTestId("create-def-btn"));
+
+    const nameInput = await screen.findByTestId("def-name-input");
+
+    fireEvent.change(nameInput, { target: { value: "a" } });
+    // Delete the character — second change with empty value
+    fireEvent.change(nameInput, { target: { value: "" } });
+
+    await waitFor(() => {
+      expect((nameInput as HTMLInputElement).value).toBe("");
+    });
+  });
+});
+
+describe("InstanceFormModal — consecutive onChange does not crash (regression)", () => {
+  beforeEach(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.mocked(client.GET).mockImplementation(async (path: any) => {
+      if (path === "/api/definitions/{definition_id}") {
+        return { data: defDrill, response: new Response(null, { status: 200 }) };
+      }
+      if (path === "/api/instances") {
+        return { data: [], response: new Response(null, { status: 200 }) };
+      }
+      if (path === "/api/kinds") {
+        return { data: [kindDurable], response: new Response(null, { status: 200 }) };
+      }
+      if (path === "/api/categories") {
+        return { data: [categoryTools], response: new Response(null, { status: 200 }) };
+      }
+      if (path === "/api/locations") {
+        return { data: [locationGarage], response: new Response(null, { status: 200 }) };
+      }
+      if (path === "/api/definitions") {
+        return { data: [defDrill], response: new Response(null, { status: 200 }) };
+      }
+      return { data: null, error: { code: "http.404", message: "Not found" }, response: new Response(null, { status: 404 }) };
+    });
+  });
+
+  it("typing two characters in manufacturer field does not throw (second change triggers lazy updater path)", async () => {
+    renderItemDetail(42);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Cordless Drill").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByTestId("register-instance-btn"));
+
+    const manufacturerInput = await screen.findByTestId("inst-manufacturer-input");
+
+    // First change
+    fireEvent.change(manufacturerInput, { target: { value: "D" } });
+    // Second change — exercises deferred updater path
+    fireEvent.change(manufacturerInput, { target: { value: "De" } });
+
+    await waitFor(() => {
+      expect((manufacturerInput as HTMLInputElement).value).toBe("De");
+    });
+  });
+
+  it("clearing manufacturer field after typing does not crash", async () => {
+    renderItemDetail(42);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Cordless Drill").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByTestId("register-instance-btn"));
+
+    const manufacturerInput = await screen.findByTestId("inst-manufacturer-input");
+
+    fireEvent.change(manufacturerInput, { target: { value: "D" } });
+    fireEvent.change(manufacturerInput, { target: { value: "" } });
+
+    await waitFor(() => {
+      expect((manufacturerInput as HTMLInputElement).value).toBe("");
+    });
+  });
+});
