@@ -114,11 +114,8 @@ describe("UserButton — logout menu item", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /user menu/i }));
 
-    await waitFor(() => {
-      expect(screen.getByRole("menuitem", { name: /logout/i })).toBeDefined();
-    });
-
-    fireEvent.click(screen.getByRole("menuitem", { name: /logout/i }));
+    const logoutItem = await screen.findByRole("menuitem", { name: /logout/i });
+    fireEvent.click(logoutItem);
     expect(onLogout).toHaveBeenCalledTimes(1);
   });
 });

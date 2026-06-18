@@ -44,7 +44,7 @@ async function submitForm(email: string, password: string) {
   fireEvent.change(screen.getByLabelText(/email/i), {
     target: { value: email },
   });
-  fireEvent.change(screen.getByLabelText(/password/i), {
+  fireEvent.change(screen.getByLabelText(/password/i, { selector: "input" }), {
     target: { value: password },
   });
   fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
@@ -54,7 +54,7 @@ describe("Login — renders", () => {
   it("shows the sign-in form with email, password, and submit button", () => {
     renderLogin();
     expect(screen.getByLabelText(/email/i)).toBeDefined();
-    expect(screen.getByLabelText(/password/i)).toBeDefined();
+    expect(screen.getByLabelText(/password/i, { selector: "input" })).toBeDefined();
     expect(screen.getByRole("button", { name: /sign in/i })).toBeDefined();
   });
 });

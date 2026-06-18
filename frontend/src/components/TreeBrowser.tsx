@@ -33,6 +33,7 @@ import {
   Alert,
   Tree,
   useTree,
+  getTreeExpandedState,
   Divider,
   Table,
   Card,
@@ -196,9 +197,16 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
   // after a CRUD operation reloads the tree).  This gives a fully-visible
   // tree by default, which is appropriate for a small location/category tree
   // and also makes the container-as-item badges immediately visible.
+  //
+  // We compute the fully-expanded state from our own data via
+  // getTreeExpandedState(..., "*") and set it directly, rather than calling
+  // tree.expandAllNodes().  In Mantine v9 the Tree runs controller.initialize(data)
+  // in its own [data] effect (resetting expansion to collapsed); expandAllNodes()
+  // reads the controller's still-uncommitted internal data and so expands nothing.
+  // Deriving the state from our data sidesteps that ordering entirely.
   useEffect(() => {
     if (treeData.length > 0) {
-      tree.expandAllNodes();
+      tree.setExpandedState(getTreeExpandedState(toMantineTree(treeData), "*"));
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [treeData]);

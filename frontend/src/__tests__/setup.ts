@@ -62,3 +62,22 @@ Object.defineProperty(Element.prototype, "scrollIntoView", {
   writable: true,
   value: () => {},
 });
+
+/**
+ * Stub document.fonts (the FontFaceSet API; jsdom does not implement it).
+ * Mantine 9's Textarea autosize subscribes to font-loading events
+ * (document.fonts.addEventListener("loadingdone", …)) on mount, which
+ * otherwise throws "Cannot read properties of undefined" in jsdom and
+ * crashes any test that renders a Textarea with the `autosize` prop.
+ */
+Object.defineProperty(document, "fonts", {
+  writable: true,
+  value: {
+    ready: Promise.resolve(),
+    status: "loaded",
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    check: () => true,
+    load: () => Promise.resolve([]),
+  },
+});
