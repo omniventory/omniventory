@@ -9,7 +9,9 @@
     "addChild": "Add child category",
     "addChildUnder": "Add child category under {{name}}",
     "rename": "Rename {{name}}",
-    "delete": "Delete {{name}}"
+    "delete": "Delete {{name}}",
+    "expand": "Expand {{name}}",
+    "collapse": "Collapse {{name}}"
   },
   "modals": {
     "create": {

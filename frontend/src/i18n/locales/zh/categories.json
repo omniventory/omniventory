@@ -9,7 +9,9 @@
     "addChild": "添加子分类",
     "addChildUnder": "在 {{name}} 下添加子分类",
     "rename": "重命名 {{name}}",
-    "delete": "删除 {{name}}"
+    "delete": "删除 {{name}}",
+    "expand": "展开 {{name}}",
+    "collapse": "折叠 {{name}}"
   },
   "modals": {
     "create": {

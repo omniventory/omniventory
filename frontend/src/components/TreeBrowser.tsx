@@ -27,6 +27,7 @@ import {
   Badge,
   Button,
   ActionIcon,
+  UnstyledButton,
   TextInput,
   Select,
   Modal,
@@ -746,8 +747,6 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
         <Tree
           data={mantineTreeData}
           tree={tree}
-          selectOnClick
-          expandOnClick
           renderNode={({ node, expanded, hasChildren, elementProps }) => {
             const nodeId = Number(node.value);
             const nodeData = flatMap.get(nodeId);
@@ -784,14 +783,32 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
                 }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  elementProps.onClick?.(e);
                   setSelectedId(isSelected ? null : nodeId);
                 }}
               >
-                {/* Expand caret */}
-                <Text size="sm" c="dimmed" w={16} ta="center">
-                  {hasChildren ? (expanded ? "▾" : "▸") : "·"}
-                </Text>
+                {/* Expand caret — interactive button for nodes with children */}
+                {hasChildren ? (
+                  <UnstyledButton
+                    style={{ width: 16, textAlign: "center", lineHeight: 1 }}
+                    aria-label={
+                      expanded
+                        ? t("tree.collapse", { name: node.label as string })
+                        : t("tree.expand", { name: node.label as string })
+                    }
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      tree.toggleExpanded(node.value);
+                    }}
+                  >
+                    <Text size="sm" c="dimmed">
+                      {expanded ? "▾" : "▸"}
+                    </Text>
+                  </UnstyledButton>
+                ) : (
+                  <Text size="sm" c="dimmed" w={16} ta="center">
+                    ·
+                  </Text>
+                )}
                 {/* Node label */}
                 <Text size="md" fw={500} style={{ flex: 1 }}>
                   {node.label as string}

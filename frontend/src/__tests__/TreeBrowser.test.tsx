@@ -1480,3 +1480,153 @@ describe("TreeBrowser — move-instance picker annotates container-as-item locat
     });
   });
 });
+
+// ── Expand/select decoupling (core fix) ──────────────────────────────────────
+
+/**
+ * These tests verify that clicking the row only toggles selection and that
+ * clicking the caret only toggles expand/collapse, with no cross-contamination
+ * between the two states.
+ *
+ * Fixture used: locationTreeFixture — Home(1) is a non-leaf (has children);
+ * Garage(2) and Toolbox(3) are leaf nodes.
+ */
+describe("TreeBrowser — row click only toggles selection (expand state unchanged)", () => {
+  beforeEach(() => {
+    makeSuccessGetLocations();
+  });
+
+  it("clicking a leaf node row selects it", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Garage is a leaf node; clicking it should select and show the detail panel.
+    fireEvent.click(screen.getByText("Garage"));
+
+    await waitFor(() => {
+      // Detail panel appears → Garage is selected
+      expect(screen.getByRole("button", { name: /reparent/i })).toBeDefined();
+    });
+  });
+
+  it("clicking an expandable row selects it AND its children remain visible", async () => {
+    renderLocations();
+    // Home is auto-expanded on load; both Garage and Toolbox are visible.
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Click the "Home" row label (not the caret) — should select Home.
+    fireEvent.click(screen.getByText("Home"));
+
+    await waitFor(() => {
+      // Detail panel for Home appears → Home is selected.
+      expect(screen.getByRole("button", { name: /reparent/i })).toBeDefined();
+    });
+
+    // "Garage" and "Toolbox" must still be visible — expand state unchanged.
+    expect(screen.getByText("Garage")).toBeDefined();
+    expect(screen.getByText("Toolbox")).toBeDefined();
+  });
+
+  it("clicking a selected row again deselects it", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    // First click — select Garage
+    fireEvent.click(screen.getByText("Garage"));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /reparent/i })).toBeDefined();
+    });
+
+    // Second click on the tree node row — deselect.
+    // After selection, "Garage" appears both in the tree and in the detail panel
+    // heading, so we find the rename button for "Garage" and use its row instead.
+    // Clicking the rename aria-label button would open a modal; instead click the
+    // first occurrence of "Garage" text, which is the tree node row text.
+    const garageTexts = screen.getAllByText("Garage");
+    // The first occurrence is always the tree node (rendered before the detail panel).
+    fireEvent.click(garageTexts[0]);
+    await waitFor(() => {
+      // Detail panel gone → deselected
+      expect(screen.queryByRole("button", { name: /reparent/i })).toBeNull();
+    });
+  });
+});
+
+describe("TreeBrowser — caret click only toggles expand (selection unchanged)", () => {
+  beforeEach(() => {
+    makeSuccessGetLocations();
+  });
+
+  it("caret has 'Collapse Home' aria-label when Home is expanded", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Home"));
+
+    // Home is auto-expanded; caret label should say "Collapse Home".
+    const caretBtn = screen.getByRole("button", { name: /collapse home/i });
+    expect(caretBtn).toBeDefined();
+  });
+
+  it("clicking caret changes its aria-label (expand toggled) but selection stays cleared", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Home"));
+
+    // No node selected initially; click the caret on "Home" (currently expanded).
+    const caretBtn = screen.getByRole("button", { name: /collapse home/i });
+    fireEvent.click(caretBtn);
+
+    // After collapsing, the caret aria-label should switch to "Expand Home".
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /expand home/i })).toBeDefined();
+    });
+
+    // Selection remains cleared — no detail panel.
+    expect(screen.queryByRole("button", { name: /reparent/i })).toBeNull();
+  });
+
+  it("clicking caret while a sibling is selected does NOT clear selection", async () => {
+    renderLocations();
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Select "Garage" (leaf, child of Home) via row click.
+    fireEvent.click(screen.getByText("Garage"));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /reparent/i })).toBeDefined();
+    });
+
+    // Now collapse "Home" via its caret — selection must remain on Garage.
+    const caretBtn = screen.getByRole("button", { name: /collapse home/i });
+    fireEvent.click(caretBtn);
+
+    // Caret label flips to "Expand Home".
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /expand home/i })).toBeDefined();
+    });
+
+    // Detail panel for Garage (selectedId=2) must still be showing.
+    expect(screen.getByRole("button", { name: /reparent/i })).toBeDefined();
+  });
+});
+
+describe("TreeBrowser — expand+select combination is reachable", () => {
+  beforeEach(() => {
+    makeSuccessGetLocations();
+  });
+
+  it("can select an expanded non-leaf node (Home) while it stays expanded", async () => {
+    renderLocations();
+    // Tree auto-expands all; Home is already expanded and Garage is visible.
+    await waitFor(() => screen.getByText("Garage"));
+
+    // Click the "Home" row — selects Home without collapsing it.
+    fireEvent.click(screen.getByText("Home"));
+
+    await waitFor(() => {
+      // Detail panel for Home appears.
+      expect(screen.getByRole("button", { name: /reparent/i })).toBeDefined();
+    });
+
+    // Home is still expanded: Garage and Toolbox are visible.
+    expect(screen.getByText("Garage")).toBeDefined();
+    expect(screen.getByText("Toolbox")).toBeDefined();
+  });
+});

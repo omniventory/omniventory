@@ -17,7 +17,9 @@
     "instancesLoading": "Loading…",
     "containerAsset": "Container asset",
     "linkContainerBtn": "Link container asset",
-    "unlinkContainerBtn": "Unlink"
+    "unlinkContainerBtn": "Unlink",
+    "expand": "Expand {{name}}",
+    "collapse": "Collapse {{name}}"
   },
   "modals": {
     "create": {
