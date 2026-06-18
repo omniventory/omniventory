@@ -12,6 +12,7 @@ from app.models.item_kind import ItemKind
 from app.models.location import Location
 from app.models.session import Session
 from app.models.stock_instance import StockInstance
+from app.models.stock_movement import StockMovement
 from app.models.user import User
 
 __all__ = [
@@ -23,5 +24,6 @@ __all__ = [
     "Location",
     "Session",
     "StockInstance",
+    "StockMovement",
     "User",
 ]

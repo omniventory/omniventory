@@ -21,3 +21,13 @@ STOCK_TRACKING_MODES: tuple[str, ...] = ("exact", "level", "none")
 
 # Qualitative stock levels for ``level``-mode instances (M2 §3.2 / §3.4).
 STOCK_LEVELS: tuple[str, ...] = ("high", "medium", "low")
+
+# The six movement types for the append-only stock ledger (M2 §3.3 / §4.3).
+# Validated app-layer (no DB CHECK — the set may grow; roadmap §2.11).
+#   intake     — stock received / added.
+#   consume    — stock consumed (FIFO-driven or per-lot).
+#   move       — whole-lot location change; quantity_delta = 0.
+#   adjust     — stock-take to an absolute counted value (signed delta).
+#   discard    — stock written off / thrown away (negative delta).
+#   correction — undo/reversal entry; delta = −original (M2 §4.4).
+MOVEMENT_TYPES: tuple[str, ...] = ("intake", "consume", "move", "adjust", "discard", "correction")
