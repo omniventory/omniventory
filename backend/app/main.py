@@ -241,6 +241,7 @@ def create_app() -> FastAPI:
     from app.api.routes.instances import router as instances_router
     from app.api.routes.kinds import router as kinds_router
     from app.api.routes.locations import router as locations_router
+    from app.api.routes.low_stock import router as low_stock_router
     from app.api.routes.movements import router as movements_router
 
     root_router = APIRouter()
@@ -252,6 +253,7 @@ def create_app() -> FastAPI:
     root_router.include_router(definitions_router)
     root_router.include_router(instances_router)
     root_router.include_router(movements_router)
+    root_router.include_router(low_stock_router)
 
     app.include_router(root_router, prefix=settings.api_prefix)
 

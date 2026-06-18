@@ -631,6 +631,35 @@ export interface paths {
         patch: operations["update_location_api_locations__location_id__patch"];
         trace?: never;
     };
+    "/api/low-stock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Low Stock
+         * @description Return the computed list of definitions that are currently low on stock.
+         *
+         *     Applies the per-mode low-stock rule across all definitions:
+         *     - ``exact`` mode with ``min_stock`` set: flagged when SUM(lot quantities)
+         *       is strictly below ``min_stock``.
+         *     - ``level`` mode: flagged when any lot is at ``stock_level='low'``.
+         *     - ``none`` mode: never flagged.
+         *
+         *     Returns an empty list when nothing is low.  This is a pure computed read
+         *     — no state is persisted.
+         */
+        get: operations["get_low_stock_api_low_stock_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/movements/{movement_id}/reverse": {
         parameters: {
             query?: never;
@@ -1122,6 +1151,24 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /**
+         * LowStockItem
+         * @description Public representation of a single low-stock definition (M2 §4.5 / §4.8).
+         */
+        LowStockItem: {
+            /** Current */
+            current: string | null;
+            /** Definition Id */
+            definition_id: number;
+            /** Mode */
+            mode: string;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason: string;
+            /** Threshold */
+            threshold: string | null;
         };
         /**
          * MeResponse
@@ -3366,6 +3413,35 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_low_stock_api_low_stock_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LowStockItem"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

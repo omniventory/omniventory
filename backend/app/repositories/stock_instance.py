@@ -104,6 +104,40 @@ class StockInstanceRepository:
         )
         return list(self._db.scalars(stmt).all())
 
+    def sum_quantity_for_definition(self, definition_id: int) -> Decimal:
+        """Return the SUM of quantity across all lots for a definition.
+
+        Uses COALESCE so that a definition with no lots (or all-NULL quantities)
+        returns Decimal("0") rather than None.
+
+        Only ``exact``-mode lots carry a numeric quantity; ``level``/``none``
+        lots have NULL which the SUM naturally skips.
+
+        Pure data access — no business rules here.
+        """
+        stmt = select(func.coalesce(func.sum(StockInstance.quantity), 0)).where(
+            StockInstance.definition_id == definition_id
+        )
+        result = self._db.execute(stmt).scalar_one()
+        return Decimal(str(result))
+
+    def definition_has_low_level_lot(self, definition_id: int) -> bool:
+        """Return True if any lot for the definition has stock_level == 'low'.
+
+        Used by the low-stock scan for ``level``-mode definitions (M2 §4.5).
+
+        Pure data access — no business rules here.
+        """
+        stmt = (
+            select(StockInstance.id)
+            .where(
+                StockInstance.definition_id == definition_id,
+                StockInstance.stock_level == "low",
+            )
+            .limit(1)
+        )
+        return self._db.scalars(stmt).first() is not None
+
     def has_instances_at_location(self, location_id: int) -> bool:
         """Return True if any stock instance is assigned to the given location."""
         stmt = select(StockInstance.id).where(StockInstance.location_id == location_id).limit(1)

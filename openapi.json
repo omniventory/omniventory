@@ -1433,6 +1433,61 @@
         "title": "LoginRequest",
         "type": "object"
       },
+      "LowStockItem": {
+        "description": "Public representation of a single low-stock definition (M2 \u00a74.5 / \u00a74.8).",
+        "properties": {
+          "current": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "definition_id": {
+            "title": "Definition Id",
+            "type": "integer"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          }
+        },
+        "required": [
+          "definition_id",
+          "name",
+          "mode",
+          "reason",
+          "current",
+          "threshold"
+        ],
+        "title": "LowStockItem",
+        "type": "object"
+      },
       "MeResponse": {
         "description": "Response body for GET /auth/me.",
         "properties": {
@@ -4424,6 +4479,42 @@
         "summary": "Update Location",
         "tags": [
           "locations"
+        ]
+      }
+    },
+    "/api/low-stock": {
+      "get": {
+        "description": "Return the computed list of definitions that are currently low on stock.\n\nApplies the per-mode low-stock rule across all definitions:\n- ``exact`` mode with ``min_stock`` set: flagged when SUM(lot quantities)\n  is strictly below ``min_stock``.\n- ``level`` mode: flagged when any lot is at ``stock_level='low'``.\n- ``none`` mode: never flagged.\n\nReturns an empty list when nothing is low.  This is a pure computed read\n\u2014 no state is persisted.",
+        "operationId": "get_low_stock_api_low_stock_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LowStockItem"
+                  },
+                  "title": "Response Get Low Stock Api Low Stock Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Get Low Stock",
+        "tags": [
+          "low-stock"
         ]
       }
     },
