@@ -2338,6 +2338,30 @@
         "title": "MqttChannelUpdate",
         "type": "object"
       },
+      "ReminderRunSummary": {
+        "description": "Summary of a single reminder scan run.\n\nFields\n------\nbest_before\n    Number of new best-before notifications created in this scan.\nwarranty\n    Number of new warranty notifications created in this scan.\nlow_stock\n    Number of new low-stock notifications created in this scan.\n    Always 0 in Step 3; Step 4 fills it in.",
+        "properties": {
+          "best_before": {
+            "title": "Best Before",
+            "type": "integer"
+          },
+          "low_stock": {
+            "title": "Low Stock",
+            "type": "integer"
+          },
+          "warranty": {
+            "title": "Warranty",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "best_before",
+          "warranty",
+          "low_stock"
+        ],
+        "title": "ReminderRunSummary",
+        "type": "object"
+      },
       "RemindersSettings": {
         "description": "Global reminder configuration.",
         "properties": {
@@ -5566,6 +5590,38 @@
         "summary": "Reverse",
         "tags": [
           "movements"
+        ]
+      }
+    },
+    "/api/reminders/run": {
+      "post": {
+        "description": "Trigger the reminder engine scan on demand.\n\nEvaluates all date sources (best_before, warranty) across all active users\nand creates idempotent in-app notification rows.  Returns the count of\n*newly created* rows per source; zero means \"nothing new this scan\" (either\nno lots qualify or they were already notified).\n\nRe-running is safe: the engine uses a unique ``(user_id, dedup_key)`` to\nprevent duplicate notifications.\n\nThe ``get_db`` dependency auto-commits the session after this handler\nreturns, so newly created notification rows are durably persisted.\nExternal channel dispatch (Phase C) runs after commit; in Step 3 no external\nI/O occurs (dispatcher is a no-op).",
+        "operationId": "run_reminders_api_reminders_run_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReminderRunSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Run Reminders",
+        "tags": [
+          "reminders"
         ]
       }
     },

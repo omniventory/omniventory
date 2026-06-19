@@ -10,6 +10,7 @@ Public methods
 ``get_by_email(email)``                                 Fetch by (lowercased) email; returns ``User | None``.
 ``create(email, hash, role, is_active)``                Insert a new user row.
 ``count()``                                             Return total user count (used by bootstrap guard).
+``list_active()``                                       Return all active users (recipients for M4 §4.2).
 ``set_preferred_language(user, lang)``                  Update the user's preferred_language and flush.
 ``set_reminder_best_before_lead_days(user, days)``      Update the per-user best-before lead override and flush.
 ``set_reminder_warranty_lead_days(user, days)``         Update the per-user warranty lead override and flush.
@@ -65,6 +66,16 @@ class UserRepository:
         result = self._db.execute(select(func.count()).select_from(User))
         value = result.scalar()
         return int(value) if value is not None else 0
+
+    def list_active(self) -> list[User]:
+        """Return all users with ``is_active=True``, ordered by id.
+
+        Used by the reminder engine (M4 §4.2) to determine the recipient set
+        for each scan.  In M4 this is typically a single admin; the structure
+        scales and M6 can narrow the set further.
+        """
+        stmt = select(User).where(User.is_active.is_(True)).order_by(User.id)
+        return list(self._db.scalars(stmt).all())
 
     def set_preferred_language(self, user: User, language: str | None) -> User:
         """Update the user's preferred_language and flush.

@@ -722,6 +722,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reminders/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run Reminders
+         * @description Trigger the reminder engine scan on demand.
+         *
+         *     Evaluates all date sources (best_before, warranty) across all active users
+         *     and creates idempotent in-app notification rows.  Returns the count of
+         *     *newly created* rows per source; zero means "nothing new this scan" (either
+         *     no lots qualify or they were already notified).
+         *
+         *     Re-running is safe: the engine uses a unique ``(user_id, dedup_key)`` to
+         *     prevent duplicate notifications.
+         *
+         *     The ``get_db`` dependency auto-commits the session after this handler
+         *     returns, so newly created notification rows are durably persisted.
+         *     External channel dispatch (Phase C) runs after commit; in Step 3 no external
+         *     I/O occurs (dispatcher is a no-op).
+         */
+        post: operations["run_reminders_api_reminders_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings": {
         parameters: {
             query?: never;
@@ -1509,6 +1542,28 @@ export interface components {
             use_tls?: boolean | null;
             /** Username */
             username?: string | null;
+        };
+        /**
+         * ReminderRunSummary
+         * @description Summary of a single reminder scan run.
+         *
+         *     Fields
+         *     ------
+         *     best_before
+         *         Number of new best-before notifications created in this scan.
+         *     warranty
+         *         Number of new warranty notifications created in this scan.
+         *     low_stock
+         *         Number of new low-stock notifications created in this scan.
+         *         Always 0 in Step 3; Step 4 fills it in.
+         */
+        ReminderRunSummary: {
+            /** Best Before */
+            best_before: number;
+            /** Low Stock */
+            low_stock: number;
+            /** Warranty */
+            warranty: number;
         };
         /**
          * RemindersSettings
@@ -3898,6 +3953,35 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    run_reminders_api_reminders_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderRunSummary"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -10,6 +10,7 @@ from app.models.household import Household
 from app.models.item_definition import ItemDefinition
 from app.models.item_kind import ItemKind
 from app.models.location import Location
+from app.models.notification import Notification
 from app.models.session import Session
 from app.models.setting import Setting
 from app.models.stock_instance import StockInstance
@@ -23,6 +24,7 @@ __all__ = [
     "ItemDefinition",
     "ItemKind",
     "Location",
+    "Notification",
     "Session",
     "Setting",
     "StockInstance",

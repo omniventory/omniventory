@@ -244,6 +244,7 @@ def create_app() -> FastAPI:
     from app.api.routes.locations import router as locations_router
     from app.api.routes.low_stock import router as low_stock_router
     from app.api.routes.movements import router as movements_router
+    from app.api.routes.reminders import router as reminders_router
     from app.api.routes.settings import router as settings_router
 
     root_router = APIRouter()
@@ -258,6 +259,7 @@ def create_app() -> FastAPI:
     root_router.include_router(low_stock_router)
     root_router.include_router(expiry_router)
     root_router.include_router(settings_router)
+    root_router.include_router(reminders_router)
 
     app.include_router(root_router, prefix=settings.api_prefix)
 

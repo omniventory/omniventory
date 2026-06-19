@@ -153,6 +153,54 @@ class StockInstanceRepository:
         )
         return self._db.scalars(stmt).first() is not None
 
+    def list_live_with_best_before(self) -> list[StockInstance]:
+        """Return all live lots that have a ``best_before_date`` set.
+
+        Live lot criterion (M4 §4.4): ``quantity IS NULL OR quantity > 0``.
+        NULL quantity ⇒ level/none-mode lot (present but unquantified) — counted
+        as live.  Zero quantity ⇒ depleted exact-mode lot — excluded.
+
+        The lot's definition is eager-loaded via joinedload to avoid N+1 queries
+        (the engine reads ``lot.definition.name`` and
+        ``lot.definition.reminder_lead_days`` for every lot).
+
+        Pure data access — no business rules here.
+        """
+        stmt = (
+            select(StockInstance)
+            .where(
+                StockInstance.best_before_date.is_not(None),
+                (StockInstance.quantity.is_(None)) | (StockInstance.quantity > 0),
+            )
+            .options(joinedload(StockInstance.definition))
+            .order_by(StockInstance.best_before_date, StockInstance.id)
+        )
+        return list(self._db.scalars(stmt).unique().all())
+
+    def list_live_with_warranty(self) -> list[StockInstance]:
+        """Return all live lots that have a ``warranty_expires`` date set.
+
+        Live lot criterion (M4 §4.4): ``quantity IS NULL OR quantity > 0``.
+        NULL quantity ⇒ level/none-mode lot — counted as live.
+        Zero quantity ⇒ depleted exact-mode lot — excluded.
+
+        The lot's definition is eager-loaded via joinedload to avoid N+1 queries
+        (the engine reads ``lot.definition.name`` and
+        ``lot.definition.reminder_lead_days`` for every lot).
+
+        Pure data access — no business rules here.
+        """
+        stmt = (
+            select(StockInstance)
+            .where(
+                StockInstance.warranty_expires.is_not(None),
+                (StockInstance.quantity.is_(None)) | (StockInstance.quantity > 0),
+            )
+            .options(joinedload(StockInstance.definition))
+            .order_by(StockInstance.warranty_expires, StockInstance.id)
+        )
+        return list(self._db.scalars(stmt).unique().all())
+
     def list_expiring(self, cutoff_date: date) -> list[StockInstance]:
         """Return lots whose best_before_date is not NULL and <= cutoff_date.
 
