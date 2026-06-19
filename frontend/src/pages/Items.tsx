@@ -1232,7 +1232,7 @@ export function ItemDetail() {
                   {t("detail.minStockLabel")}
                 </Text>
                 <Text size="sm" data-testid="def-min-stock-value">
-                  {def.min_stock}
+                  {formatQuantity(def.min_stock)}
                 </Text>
               </Stack>
             )}

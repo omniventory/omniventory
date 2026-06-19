@@ -81,7 +81,7 @@ const locationGarage = {
   created_at: "2025-01-01T00:00:00Z",
 };
 
-// Definition with exact mode and min_stock
+// Definition with exact mode and min_stock (uses raw Decimal string as returned by API)
 const defExact = {
   id: 42,
   name: "AA Batteries",
@@ -92,7 +92,22 @@ const defExact = {
   unit: "pcs",
   default_location_id: 1,
   stock_tracking_mode: "exact",
-  min_stock: "4",
+  min_stock: "4.000000",
+  created_at: "2025-01-01T00:00:00Z",
+};
+
+// Definition with fractional min_stock for display formatting test
+const defExactFractional = {
+  id: 45,
+  name: "Cable Ties",
+  description: null,
+  category_id: 10,
+  kind_id: 1,
+  kind: kindDurable,
+  unit: "pcs",
+  default_location_id: null,
+  stock_tracking_mode: "exact",
+  min_stock: "4.500000",
   created_at: "2025-01-01T00:00:00Z",
 };
 
@@ -475,14 +490,26 @@ describe("ItemDetail — definition card shows tracking mode badge and min_stock
     expect(screen.getByTestId("def-tracking-mode-badge").textContent).toMatch(/exact/i);
   });
 
-  it("shows min_stock value when mode is exact and min_stock is set", async () => {
+  it("shows min_stock value with trailing zeros stripped (4.000000 → 4)", async () => {
     mockItemDetailLoad(defExact, []);
     renderItemDetail(42);
 
     await waitFor(() => {
       expect(screen.getByTestId("def-min-stock-value")).toBeDefined();
     });
+    // API returns "4.000000"; formatQuantity should strip trailing zeros → "4"
     expect(screen.getByTestId("def-min-stock-value").textContent).toBe("4");
+  });
+
+  it("shows fractional min_stock with trailing zeros stripped (4.500000 → 4.5)", async () => {
+    mockItemDetailLoad(defExactFractional, []);
+    renderItemDetail(45);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("def-min-stock-value")).toBeDefined();
+    });
+    // API returns "4.500000"; formatQuantity should strip trailing zeros → "4.5"
+    expect(screen.getByTestId("def-min-stock-value").textContent).toBe("4.5");
   });
 
   it("does NOT show min_stock when mode is level", async () => {
