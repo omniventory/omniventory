@@ -900,6 +900,11 @@ export interface components {
             /** Name */
             name: string;
             /**
+             * Reminder Lead Days
+             * @description Per-item reminder lead-time override in days (M4). ``NULL`` = inherit (engine falls through to the per-user then global default — §4.3). Must be ≥ 0 when provided (0 = fire on the target date itself). Applies to whichever date source this definition's lots carry (best_before for perishables, warranty for durables). Pydantic ge=0 is the sole validation; no DB CHECK constraint.
+             */
+            reminder_lead_days?: number | null;
+            /**
              * Stock Tracking Mode
              * @default exact
              */
@@ -937,6 +942,8 @@ export interface components {
             min_stock: string | null;
             /** Name */
             name: string;
+            /** Reminder Lead Days */
+            reminder_lead_days: number | null;
             /** Stock Tracking Mode */
             stock_tracking_mode: string;
             /** Unit */
@@ -964,6 +971,11 @@ export interface components {
             min_stock?: number | string | null;
             /** Name */
             name?: string | null;
+            /**
+             * Reminder Lead Days
+             * @description Per-item reminder lead-time override in days (M4). ``NULL`` = remove the override (inherit from per-user or global). Must be ≥ 0 when provided.
+             */
+            reminder_lead_days?: number | null;
             /** Stock Tracking Mode */
             stock_tracking_mode?: string | null;
             /** Unit */
@@ -1578,29 +1590,45 @@ export interface components {
          *
          *     All fields are optional and PATCH-style.  An omitted field is a no-op and
          *     does NOT overwrite an existing value.  Setting a field to ``null``
-         *     explicitly unsets it (re-inherits client-side resolution chain).
+         *     explicitly unsets it (clears the override, re-inheriting the next level in
+         *     the resolution chain).
          *
          *     Null-vs-omitted semantics
          *     -------------------------
-         *     We must distinguish three cases for ``preferred_language``:
-         *     - Field **omitted** from the JSON body → no-op (do not touch the stored value).
-         *     - Field set to **null** explicitly → write NULL (explicit unset).
-         *     - Field set to a **string** → validate + write.
-         *
          *     Pydantic v2's ``model_fields_set`` correctly tracks which fields were
          *     explicitly present in the raw input, including when the value is ``null``.
-         *     Because ``preferred_language`` defaults to ``None``, an omitted key does
-         *     *not* appear in ``model_fields_set``, while ``{"preferred_language": null}``
-         *     *does* — allowing the route to distinguish omission from explicit null.
-         *     The route checks ``"preferred_language" in body.model_fields_set`` instead
-         *     of relying on a private tracking field.
+         *     Because all fields default to ``None``, an omitted key does *not* appear in
+         *     ``model_fields_set``, while ``{"field": null}`` *does* — allowing the route
+         *     to distinguish omission from explicit null.
+         *
+         *     The route checks ``"<field>" in body.model_fields_set`` for each field:
+         *     - **Omitted** → no-op (do not touch the stored value).
+         *     - **Null** explicitly → write NULL to DB (remove the override, inherit up).
+         *     - **Value** → validate + write.
+         *
+         *     This applies uniformly to:
+         *     - ``preferred_language``: NULL → client resolves (localStorage → navigator → 'en').
+         *     - ``reminder_best_before_lead_days``: NULL → inherit per-user fallback chain (§4.3).
+         *     - ``reminder_warranty_lead_days``: NULL → inherit per-user fallback chain (§4.3).
          * @example {
-         *       "preferred_language": "zh"
+         *       "preferred_language": "zh",
+         *       "reminder_best_before_lead_days": 5,
+         *       "reminder_warranty_lead_days": 14
          *     }
          */
         UserPreferencesUpdate: {
             /** Preferred Language */
             preferred_language?: string | null;
+            /**
+             * Reminder Best Before Lead Days
+             * @description Per-user best-before lead-time override in days (M4). ``NULL`` = remove the override, inherit global default (§4.3). Must be ≥ 0 when provided (0 = fire on the target date itself). Omitting the field is a no-op; ``null`` explicitly clears the override.
+             */
+            reminder_best_before_lead_days?: number | null;
+            /**
+             * Reminder Warranty Lead Days
+             * @description Per-user warranty-expiry lead-time override in days (M4). ``NULL`` = remove the override, inherit global default (§4.3). Must be ≥ 0 when provided (0 = fire on the target date itself). Omitting the field is a no-op; ``null`` explicitly clears the override.
+             */
+            reminder_warranty_lead_days?: number | null;
         };
         /**
          * UserResponse
@@ -1624,6 +1652,10 @@ export interface components {
             is_active: boolean;
             /** Preferred Language */
             preferred_language?: string | null;
+            /** Reminder Best Before Lead Days */
+            reminder_best_before_lead_days?: number | null;
+            /** Reminder Warranty Lead Days */
+            reminder_warranty_lead_days?: number | null;
             /** Role */
             role: string;
         };

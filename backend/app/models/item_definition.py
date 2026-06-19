@@ -51,6 +51,12 @@ class ItemDefinition(Base):
     default_best_before_days   Integer; nullable; default shelf life in days (M3). ``≥ 0``
                                (Pydantic-validated). Auto-computes best_before_date on lot
                                intake when none is provided. Editing is non-retroactive.
+    reminder_lead_days         Integer; nullable; per-item reminder lead-time override (M4). ``≥ 0``
+                               (Pydantic-validated). Applies to whichever date source this
+                               definition's lots carry (best_before for perishables, warranty
+                               for durables).  ``NULL`` = inherit — the engine falls through
+                               to the per-user then global default (§4.3 resolution chain).
+                               Editing is non-retroactive (no recompute of existing notifications).
     created_at                 Row-creation timestamp (UTC, set by DB on insert).
     """
 
@@ -92,6 +98,11 @@ class ItemDefinition(Base):
         default=None,
     )
     default_best_before_days: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        default=None,
+    )
+    reminder_lead_days: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
         default=None,

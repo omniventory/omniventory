@@ -35,6 +35,18 @@ class DefinitionCreate(BaseModel):
             "Pydantic ge=0 is the sole validation; no DB CHECK constraint."
         ),
     )
+    reminder_lead_days: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Per-item reminder lead-time override in days (M4). ``NULL`` = inherit "
+            "(engine falls through to the per-user then global default — §4.3). "
+            "Must be ≥ 0 when provided (0 = fire on the target date itself). "
+            "Applies to whichever date source this definition's lots carry "
+            "(best_before for perishables, warranty for durables). "
+            "Pydantic ge=0 is the sole validation; no DB CHECK constraint."
+        ),
+    )
 
 
 class DefinitionUpdate(BaseModel):
@@ -56,6 +68,15 @@ class DefinitionUpdate(BaseModel):
             "Must be ≥ 0 when provided."
         ),
     )
+    reminder_lead_days: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Per-item reminder lead-time override in days (M4). ``NULL`` = remove "
+            "the override (inherit from per-user or global). "
+            "Must be ≥ 0 when provided."
+        ),
+    )
 
 
 class DefinitionResponse(BaseModel):
@@ -72,6 +93,7 @@ class DefinitionResponse(BaseModel):
     stock_tracking_mode: str
     min_stock: Decimal | None
     default_best_before_days: int | None  # M3: shelf-life default in days; NULL = no default
+    reminder_lead_days: int | None  # M4: per-item lead override; NULL = inherit (§4.3)
     created_at: datetime
 
     model_config = {"from_attributes": True}

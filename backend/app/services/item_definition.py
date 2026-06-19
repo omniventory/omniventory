@@ -164,6 +164,7 @@ class ItemDefinitionService:
             stock_tracking_mode=data.stock_tracking_mode,
             min_stock=data.min_stock,
             default_best_before_days=data.default_best_before_days,
+            reminder_lead_days=data.reminder_lead_days,
         )
 
     def get(self, definition_id: int) -> ItemDefinition:
@@ -210,6 +211,7 @@ class ItemDefinitionService:
         location_id_changed = "default_location_id" in data.model_fields_set
         min_stock_changed = "min_stock" in data.model_fields_set
         best_before_days_changed = "default_best_before_days" in data.model_fields_set
+        reminder_lead_days_changed = "reminder_lead_days" in data.model_fields_set
 
         if category_id_changed and data.category_id is not None:
             self._assert_category_exists(data.category_id)
@@ -257,6 +259,8 @@ class ItemDefinitionService:
             min_stock=data.min_stock,
             set_default_best_before_days=best_before_days_changed,
             default_best_before_days=data.default_best_before_days,
+            set_reminder_lead_days=reminder_lead_days_changed,
+            reminder_lead_days=data.reminder_lead_days,
         )
 
     def delete(self, definition_id: int) -> None:

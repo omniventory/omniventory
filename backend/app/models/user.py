@@ -29,15 +29,20 @@ class User(Base):
 
     Columns
     -------
-    id                  Auto-increment surrogate PK.
-    email               Unique login identifier; lower-cased on write.
-    password_hash       Argon2 hash via ``app.auth.passwords.hash_password``.
-    role                Role label (``"admin"`` in M0); expanded in M6.
-    is_active           False → account is disabled; login is rejected.
-    created_at          Row-creation timestamp (UTC, set by DB on insert).
-    preferred_language  BCP-47 language code chosen by the user (nullable).
-                        NULL = "never explicitly chosen" → client resolves.
-                        M1.5 values: ``'en'`` / ``'zh'``.
+    id                                  Auto-increment surrogate PK.
+    email                               Unique login identifier; lower-cased on write.
+    password_hash                       Argon2 hash via ``app.auth.passwords.hash_password``.
+    role                                Role label (``"admin"`` in M0); expanded in M6.
+    is_active                           False → account is disabled; login is rejected.
+    created_at                          Row-creation timestamp (UTC, set by DB on insert).
+    preferred_language                  BCP-47 language code chosen by the user (nullable).
+                                        NULL = "never explicitly chosen" → client resolves.
+                                        M1.5 values: ``'en'`` / ``'zh'``.
+    reminder_best_before_lead_days      Per-user best-before lead-time override (M4). ``≥ 0``
+                                        (Pydantic-validated). NULL = inherit global default
+                                        (§4.3 resolution chain: per-item > per-user > global).
+    reminder_warranty_lead_days         Per-user warranty-expiry lead-time override (M4). ``≥ 0``
+                                        (Pydantic-validated). NULL = inherit global default.
     """
 
     __tablename__ = "users"
@@ -53,6 +58,8 @@ class User(Base):
         server_default=func.now(),
     )
     preferred_language: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reminder_best_before_lead_days: Mapped[int | None] = mapped_column(nullable=True, default=None)
+    reminder_warranty_lead_days: Mapped[int | None] = mapped_column(nullable=True, default=None)
 
     # Back-reference to sessions (lazy-loaded on demand).
     sessions: Mapped[list["Session"]] = relationship(  # type: ignore[name-defined]  # noqa: F821

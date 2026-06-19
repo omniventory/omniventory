@@ -410,6 +410,19 @@
             "title": "Name",
             "type": "string"
           },
+          "reminder_lead_days": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-item reminder lead-time override in days (M4). ``NULL`` = inherit (engine falls through to the per-user then global default \u2014 \u00a74.3). Must be \u2265 0 when provided (0 = fire on the target date itself). Applies to whichever date source this definition's lots carry (best_before for perishables, warranty for durables). Pydantic ge=0 is the sole validation; no DB CHECK constraint.",
+            "title": "Reminder Lead Days"
+          },
           "stock_tracking_mode": {
             "default": "exact",
             "title": "Stock Tracking Mode",
@@ -506,6 +519,17 @@
             "title": "Name",
             "type": "string"
           },
+          "reminder_lead_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Lead Days"
+          },
           "stock_tracking_mode": {
             "title": "Stock Tracking Mode",
             "type": "string"
@@ -527,6 +551,7 @@
           "stock_tracking_mode",
           "min_stock",
           "default_best_before_days",
+          "reminder_lead_days",
           "created_at"
         ],
         "title": "DefinitionResponse",
@@ -617,6 +642,19 @@
               }
             ],
             "title": "Name"
+          },
+          "reminder_lead_days": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-item reminder lead-time override in days (M4). ``NULL`` = remove the override (inherit from per-user or global). Must be \u2265 0 when provided.",
+            "title": "Reminder Lead Days"
           },
           "stock_tracking_mode": {
             "anyOf": [
@@ -2486,10 +2524,12 @@
         "type": "object"
       },
       "UserPreferencesUpdate": {
-        "description": "Body for PATCH /api/auth/me \u2014 update per-user preferences.\n\nAll fields are optional and PATCH-style.  An omitted field is a no-op and\ndoes NOT overwrite an existing value.  Setting a field to ``null``\nexplicitly unsets it (re-inherits client-side resolution chain).\n\nNull-vs-omitted semantics\n-------------------------\nWe must distinguish three cases for ``preferred_language``:\n- Field **omitted** from the JSON body \u2192 no-op (do not touch the stored value).\n- Field set to **null** explicitly \u2192 write NULL (explicit unset).\n- Field set to a **string** \u2192 validate + write.\n\nPydantic v2's ``model_fields_set`` correctly tracks which fields were\nexplicitly present in the raw input, including when the value is ``null``.\nBecause ``preferred_language`` defaults to ``None``, an omitted key does\n*not* appear in ``model_fields_set``, while ``{\"preferred_language\": null}``\n*does* \u2014 allowing the route to distinguish omission from explicit null.\nThe route checks ``\"preferred_language\" in body.model_fields_set`` instead\nof relying on a private tracking field.",
+        "description": "Body for PATCH /api/auth/me \u2014 update per-user preferences.\n\nAll fields are optional and PATCH-style.  An omitted field is a no-op and\ndoes NOT overwrite an existing value.  Setting a field to ``null``\nexplicitly unsets it (clears the override, re-inheriting the next level in\nthe resolution chain).\n\nNull-vs-omitted semantics\n-------------------------\nPydantic v2's ``model_fields_set`` correctly tracks which fields were\nexplicitly present in the raw input, including when the value is ``null``.\nBecause all fields default to ``None``, an omitted key does *not* appear in\n``model_fields_set``, while ``{\"field\": null}`` *does* \u2014 allowing the route\nto distinguish omission from explicit null.\n\nThe route checks ``\"<field>\" in body.model_fields_set`` for each field:\n- **Omitted** \u2192 no-op (do not touch the stored value).\n- **Null** explicitly \u2192 write NULL to DB (remove the override, inherit up).\n- **Value** \u2192 validate + write.\n\nThis applies uniformly to:\n- ``preferred_language``: NULL \u2192 client resolves (localStorage \u2192 navigator \u2192 'en').\n- ``reminder_best_before_lead_days``: NULL \u2192 inherit per-user fallback chain (\u00a74.3).\n- ``reminder_warranty_lead_days``: NULL \u2192 inherit per-user fallback chain (\u00a74.3).",
         "examples": [
           {
-            "preferred_language": "zh"
+            "preferred_language": "zh",
+            "reminder_best_before_lead_days": 5,
+            "reminder_warranty_lead_days": 14
           }
         ],
         "properties": {
@@ -2503,6 +2543,32 @@
               }
             ],
             "title": "Preferred Language"
+          },
+          "reminder_best_before_lead_days": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-user best-before lead-time override in days (M4). ``NULL`` = remove the override, inherit global default (\u00a74.3). Must be \u2265 0 when provided (0 = fire on the target date itself). Omitting the field is a no-op; ``null`` explicitly clears the override.",
+            "title": "Reminder Best Before Lead Days"
+          },
+          "reminder_warranty_lead_days": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-user warranty-expiry lead-time override in days (M4). ``NULL`` = remove the override, inherit global default (\u00a74.3). Must be \u2265 0 when provided (0 = fire on the target date itself). Omitting the field is a no-op; ``null`` explicitly clears the override.",
+            "title": "Reminder Warranty Lead Days"
           }
         },
         "title": "UserPreferencesUpdate",
@@ -2538,6 +2604,28 @@
               }
             ],
             "title": "Preferred Language"
+          },
+          "reminder_best_before_lead_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Best Before Lead Days"
+          },
+          "reminder_warranty_lead_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminder Warranty Lead Days"
           },
           "role": {
             "title": "Role",

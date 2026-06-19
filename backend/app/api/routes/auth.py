@@ -196,6 +196,7 @@ def update_me(
     Returns the updated ``MeResponse``.
     """
     repo = UserRepository(db)
+    needs_commit = False
 
     if "preferred_language" in body.model_fields_set:
         lang = body.preferred_language
@@ -206,6 +207,19 @@ def update_me(
                 params={"value": lang, "supported": list(SUPPORTED_LANGUAGES)},
             )
         repo.set_preferred_language(user, lang)
+        needs_commit = True
+
+    if "reminder_best_before_lead_days" in body.model_fields_set:
+        # Pydantic ge=0 is the sole validation guard; the value is already
+        # validated by the schema before reaching this point.
+        repo.set_reminder_best_before_lead_days(user, body.reminder_best_before_lead_days)
+        needs_commit = True
+
+    if "reminder_warranty_lead_days" in body.model_fields_set:
+        repo.set_reminder_warranty_lead_days(user, body.reminder_warranty_lead_days)
+        needs_commit = True
+
+    if needs_commit:
         db.commit()
         db.refresh(user)
 

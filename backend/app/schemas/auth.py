@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
@@ -32,6 +32,8 @@ class UserResponse(BaseModel):
     is_active: bool
     created_at: datetime
     preferred_language: str | None = None
+    reminder_best_before_lead_days: int | None = None  # M4: per-user lead override; NULL = inherit
+    reminder_warranty_lead_days: int | None = None  # M4: per-user lead override; NULL = inherit
 
     model_config = {"from_attributes": True}
 
@@ -66,24 +68,58 @@ class UserPreferencesUpdate(BaseModel):
 
     All fields are optional and PATCH-style.  An omitted field is a no-op and
     does NOT overwrite an existing value.  Setting a field to ``null``
-    explicitly unsets it (re-inherits client-side resolution chain).
+    explicitly unsets it (clears the override, re-inheriting the next level in
+    the resolution chain).
 
     Null-vs-omitted semantics
     -------------------------
-    We must distinguish three cases for ``preferred_language``:
-    - Field **omitted** from the JSON body → no-op (do not touch the stored value).
-    - Field set to **null** explicitly → write NULL (explicit unset).
-    - Field set to a **string** → validate + write.
-
     Pydantic v2's ``model_fields_set`` correctly tracks which fields were
     explicitly present in the raw input, including when the value is ``null``.
-    Because ``preferred_language`` defaults to ``None``, an omitted key does
-    *not* appear in ``model_fields_set``, while ``{"preferred_language": null}``
-    *does* — allowing the route to distinguish omission from explicit null.
-    The route checks ``"preferred_language" in body.model_fields_set`` instead
-    of relying on a private tracking field.
+    Because all fields default to ``None``, an omitted key does *not* appear in
+    ``model_fields_set``, while ``{"field": null}`` *does* — allowing the route
+    to distinguish omission from explicit null.
+
+    The route checks ``"<field>" in body.model_fields_set`` for each field:
+    - **Omitted** → no-op (do not touch the stored value).
+    - **Null** explicitly → write NULL to DB (remove the override, inherit up).
+    - **Value** → validate + write.
+
+    This applies uniformly to:
+    - ``preferred_language``: NULL → client resolves (localStorage → navigator → 'en').
+    - ``reminder_best_before_lead_days``: NULL → inherit per-user fallback chain (§4.3).
+    - ``reminder_warranty_lead_days``: NULL → inherit per-user fallback chain (§4.3).
     """
 
     preferred_language: str | None = None
+    reminder_best_before_lead_days: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Per-user best-before lead-time override in days (M4). "
+            "``NULL`` = remove the override, inherit global default (§4.3). "
+            "Must be ≥ 0 when provided (0 = fire on the target date itself). "
+            "Omitting the field is a no-op; ``null`` explicitly clears the override."
+        ),
+    )
+    reminder_warranty_lead_days: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Per-user warranty-expiry lead-time override in days (M4). "
+            "``NULL`` = remove the override, inherit global default (§4.3). "
+            "Must be ≥ 0 when provided (0 = fire on the target date itself). "
+            "Omitting the field is a no-op; ``null`` explicitly clears the override."
+        ),
+    )
 
-    model_config = {"json_schema_extra": {"examples": [{"preferred_language": "zh"}]}}
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "preferred_language": "zh",
+                    "reminder_best_before_lead_days": 5,
+                    "reminder_warranty_lead_days": 14,
+                }
+            ]
+        }
+    }

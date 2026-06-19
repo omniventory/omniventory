@@ -6,11 +6,13 @@ and services must not issue raw queries against ``users``; they call
 
 Public methods
 --------------
-``get_by_id(id)``                       Fetch by PK; returns ``User | None``.
-``get_by_email(email)``                 Fetch by (lowercased) email; returns ``User | None``.
-``create(email, hash, role, is_active)``  Insert a new user row.
-``count()``                             Return total user count (used by bootstrap guard).
-``set_preferred_language(user, lang)``  Update the user's preferred_language and flush.
+``get_by_id(id)``                                       Fetch by PK; returns ``User | None``.
+``get_by_email(email)``                                 Fetch by (lowercased) email; returns ``User | None``.
+``create(email, hash, role, is_active)``                Insert a new user row.
+``count()``                                             Return total user count (used by bootstrap guard).
+``set_preferred_language(user, lang)``                  Update the user's preferred_language and flush.
+``set_reminder_best_before_lead_days(user, days)``      Update the per-user best-before lead override and flush.
+``set_reminder_warranty_lead_days(user, days)``         Update the per-user warranty lead override and flush.
 """
 
 from sqlalchemy import func, select
@@ -73,5 +75,31 @@ class UserRepository:
         response).
         """
         user.preferred_language = language
+        self._db.flush()
+        return user
+
+    def set_reminder_best_before_lead_days(self, user: User, days: int | None) -> User:
+        """Update the user's per-user best-before lead-time override and flush.
+
+        Pass ``None`` to explicitly clear the override (→ NULL in DB), which
+        causes the engine to fall through to the global default (§4.3 resolution
+        chain: per-item > per-user > global).  Pass an integer ``≥ 0`` to set
+        the override (Pydantic ``ge=0`` is the sole guard; no DB CHECK constraint).
+        The caller must commit (or rely on ``get_db``'s auto-commit on response).
+        """
+        user.reminder_best_before_lead_days = days
+        self._db.flush()
+        return user
+
+    def set_reminder_warranty_lead_days(self, user: User, days: int | None) -> User:
+        """Update the user's per-user warranty-expiry lead-time override and flush.
+
+        Pass ``None`` to explicitly clear the override (→ NULL in DB), which
+        causes the engine to fall through to the global default (§4.3 resolution
+        chain: per-item > per-user > global).  Pass an integer ``≥ 0`` to set
+        the override (Pydantic ``ge=0`` is the sole guard; no DB CHECK constraint).
+        The caller must commit (or rely on ``get_db``'s auto-commit on response).
+        """
+        user.reminder_warranty_lead_days = days
         self._db.flush()
         return user
