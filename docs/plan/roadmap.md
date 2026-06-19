@@ -81,7 +81,7 @@ Legend: ⬜ planned · 🟡 active · 🟢 done. **Active milestone = the single
 | **M0** | Foundations & scaffolding | running skeleton | 🟢 |
 | **M1** | Unified core model & durable-goods registry | ② (registry) | 🟢 |
 | **M1.5** | Internationalization (i18n) foundation | all (ZH + EN) | 🟢 |
-| **M2** | Stock ledger & consumables | ③ (in/out + low-stock) | 🟡 |
+| **M2** | Stock ledger & consumables | ③ (in/out + low-stock) | 🟢 |
 | **M3** | Best-before / expiry & perishables | ① (data + listings) | ⬜ |
 | **M4** | Unified reminder & notification engine | ①②③ proactive alerts | ⬜ |
 | **M5** | Cross-cutting + barcode + data I/O | all | ⬜ |
@@ -191,4 +191,5 @@ Not scheduled; revisit when the core is stable.
 ## 7. Open questions / to revisit
 - Exact role set & permission granularity for M6 (admin/member/viewer is the current assumption).
 - Whether multi-unit conversion (M8) earns its complexity for the household use case, or stays a thin opt-in.
+- **Stock-tracking modes `level` / `none` ergonomics:** in practice (M2) the author finds the current `level` (qualitative high/medium/low) and `none` (presence-only) modes not fully satisfying, but no concrete better design has emerged yet — revisit once real usage clarifies what's missing (relates to M2 §12's `level` granularity question).
 - Author noted "probably more capabilities not yet thought of" — additions get slotted here, then into the table.
