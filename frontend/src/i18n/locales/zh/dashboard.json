@@ -1,9 +1,12 @@
 {
   "subtitle": "欢迎使用 Omniventory——您的一体化库存系统。",
   "expiryCard": {
-    "title": "保质期与到期提醒",
-    "description": "追踪食品、药品及消耗品，到期前提前发出预警。",
-    "badge": "即将上线"
+    "title": "保质期与到期",
+    "countLabel_one": "{{count}} 批次即将到期",
+    "countLabel_other": "{{count}} 批次即将到期",
+    "emptyState": "当前时间窗口内无到期批次。",
+    "loadError": "加载到期数据失败。",
+    "viewAll": "查看所有即将到期批次"
   },
   "durableCard": {
     "title": "耐用品台账",

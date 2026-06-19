@@ -49,6 +49,7 @@ import {
   MapPin,
   Tag,
   Package,
+  Clock,
 } from "react-feather";
 import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
@@ -150,6 +151,12 @@ function NavContent({ onClose }: { onClose?: () => void }) {
         to="/items"
         label={t("items")}
         icon={<Package size={16} />}
+        onClick={onClose}
+      />
+      <NavItem
+        to="/expiring"
+        label={t("expiring")}
+        icon={<Clock size={16} />}
         onClick={onClose}
       />
     </Stack>

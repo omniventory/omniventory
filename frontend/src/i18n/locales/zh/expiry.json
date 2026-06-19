@@ -6,5 +6,15 @@
   "expiresInDays": "还有 {{count}} 天到期",
   "defaultHint": "如不填写将自动计算为 {{date}}（定义默认保质期：{{days}} 天）",
   "shelfLifeLabel": "默认保质期",
-  "shelfLifeDisplay": "默认保质期：{{days}} 天"
+  "shelfLifeDisplay": "默认保质期：{{days}} 天",
+  "pageTitle": "即将到期批次",
+  "horizon": "时间窗口",
+  "horizonDays": "{{count}} 天",
+  "nameLabel": "物品",
+  "bestBeforeColumn": "到期日",
+  "statusLabel": "状态",
+  "countLabel_one": "{{count}} 批次",
+  "countLabel_other": "{{count}} 批次",
+  "emptyState": "所选时间窗口内无到期批次。",
+  "loadError": "加载到期数据失败。"
 }

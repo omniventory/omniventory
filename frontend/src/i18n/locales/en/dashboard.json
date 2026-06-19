@@ -1,9 +1,12 @@
 {
   "subtitle": "Welcome to Omniventory — your all-in-one inventory system.",
   "expiryCard": {
-    "title": "Best-before & Expiry Reminders",
-    "description": "Track food, medicine, and consumables with advance alerts before items expire.",
-    "badge": "Coming soon"
+    "title": "Best-before & Expiry",
+    "countLabel_one": "{{count}} lot expiring",
+    "countLabel_other": "{{count}} lots expiring",
+    "emptyState": "No lots expiring within the window.",
+    "loadError": "Failed to load expiry data.",
+    "viewAll": "View all expiring lots"
   },
   "durableCard": {
     "title": "Durable-goods Ledger",

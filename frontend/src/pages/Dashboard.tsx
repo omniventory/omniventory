@@ -3,7 +3,9 @@
  *
  * Layout: SimpleGrid (single column on mobile, three columns on md+).
  *
- * Card 1 (expiryCard): static placeholder — Best-before / Expiry (M3).
+ * Card 1 (ExpiryCard): LIVE — fetches GET /api/expiring and shows
+ *   a count + short list. Empty state when nothing is expiring.
+ *   Links to /expiring for the full list.
  * Card 2 (durableCard): static placeholder linking to /items.
  * Card 3 (lowStockCard): LIVE — fetches GET /api/low-stock and shows
  *   a count + short list.  Empty state when nothing is low.
@@ -27,11 +29,13 @@ import {
 } from "@mantine/core";
 import { Clock, Archive, TrendingDown } from "react-feather";
 import { PageShell } from "../components/PageShell";
+import { ExpiryBadge } from "../components/ExpiryBadge";
 import { client } from "../api/client";
-import { formatQuantity } from "../i18n/format";
+import { formatDate, formatQuantity } from "../i18n/format";
 import type { components } from "../api/schema";
 
 type LowStockItem = components["schemas"]["LowStockItem"];
+type ExpiringItem = components["schemas"]["ExpiringItem"];
 
 // ── Static concept card ───────────────────────────────────────────────────────
 
@@ -77,6 +81,133 @@ function ConceptCard({
         {linkTo && linkLabel && (
           <Anchor component={Link} to={linkTo} size="sm" mt="auto">
             {linkLabel}
+          </Anchor>
+        )}
+      </Stack>
+    </Card>
+  );
+}
+
+// ── Live expiry tile ──────────────────────────────────────────────────────────
+
+/**
+ * The expiry / best-before card:
+ *   - Fetches GET /api/expiring once on mount (default horizon = backend default 30 days).
+ *   - Shows a count badge + short list (up to 3 lots; definition name · best_before_date
+ *     · ExpiryBadge status cue), a link to the full /expiring view.
+ *   - Empty state when nothing is expiring within the window.
+ *   - Never re-derives the expiring rule client-side (backend owns the rule).
+ */
+function ExpiryCard() {
+  const { t } = useTranslation("dashboard");
+
+  const [items, setItems] = useState<ExpiringItem[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      const result = await client.GET("/api/expiring");
+      if (cancelled) return;
+      const data = result?.data;
+      if (Array.isArray(data)) {
+        setItems(data);
+      } else {
+        setFetchError(true);
+      }
+      setLoading(false);
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const previewItems = items?.slice(0, 3) ?? [];
+  const count = items?.length ?? 0;
+
+  return (
+    <Card component="article" data-testid="expiry-tile">
+      <Stack gap="md">
+        <Group justify="space-between" align="flex-start" wrap="nowrap">
+          <ThemeIcon size={44} radius="md" variant="light" color="red">
+            <Clock size={22} strokeWidth={1.5} />
+          </ThemeIcon>
+          {!loading && !fetchError && count > 0 && (
+            <Badge
+              variant="filled"
+              color="red"
+              size="sm"
+              data-testid="expiry-count-badge"
+            >
+              {t("expiryCard.countLabel", { count })}
+            </Badge>
+          )}
+        </Group>
+
+        <Stack gap={6}>
+          <Title order={3} size="h4">
+            {t("expiryCard.title")}
+          </Title>
+
+          {loading && <Loader size="xs" />}
+
+          {!loading && fetchError && (
+            <Text
+              c="dimmed"
+              size="sm"
+              lh={1.5}
+              data-testid="expiry-load-error"
+            >
+              {t("expiryCard.loadError")}
+            </Text>
+          )}
+
+          {!loading && !fetchError && count === 0 && (
+            <Text
+              c="dimmed"
+              size="sm"
+              lh={1.5}
+              data-testid="expiry-empty-state"
+            >
+              {t("expiryCard.emptyState")}
+            </Text>
+          )}
+
+          {!loading && !fetchError && count > 0 && (
+            <List
+              size="sm"
+              spacing={4}
+              data-testid="expiry-list"
+            >
+              {previewItems.map((item) => (
+                <List.Item key={item.instance_id} data-testid={`expiry-item-${item.instance_id}`}>
+                  <Text size="sm" span fw={500}>
+                    {item.name}
+                  </Text>
+                  <Text size="sm" span c="dimmed">
+                    {" "}{formatDate(item.best_before_date)}
+                  </Text>
+                  {" "}
+                  <ExpiryBadge bestBeforeDate={item.best_before_date} />
+                </List.Item>
+              ))}
+            </List>
+          )}
+        </Stack>
+
+        {!loading && !fetchError && count > 0 && (
+          <Anchor
+            component={Link}
+            to="/expiring"
+            size="sm"
+            mt="auto"
+            data-testid="expiry-view-link"
+          >
+            {t("expiryCard.viewAll")}
           </Anchor>
         )}
       </Stack>
@@ -228,12 +359,7 @@ export function Dashboard() {
   return (
     <PageShell title={tNav("dashboard")} subtitle={t("subtitle")}>
       <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md">
-        <ConceptCard
-          icon={<Clock size={22} strokeWidth={1.5} />}
-          title={t("expiryCard.title")}
-          description={t("expiryCard.description")}
-          badgeLabel={t("expiryCard.badge")}
-        />
+        <ExpiryCard />
 
         <ConceptCard
           icon={<Archive size={22} strokeWidth={1.5} />}

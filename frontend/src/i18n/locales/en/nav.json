@@ -3,6 +3,7 @@
   "locations": "Locations",
   "categories": "Categories",
   "items": "Items",
+  "expiring": "Expiring",
   "navigation": "Navigation",
   "toggleNavigation": "Toggle navigation",
   "toggleColorScheme": "Toggle color scheme",

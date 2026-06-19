@@ -6,5 +6,15 @@
   "expiresInDays": "Expires in {{count}} days",
   "defaultHint": "Will default to {{date}} if left empty (definition default: {{days}} days)",
   "shelfLifeLabel": "Default shelf life",
-  "shelfLifeDisplay": "Default shelf life: {{days}} days"
+  "shelfLifeDisplay": "Default shelf life: {{days}} days",
+  "pageTitle": "Expiring Lots",
+  "horizon": "Horizon",
+  "horizonDays": "{{count}} days",
+  "nameLabel": "Item",
+  "bestBeforeColumn": "Best Before",
+  "statusLabel": "Status",
+  "countLabel_one": "{{count}} lot",
+  "countLabel_other": "{{count}} lots",
+  "emptyState": "No lots expiring within the selected window.",
+  "loadError": "Failed to load expiry data."
 }

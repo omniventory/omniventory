@@ -24,6 +24,7 @@ import enInstances from "../i18n/locales/en/instances.json";
 import enErrors from "../i18n/locales/en/errors.json";
 import enDashboard from "../i18n/locales/en/dashboard.json";
 import enStock from "../i18n/locales/en/stock.json";
+import enExpiry from "../i18n/locales/en/expiry.json";
 
 import zhCommon from "../i18n/locales/zh/common.json";
 import zhAuth from "../i18n/locales/zh/auth.json";
@@ -35,6 +36,7 @@ import zhInstances from "../i18n/locales/zh/instances.json";
 import zhErrors from "../i18n/locales/zh/errors.json";
 import zhDashboard from "../i18n/locales/zh/dashboard.json";
 import zhStock from "../i18n/locales/zh/stock.json";
+import zhExpiry from "../i18n/locales/zh/expiry.json";
 
 // ── Deep key extraction ───────────────────────────────────────────────────────
 
@@ -69,6 +71,7 @@ const namespacePairs: [string, unknown, unknown][] = [
   ["errors", enErrors, zhErrors],
   ["dashboard", enDashboard, zhDashboard],
   ["stock", enStock, zhStock],
+  ["expiry", enExpiry, zhExpiry],
 ];
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
