@@ -11,6 +11,7 @@ from app.models.item_definition import ItemDefinition
 from app.models.item_kind import ItemKind
 from app.models.location import Location
 from app.models.session import Session
+from app.models.setting import Setting
 from app.models.stock_instance import StockInstance
 from app.models.stock_movement import StockMovement
 from app.models.user import User
@@ -23,6 +24,7 @@ __all__ = [
     "ItemKind",
     "Location",
     "Session",
+    "Setting",
     "StockInstance",
     "StockMovement",
     "User",

@@ -228,6 +228,64 @@
         "title": "CategoryUpdate",
         "type": "object"
       },
+      "ChannelsResponse": {
+        "description": "Container for all channel configs (read).",
+        "properties": {
+          "email": {
+            "$ref": "#/components/schemas/EmailChannelResponse"
+          },
+          "http": {
+            "$ref": "#/components/schemas/HttpChannelResponse"
+          },
+          "mqtt": {
+            "$ref": "#/components/schemas/MqttChannelResponse"
+          }
+        },
+        "required": [
+          "email",
+          "http",
+          "mqtt"
+        ],
+        "title": "ChannelsResponse",
+        "type": "object"
+      },
+      "ChannelsUpdate": {
+        "description": "Container for partial channel config updates.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmailChannelUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "http": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HttpChannelUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mqtt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MqttChannelUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ChannelsUpdate",
+        "type": "object"
+      },
       "ConsumeRequest": {
         "description": "Body for POST /definitions/{id}/consume.\n\nConsumes ``quantity`` units from the definition's lots in FIFO order\n(oldest received_at first).",
         "properties": {
@@ -631,6 +689,164 @@
         "title": "DiscardRequest",
         "type": "object"
       },
+      "EmailChannelResponse": {
+        "description": "Email channel config returned to the client (password masked).",
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "from_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Address"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "password_is_set": {
+            "title": "Password Is Set",
+            "type": "boolean"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "use_tls": {
+            "title": "Use Tls",
+            "type": "boolean"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "enabled",
+          "host",
+          "port",
+          "username",
+          "password_is_set",
+          "use_tls",
+          "from_address"
+        ],
+        "title": "EmailChannelResponse",
+        "type": "object"
+      },
+      "EmailChannelUpdate": {
+        "description": "Partial update for email channel config.",
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "from_address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Address"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "use_tls": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Tls"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "title": "EmailChannelUpdate",
+        "type": "object"
+      },
       "ErrorResponse": {
         "description": "Uniform error envelope returned by every error path.\n\n``code``     Stable machine-readable key (e.g. ``location.not_found``).\n             The frontend maps this to a localized string.\n``message``  Dev-facing English description.  Never shown verbatim to users.\n``params``   Optional structured details (e.g. ``{\"id\": 42}``).\n             Machine-readable; the frontend uses them for string interpolation.",
         "properties": {
@@ -767,6 +983,93 @@
           "db"
         ],
         "title": "HealthResponse",
+        "type": "object"
+      },
+      "HttpChannelResponse": {
+        "description": "HTTP channel config returned to the client (secrets masked).",
+        "properties": {
+          "auth_header_is_set": {
+            "title": "Auth Header Is Set",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "integration_token_is_set": {
+            "title": "Integration Token Is Set",
+            "type": "boolean"
+          },
+          "webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Url"
+          }
+        },
+        "required": [
+          "enabled",
+          "webhook_url",
+          "auth_header_is_set",
+          "integration_token_is_set"
+        ],
+        "title": "HttpChannelResponse",
+        "type": "object"
+      },
+      "HttpChannelUpdate": {
+        "description": "Partial update for HTTP channel config.",
+        "properties": {
+          "auth_header": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Header"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "integration_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Integration Token"
+          },
+          "webhook_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Webhook Url"
+          }
+        },
+        "title": "HttpChannelUpdate",
         "type": "object"
       },
       "InstanceCreate": {
@@ -1807,6 +2110,286 @@
         "title": "MovementResponse",
         "type": "object"
       },
+      "MqttChannelResponse": {
+        "description": "MQTT channel config returned to the client (password masked).",
+        "properties": {
+          "commands_enabled": {
+            "title": "Commands Enabled",
+            "type": "boolean"
+          },
+          "discovery_enabled": {
+            "title": "Discovery Enabled",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "password_is_set": {
+            "title": "Password Is Set",
+            "type": "boolean"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "topic_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic Prefix"
+          },
+          "use_tls": {
+            "title": "Use Tls",
+            "type": "boolean"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "enabled",
+          "host",
+          "port",
+          "username",
+          "password_is_set",
+          "topic_prefix",
+          "use_tls",
+          "discovery_enabled",
+          "commands_enabled"
+        ],
+        "title": "MqttChannelResponse",
+        "type": "object"
+      },
+      "MqttChannelUpdate": {
+        "description": "Partial update for MQTT channel config.",
+        "properties": {
+          "commands_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commands Enabled"
+          },
+          "discovery_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discovery Enabled"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "port": {
+            "anyOf": [
+              {
+                "maximum": 65535.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Port"
+          },
+          "topic_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic Prefix"
+          },
+          "use_tls": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Use Tls"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "title": "MqttChannelUpdate",
+        "type": "object"
+      },
+      "RemindersSettings": {
+        "description": "Global reminder configuration.",
+        "properties": {
+          "best_before_lead_days": {
+            "minimum": 0.0,
+            "title": "Best Before Lead Days",
+            "type": "integer"
+          },
+          "low_stock_repeat_days": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Low Stock Repeat Days",
+            "type": "array"
+          },
+          "scan_time": {
+            "title": "Scan Time",
+            "type": "string"
+          },
+          "warranty_lead_days": {
+            "minimum": 0.0,
+            "title": "Warranty Lead Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "best_before_lead_days",
+          "warranty_lead_days",
+          "low_stock_repeat_days",
+          "scan_time"
+        ],
+        "title": "RemindersSettings",
+        "type": "object"
+      },
+      "RemindersUpdate": {
+        "description": "Partial update for reminder configuration (all fields optional).",
+        "properties": {
+          "best_before_lead_days": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Before Lead Days"
+          },
+          "low_stock_repeat_days": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Low Stock Repeat Days"
+          },
+          "scan_time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Time"
+          },
+          "warranty_lead_days": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warranty Lead Days"
+          }
+        },
+        "title": "RemindersUpdate",
+        "type": "object"
+      },
       "ReverseRequest": {
         "description": "Body for POST /movements/{id}/reverse.\n\nAppends a compensating ``correction`` movement that undoes the target.\n``note`` is optional; no other field is needed (the delta is derived\nfrom the target movement).",
         "properties": {
@@ -1823,6 +2406,50 @@
           }
         },
         "title": "ReverseRequest",
+        "type": "object"
+      },
+      "SettingsResponse": {
+        "description": "Full settings payload returned by GET /settings.",
+        "properties": {
+          "channels": {
+            "$ref": "#/components/schemas/ChannelsResponse"
+          },
+          "reminders": {
+            "$ref": "#/components/schemas/RemindersSettings"
+          }
+        },
+        "required": [
+          "reminders",
+          "channels"
+        ],
+        "title": "SettingsResponse",
+        "type": "object"
+      },
+      "SettingsUpdate": {
+        "description": "Partial update payload accepted by PATCH /settings.",
+        "properties": {
+          "channels": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelsUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reminders": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RemindersUpdate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "SettingsUpdate",
         "type": "object"
       },
       "SetupRequest": {
@@ -4851,6 +5478,88 @@
         "summary": "Reverse",
         "tags": [
           "movements"
+        ]
+      }
+    },
+    "/api/settings": {
+      "get": {
+        "description": "Return the current reminders and channels configuration.\n\nSecrets (SMTP password, MQTT password, integration token, auth header)\nare never echoed; each is replaced by a ``*_is_set`` boolean flag.\nUn-set keys return their code-defined defaults (the table only stores\nuser overrides).",
+        "operationId": "get_settings_api_settings_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Get Settings",
+        "tags": [
+          "settings"
+        ]
+      },
+      "patch": {
+        "description": "Apply a partial update to the reminders and channels configuration.\n\nOnly fields explicitly supplied in the payload are changed; omitted\nfields are left at their current value.  Validation errors are handled\nby the existing ``RequestValidationError`` handler (\u2192 ``validation.invalid_input``).\n\nTo set a secret supply the new value; to clear it supply an explicit\nempty string (``\"\"``) or ``null``.",
+        "operationId": "patch_settings_api_settings_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SettingsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Settings",
+        "tags": [
+          "settings"
         ]
       }
     }

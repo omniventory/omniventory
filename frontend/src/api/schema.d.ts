@@ -722,6 +722,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Settings
+         * @description Return the current reminders and channels configuration.
+         *
+         *     Secrets (SMTP password, MQTT password, integration token, auth header)
+         *     are never echoed; each is replaced by a ``*_is_set`` boolean flag.
+         *     Un-set keys return their code-defined defaults (the table only stores
+         *     user overrides).
+         */
+        get: operations["get_settings_api_settings_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Settings
+         * @description Apply a partial update to the reminders and channels configuration.
+         *
+         *     Only fields explicitly supplied in the payload are changed; omitted
+         *     fields are left at their current value.  Validation errors are handled
+         *     by the existing ``RequestValidationError`` handler (→ ``validation.invalid_input``).
+         *
+         *     To set a secret supply the new value; to clear it supply an explicit
+         *     empty string (``""``) or ``null``.
+         */
+        patch: operations["patch_settings_api_settings_patch"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -807,6 +843,24 @@ export interface components {
             name?: string | null;
             /** Parent Id */
             parent_id?: number | null;
+        };
+        /**
+         * ChannelsResponse
+         * @description Container for all channel configs (read).
+         */
+        ChannelsResponse: {
+            email: components["schemas"]["EmailChannelResponse"];
+            http: components["schemas"]["HttpChannelResponse"];
+            mqtt: components["schemas"]["MqttChannelResponse"];
+        };
+        /**
+         * ChannelsUpdate
+         * @description Container for partial channel config updates.
+         */
+        ChannelsUpdate: {
+            email?: components["schemas"]["EmailChannelUpdate"] | null;
+            http?: components["schemas"]["HttpChannelUpdate"] | null;
+            mqtt?: components["schemas"]["MqttChannelUpdate"] | null;
         };
         /**
          * ConsumeRequest
@@ -930,6 +984,46 @@ export interface components {
             quantity: number | string;
         };
         /**
+         * EmailChannelResponse
+         * @description Email channel config returned to the client (password masked).
+         */
+        EmailChannelResponse: {
+            /** Enabled */
+            enabled: boolean;
+            /** From Address */
+            from_address: string | null;
+            /** Host */
+            host: string | null;
+            /** Password Is Set */
+            password_is_set: boolean;
+            /** Port */
+            port: number | null;
+            /** Use Tls */
+            use_tls: boolean;
+            /** Username */
+            username: string | null;
+        };
+        /**
+         * EmailChannelUpdate
+         * @description Partial update for email channel config.
+         */
+        EmailChannelUpdate: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** From Address */
+            from_address?: string | null;
+            /** Host */
+            host?: string | null;
+            /** Password */
+            password?: string | null;
+            /** Port */
+            port?: number | null;
+            /** Use Tls */
+            use_tls?: boolean | null;
+            /** Username */
+            username?: string | null;
+        };
+        /**
          * ErrorResponse
          * @description Uniform error envelope returned by every error path.
          *
@@ -992,6 +1086,34 @@ export interface components {
             status: string;
             /** Version */
             version: string;
+        };
+        /**
+         * HttpChannelResponse
+         * @description HTTP channel config returned to the client (secrets masked).
+         */
+        HttpChannelResponse: {
+            /** Auth Header Is Set */
+            auth_header_is_set: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Integration Token Is Set */
+            integration_token_is_set: boolean;
+            /** Webhook Url */
+            webhook_url: string | null;
+        };
+        /**
+         * HttpChannelUpdate
+         * @description Partial update for HTTP channel config.
+         */
+        HttpChannelUpdate: {
+            /** Auth Header */
+            auth_header?: string | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Integration Token */
+            integration_token?: string | null;
+            /** Webhook Url */
+            webhook_url?: string | null;
         };
         /**
          * InstanceCreate
@@ -1329,6 +1451,82 @@ export interface components {
             user_id: number | null;
         };
         /**
+         * MqttChannelResponse
+         * @description MQTT channel config returned to the client (password masked).
+         */
+        MqttChannelResponse: {
+            /** Commands Enabled */
+            commands_enabled: boolean;
+            /** Discovery Enabled */
+            discovery_enabled: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Host */
+            host: string | null;
+            /** Password Is Set */
+            password_is_set: boolean;
+            /** Port */
+            port: number | null;
+            /** Topic Prefix */
+            topic_prefix: string | null;
+            /** Use Tls */
+            use_tls: boolean;
+            /** Username */
+            username: string | null;
+        };
+        /**
+         * MqttChannelUpdate
+         * @description Partial update for MQTT channel config.
+         */
+        MqttChannelUpdate: {
+            /** Commands Enabled */
+            commands_enabled?: boolean | null;
+            /** Discovery Enabled */
+            discovery_enabled?: boolean | null;
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Host */
+            host?: string | null;
+            /** Password */
+            password?: string | null;
+            /** Port */
+            port?: number | null;
+            /** Topic Prefix */
+            topic_prefix?: string | null;
+            /** Use Tls */
+            use_tls?: boolean | null;
+            /** Username */
+            username?: string | null;
+        };
+        /**
+         * RemindersSettings
+         * @description Global reminder configuration.
+         */
+        RemindersSettings: {
+            /** Best Before Lead Days */
+            best_before_lead_days: number;
+            /** Low Stock Repeat Days */
+            low_stock_repeat_days: number[];
+            /** Scan Time */
+            scan_time: string;
+            /** Warranty Lead Days */
+            warranty_lead_days: number;
+        };
+        /**
+         * RemindersUpdate
+         * @description Partial update for reminder configuration (all fields optional).
+         */
+        RemindersUpdate: {
+            /** Best Before Lead Days */
+            best_before_lead_days?: number | null;
+            /** Low Stock Repeat Days */
+            low_stock_repeat_days?: number[] | null;
+            /** Scan Time */
+            scan_time?: string | null;
+            /** Warranty Lead Days */
+            warranty_lead_days?: number | null;
+        };
+        /**
          * ReverseRequest
          * @description Body for POST /movements/{id}/reverse.
          *
@@ -1339,6 +1537,22 @@ export interface components {
         ReverseRequest: {
             /** Note */
             note?: string | null;
+        };
+        /**
+         * SettingsResponse
+         * @description Full settings payload returned by GET /settings.
+         */
+        SettingsResponse: {
+            channels: components["schemas"]["ChannelsResponse"];
+            reminders: components["schemas"]["RemindersSettings"];
+        };
+        /**
+         * SettingsUpdate
+         * @description Partial update payload accepted by PATCH /settings.
+         */
+        SettingsUpdate: {
+            channels?: components["schemas"]["ChannelsUpdate"] | null;
+            reminders?: components["schemas"]["RemindersUpdate"] | null;
         };
         /**
          * SetupRequest
@@ -3657,6 +3871,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_settings_api_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patch_settings_api_settings_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SettingsResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
