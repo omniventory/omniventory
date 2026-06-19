@@ -1,14 +1,17 @@
-"""Reminder engine — unified source-pluggable scan (M4 §4.1 / §4.2–§4.4 / §9 Step 3).
+"""Reminder engine -- unified source-pluggable scan (M4 §4.1 / §4.2-§4.5 / §9 Steps 3+4).
 
-``ReminderEngine.run_scan()`` evaluates all date sources (best_before, warranty)
-across all active recipients and writes idempotent notification rows.
+``ReminderEngine.run_scan()`` evaluates all sources (best_before, warranty,
+low_stock) across all active recipients and writes idempotent notification rows.
+
+``ReminderEngine.evaluate_low_stock(definition_id)`` is the event-trigger
+scoped path: same low-stock logic as run_scan, but limited to one definition
+across all recipients.  Called by StockMovementService after consume/discard/
+adjust, within the same DB transaction (best-effort, savepoint-isolated).
 
 Locked decisions implemented here (M4 §2)
 ------------------------------------------
 - **One engine, source-pluggable**: each date source is a small ``_DateSource``
-  descriptor; the engine loops sources × recipients × lots in a single pass.
-  The low-stock source (Step 4) slots in via ``_DateSource`` without touching
-  the existing two sources.
+  descriptor; the engine loops sources x recipients x lots in a single pass.
 - **Recipients = all active users (M4)**: ``UserRepository.list_active()``.
 - **"Today" honours ``household.timezone``**: ``today_local`` is computed from
   the current UTC time localised into ``household.timezone`` via
@@ -17,29 +20,32 @@ Locked decisions implemented here (M4 §2)
 - **Lead resolution per-item > per-user > global** (§4.3): first non-None wins.
 - **Date sources fire once per (recipient, lot, target-date)** (§4.4): the
   dedup key ``"{source}:u{uid}:i{lot_id}:{target_date}"`` makes re-runs no-ops.
+- **Low-stock episodes** (§4.5 / §3.3): opener fires on going low; repeats
+  fire when elapsed >= offset (catch-up); episode closes on recovery.
 
 Testability
 -----------
 ``run_scan(today_local=None)``  When ``None`` (the default) the scan computes
     ``today_local`` from ``household.timezone``; tests inject a fixed ``date``
-    to remove clock dependency.  Tests should *also* verify the tz-aware
-    default path by constructing a household with a timezone that differs from
-    UTC on a known offset boundary (see ``test_m4_step3.py``).
+    to remove clock dependency.
 
-Out of scope (Step 3)
+``evaluate_low_stock(definition_id, today_local=None)``  When ``None`` (the
+    default) the date is computed from ``household.timezone``.
+
+Out of scope (Step 4)
 ---------------------
-- Low-stock source (Step 4)
 - APScheduler wiring (Step 5)
 - Inbox list / mark-read API (Step 6)
-- External channels (Steps 7–10)
+- External channels (Steps 7-10)
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, timedelta
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
@@ -125,14 +131,14 @@ def _resolve_lead(
     """Resolve the effective lead-time in days for a source / definition / user.
 
     Resolution chain (§4.3, first non-None wins):
-    1. ``definition.reminder_lead_days`` — per-item override (applies to all
+    1. ``definition.reminder_lead_days`` -- per-item override (applies to all
        date sources on this definition's lots).
-    2. Per-user override — ``user.reminder_best_before_lead_days`` for
+    2. Per-user override -- ``user.reminder_best_before_lead_days`` for
        ``best_before``, ``user.reminder_warranty_lead_days`` for ``warranty``.
-    3. Global default — ``settings_service.best_before_lead_days()`` or
+    3. Global default -- ``settings_service.best_before_lead_days()`` or
        ``settings_service.warranty_lead_days()``.
 
-    All resolved values are ``≥ 0`` (Pydantic-validated at write time).
+    All resolved values are ``>= 0`` (Pydantic-validated at write time).
     A lead of 0 means fire on the target date itself.
 
     Parameters
@@ -173,7 +179,24 @@ class ScanSummary:
 
     best_before: int = 0
     warranty: int = 0
-    low_stock: int = 0  # Step 4 fills this; Step 3 always returns 0.
+    low_stock: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Decimal serialisation helper
+# ---------------------------------------------------------------------------
+
+
+def _decimal_to_str(value: Decimal | None) -> str | None:
+    """Convert a Decimal to string for JSON params storage, or keep None as None.
+
+    ``json.dumps(Decimal(...))`` raises TypeError.  We store Decimal values as
+    strings in the params JSON blob, matching the existing wire convention for
+    quantity fields (roadmap §2.9: Decimal as string on the wire).
+    """
+    if value is None:
+        return None
+    return str(value)
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +225,7 @@ class ReminderEngine:
     # ------------------------------------------------------------------
 
     def run_scan(self, today_local: date | None = None) -> ScanSummary:
-        """Evaluate all date sources for all active recipients.
+        """Evaluate all sources for all active recipients.
 
         Parameters
         ----------
@@ -211,7 +234,7 @@ class ReminderEngine:
             production), the date is computed from ``household.timezone`` so
             that the scan honours the household's clock.  Tests inject a fixed
             date to remove clock dependency (but should also verify the tz-aware
-            path separately).
+            default path separately).
 
         Returns
         -------
@@ -226,7 +249,7 @@ class ReminderEngine:
         # ---- Collect recipients -------------------------------------------
         recipients = self._user_repo.list_active()
         if not recipients:
-            logger.debug("run_scan: no active users — skipping.")
+            logger.debug("run_scan: no active users -- skipping.")
             return ScanSummary()
 
         # ---- Evaluate each date source ------------------------------------
@@ -248,19 +271,34 @@ class ReminderEngine:
                 summary.warranty += count
             all_new.extend(new_notifications)
 
+        # ---- Evaluate low-stock source ------------------------------------
+        # Import LowStockService here to avoid a potential import cycle;
+        # reminder_engine is imported by stock_movement which is not in this
+        # module's import tree, but keeping this local is defensive.
+        from app.services.low_stock import LowStockService
+
+        low_stock_items = LowStockService(self._db).compute()
+        low_now: set[int] = {item.definition_id for item in low_stock_items}
+        # Build a lookup map: definition_id -> LowStockItem for params building.
+        low_item_map = {item.definition_id: item for item in low_stock_items}
+
+        repeat_offsets = sorted(
+            {o for o in self._settings_service.low_stock_repeat_days() if o >= 1}
+        )
+
+        for user in recipients:
+            low_count, new_notifs = self._evaluate_low_stock_for_user(
+                user=user,
+                low_now=low_now,
+                low_item_map=low_item_map,
+                repeat_offsets=repeat_offsets,
+                today_local=today_local,
+            )
+            summary.low_stock += low_count
+            all_new.extend(new_notifs)
+
         # ---- Dispatch (in-app = implicit; external channels are no-ops
-        #     in Step 3; caller commits before calling dispatch) --------
-        # NOTE: dispatch is called here but the caller (the route handler) is
-        # responsible for committing the DB session BEFORE calling run_scan OR
-        # the route must commit after and the dispatcher runs post-commit.
-        #
-        # Per M4 §4.6: "Network I/O happens after the notification rows commit".
-        # The route handler pattern is:
-        #   engine.run_scan() → route commits via get_db → then dispatch.
-        #
-        # For Step 3: the dispatcher is a no-op (no external channels), so the
-        # ordering does not matter yet.  The dispatch call is placed here as the
-        # structural hook for Phase C (Steps 7–9) to wire into.
+        #     in Steps 3/4; caller commits before calling dispatch) -----------
         self._dispatcher.dispatch(all_new, include_email_digest=True)
 
         logger.info(
@@ -270,6 +308,72 @@ class ReminderEngine:
             summary.low_stock,
         )
         return summary
+
+    def evaluate_low_stock(
+        self,
+        definition_id: int,
+        today_local: date | None = None,
+    ) -> int:
+        """Evaluate low-stock for a single definition across all active recipients.
+
+        This is the event-trigger path called by StockMovementService after
+        consume/discard/adjust.  It applies the same open/repeat/close logic as
+        run_scan but scoped to one definition.  Used for immediate in-app
+        feedback without waiting for the daily scan.
+
+        Parameters
+        ----------
+        definition_id:
+            The definition to evaluate.
+        today_local:
+            Reference date; when ``None``, computed from ``household.timezone``.
+
+        Returns
+        -------
+        int
+            Number of newly created notification rows (0 or more).
+        """
+        if today_local is None:
+            household = self._household_repo.ensure()
+            today_local = self._today_in_tz(household.timezone)
+
+        recipients = self._user_repo.list_active()
+        if not recipients:
+            return 0
+
+        from app.services.low_stock import LowStockService
+
+        low_stock_items = LowStockService(self._db).compute()
+        low_now: set[int] = {item.definition_id for item in low_stock_items}
+        low_item_map = {item.definition_id: item for item in low_stock_items}
+
+        repeat_offsets = sorted(
+            {o for o in self._settings_service.low_stock_repeat_days() if o >= 1}
+        )
+
+        # Restrict low_now to just the requested definition so that the
+        # per-user loop only touches this definition.
+        scoped_low_now: set[int] = {definition_id} if definition_id in low_now else set()
+
+        total_created = 0
+        all_new: list[Notification] = []
+
+        for user in recipients:
+            low_count, new_notifs = self._evaluate_low_stock_for_user(
+                user=user,
+                low_now=scoped_low_now,
+                low_item_map=low_item_map,
+                repeat_offsets=repeat_offsets,
+                today_local=today_local,
+                scoped_definition_id=definition_id,
+            )
+            total_created += low_count
+            all_new.extend(new_notifs)
+
+        if all_new:
+            self._dispatcher.dispatch(all_new, include_email_digest=False)
+
+        return total_created
 
     # ------------------------------------------------------------------
     # Internal: date-source evaluation
@@ -283,7 +387,7 @@ class ReminderEngine:
         recipients: list[User],
         today_local: date,
     ) -> tuple[int, list[Notification]]:
-        """Evaluate one date source across all recipients × lots.
+        """Evaluate one date source across all recipients x lots.
 
         Returns (created_count, list_of_new_notifications).
         """
@@ -301,7 +405,7 @@ class ReminderEngine:
 
                 window: date = target_date - timedelta(days=lead)
                 if today_local < window:
-                    continue  # Too early — fire when today_local >= window.
+                    continue  # Too early -- fire when today_local >= window.
 
                 dedup = f"{source.name}:u{user.id}:i{lot.id}:{target_date.isoformat()}"
                 params = {
@@ -324,6 +428,131 @@ class ReminderEngine:
                 if created:
                     created_count += 1
                     new_notifications.append(notification)
+
+        return created_count, new_notifications
+
+    # ------------------------------------------------------------------
+    # Internal: low-stock episode evaluation (§4.5)
+    # ------------------------------------------------------------------
+
+    def _evaluate_low_stock_for_user(
+        self,
+        *,
+        user: User,
+        low_now: set[int],
+        low_item_map: Mapping[int, object],  # definition_id -> LowStockItem
+        repeat_offsets: list[int],
+        today_local: date,
+        scoped_definition_id: int | None = None,
+    ) -> tuple[int, list[Notification]]:
+        """Apply the episode open/repeat/close logic for one user.
+
+        Parameters
+        ----------
+        user:
+            The recipient.
+        low_now:
+            Set of definition IDs currently below their threshold.
+        low_item_map:
+            Maps definition_id -> LowStockItem (for params building).
+        repeat_offsets:
+            Sorted list of repeat offset days (each >= 1).
+        today_local:
+            Reference date for this evaluation.
+        scoped_definition_id:
+            When set (event-trigger path), only close episodes for this
+            definition (not all open openers for the user); episodes for
+            other definitions are left untouched.
+
+        Returns
+        -------
+        (created_count, new_notifications)
+        """
+        created_count = 0
+        new_notifications: list[Notification] = []
+
+        # --- Phase 1: open new episodes or fire repeats for low definitions --
+        for def_id in low_now:
+            item = low_item_map[def_id]  # LowStockItem
+            opener = self._notification_repo.open_low_stock_opener(user.id, def_id)
+
+            if opener is None:
+                # No open episode -- open a new one (opener row, offset_days=0).
+                params = {
+                    "name": item.name,  # type: ignore[attr-defined]
+                    "current": _decimal_to_str(item.current),  # type: ignore[attr-defined]
+                    "threshold": _decimal_to_str(item.threshold),  # type: ignore[attr-defined]
+                    "mode": item.mode,  # type: ignore[attr-defined]
+                }
+                dedup = f"low_stock:u{user.id}:d{def_id}:{today_local.isoformat()}:o0"
+                notification, created = self._notification_repo.create_if_absent(
+                    user_id=user.id,
+                    source="low_stock",
+                    subject_type="definition",
+                    subject_id=def_id,
+                    dedup_key=dedup,
+                    message_code="reminder.low_stock",
+                    params=params,
+                    episode_started_on=today_local,
+                    offset_days=0,
+                )
+                if created:
+                    created_count += 1
+                    new_notifications.append(notification)
+            else:
+                # Episode already open -- fire any repeat offsets whose
+                # threshold has been reached.
+                # elapsed >= 0 always; repeat_offsets each >= 1 so opener is
+                # never also a repeat.
+                elapsed = (today_local - opener.episode_started_on).days  # type: ignore[operator]
+                item = low_item_map[def_id]
+                for o in repeat_offsets:
+                    if o > elapsed:
+                        # Not reached yet; remaining offsets are even larger
+                        # (list is sorted), so break early.
+                        break
+                    # o <= elapsed: this repeat should have fired.
+                    params = {
+                        "name": item.name,  # type: ignore[attr-defined]
+                        "current": _decimal_to_str(item.current),  # type: ignore[attr-defined]
+                        "threshold": _decimal_to_str(item.threshold),  # type: ignore[attr-defined]
+                        "mode": item.mode,  # type: ignore[attr-defined]
+                        "offset": o,
+                    }
+                    dedup = (
+                        f"low_stock:u{user.id}:d{def_id}"
+                        f":{opener.episode_started_on.isoformat()}:o{o}"  # type: ignore[union-attr]
+                    )
+                    notification, created = self._notification_repo.create_if_absent(
+                        user_id=user.id,
+                        source="low_stock",
+                        subject_type="definition",
+                        subject_id=def_id,
+                        dedup_key=dedup,
+                        message_code="reminder.low_stock_repeat",
+                        params=params,
+                        episode_started_on=opener.episode_started_on,
+                        offset_days=o,
+                    )
+                    if created:
+                        created_count += 1
+                        new_notifications.append(notification)
+
+        # --- Phase 2: close episodes for recovered definitions ----------------
+        # Fetch all open openers for this user.
+        open_openers = self._notification_repo.open_low_stock_openers(user.id)
+        for opener in open_openers:
+            if opener.subject_id in low_now:
+                # Still low -- leave episode open.
+                continue
+            # Not in low_now: the definition has recovered (or is now
+            # scoped to a different definition in the event-trigger path).
+            # In the event-trigger path we only close episodes for the
+            # single scoped definition; other definitions' openers are
+            # evaluated by their own event hooks or the daily scan.
+            if scoped_definition_id is not None and opener.subject_id != scoped_definition_id:
+                continue
+            self._notification_repo.mark_resolved(opener)
 
         return created_count, new_notifications
 

@@ -284,6 +284,24 @@ class StockMovementService:
         )
         self._recompute(instance)
         self._db.flush()
+
+        # Event hook: evaluate low-stock for this definition after the discard.
+        # Best-effort + savepoint-isolated (failure must not roll back movement).
+        try:
+            from app.services.reminder_engine import ReminderEngine
+
+            with self._db.begin_nested():
+                ReminderEngine(self._db).evaluate_low_stock(instance.definition_id)
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "evaluate_low_stock after discard failed for definition %d "
+                "(best-effort -- movement committed normally)",
+                instance.definition_id,
+                exc_info=True,
+            )
+
         return instance
 
     def adjust(
@@ -334,6 +352,26 @@ class StockMovementService:
         )
         self._recompute(instance)
         self._db.flush()
+
+        # Event hook: evaluate low-stock for this definition after the adjust.
+        # An upward adjust may close an open episode; a downward adjust may open
+        # one.  Best-effort + savepoint-isolated (failure must not roll back
+        # movement).
+        try:
+            from app.services.reminder_engine import ReminderEngine
+
+            with self._db.begin_nested():
+                ReminderEngine(self._db).evaluate_low_stock(instance.definition_id)
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "evaluate_low_stock after adjust failed for definition %d "
+                "(best-effort -- movement committed normally)",
+                instance.definition_id,
+                exc_info=True,
+            )
+
         return instance
 
     def move(
@@ -499,6 +537,26 @@ class StockMovementService:
             self._db.flush()
             touched.append(lot)
             remaining -= take
+
+        # Event hook: evaluate low-stock for this definition right after the
+        # consume, within the same transaction.  Best-effort + savepoint-isolated:
+        # a failure in the reminder logic must never roll back the movement.
+        # Local import to avoid circular imports (reminder_engine imports
+        # services indirectly; keeping the import local breaks the cycle).
+        try:
+            from app.services.reminder_engine import ReminderEngine
+
+            with self._db.begin_nested():
+                ReminderEngine(self._db).evaluate_low_stock(definition.id)
+        except Exception:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "evaluate_low_stock after consume_fifo failed for definition %d "
+                "(best-effort -- movement committed normally)",
+                definition.id,
+                exc_info=True,
+            )
 
         return touched
 
