@@ -34,6 +34,10 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.item_definition import ItemDefinition
 
 from sqlalchemy import (
     CheckConstraint,
@@ -47,7 +51,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -148,6 +152,16 @@ class StockInstance(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+    )
+
+    # Relationship to ItemDefinition — used by ExpiryService to read
+    # definition.name without a separate round-trip (M3 Step 4 §4.4 / §12).
+    # lazy="select" is the SQLAlchemy default; ExpiryService eager-loads it
+    # via joinedload in list_expiring so the service can access .name safely.
+    definition: Mapped[ItemDefinition] = relationship(
+        "ItemDefinition",
+        foreign_keys=[definition_id],
+        lazy="select",
     )
 
     def __repr__(self) -> str:

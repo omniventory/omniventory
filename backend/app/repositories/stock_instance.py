@@ -24,7 +24,7 @@ from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.stock_instance import StockInstance
 
@@ -152,6 +152,41 @@ class StockInstanceRepository:
             .limit(1)
         )
         return self._db.scalars(stmt).first() is not None
+
+    def list_expiring(self, cutoff_date: date) -> list[StockInstance]:
+        """Return lots whose best_before_date is not NULL and <= cutoff_date.
+
+        Filter (M3 §4.4 / §2 "live stock"):
+            best_before_date IS NOT NULL
+            AND best_before_date <= cutoff_date
+            AND (quantity IS NULL OR quantity > 0)
+
+        The ``quantity IS NULL`` arm keeps level/none-mode lots (present-but-
+        unquantified); the ``> 0`` arm drops fully-consumed exact-mode lots
+        so a depleted batch does not haunt the list.
+
+        Ordered soonest/most-overdue first (``ORDER BY best_before_date, id``)
+        so expired lots naturally lead (their date is earliest).
+
+        The lot's definition is eager-loaded via joinedload so the service can
+        read ``definition.name`` without an N+1 (M3 §4.4 / §12 note).
+
+        Pure data access — no business rules here.
+        """
+        stmt = (
+            select(StockInstance)
+            .where(
+                StockInstance.best_before_date.is_not(None),
+                StockInstance.best_before_date <= cutoff_date,
+                (StockInstance.quantity.is_(None)) | (StockInstance.quantity > 0),
+            )
+            .options(joinedload(StockInstance.definition))
+            .order_by(
+                StockInstance.best_before_date,
+                StockInstance.id,
+            )
+        )
+        return list(self._db.scalars(stmt).unique().all())
 
     def has_instances_at_location(self, location_id: int) -> bool:
         """Return True if any stock instance is assigned to the given location."""

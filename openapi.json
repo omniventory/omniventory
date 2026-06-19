@@ -662,6 +662,84 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "ExpiringItem": {
+        "description": "Public representation of a single expiring/expired lot (M3 \u00a74.6).",
+        "properties": {
+          "best_before_date": {
+            "format": "date",
+            "title": "Best Before Date",
+            "type": "string"
+          },
+          "days_remaining": {
+            "title": "Days Remaining",
+            "type": "integer"
+          },
+          "definition_id": {
+            "title": "Definition Id",
+            "type": "integer"
+          },
+          "instance_id": {
+            "title": "Instance Id",
+            "type": "integer"
+          },
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instance_id",
+          "definition_id",
+          "name",
+          "location_id",
+          "best_before_date",
+          "quantity",
+          "days_remaining",
+          "status"
+        ],
+        "title": "ExpiringItem",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
       "HealthResponse": {
         "description": "Shape of the /health response (Step 3+).",
         "properties": {
@@ -1847,6 +1925,46 @@
           "created_at"
         ],
         "title": "UserResponse",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
         "type": "object"
       }
     }
@@ -3192,6 +3310,66 @@
         "summary": "Consume",
         "tags": [
           "definitions"
+        ]
+      }
+    },
+    "/api/expiring": {
+      "get": {
+        "description": "Return the computed list of lots that are expiring or already expired.\n\nThe response set is ``expired \u222a expiring-within-N``:\n- A lot is included when ``best_before_date <= today + within_days``\n  and the lot is not a depleted ``exact`` lot (``quantity IS NULL OR\n  quantity > 0``).\n- Each item carries ``status`` (``'expired'`` or ``'expiring'``) and\n  ``days_remaining`` (negative = past; 0 = today; positive = future).\n- Ordered soonest-first (expired lots naturally lead).\n\n``within_days`` defaults to 30 and is clamped to ``>= 0`` by the service\n\u2014 negative values are never rejected (they behave as 0).\n\nReturns an empty list when nothing qualifies.  This is a pure computed\nread \u2014 no state is persisted.",
+        "operationId": "get_expiring_api_expiring_get",
+        "parameters": [
+          {
+            "description": "Return lots expiring within this many days from today (inclusive). ``0`` means only expired and expiring-today. Negative values are clamped to 0.",
+            "in": "query",
+            "name": "within_days",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "description": "Return lots expiring within this many days from today (inclusive). ``0`` means only expired and expiring-today. Negative values are clamped to 0.",
+              "title": "Within Days",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExpiringItem"
+                  },
+                  "title": "Response Get Expiring Api Expiring Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Expiring",
+        "tags": [
+          "expiry"
         ]
       }
     },

@@ -324,6 +324,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/expiring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Expiring
+         * @description Return the computed list of lots that are expiring or already expired.
+         *
+         *     The response set is ``expired ∪ expiring-within-N``:
+         *     - A lot is included when ``best_before_date <= today + within_days``
+         *       and the lot is not a depleted ``exact`` lot (``quantity IS NULL OR
+         *       quantity > 0``).
+         *     - Each item carries ``status`` (``'expired'`` or ``'expiring'``) and
+         *       ``days_remaining`` (negative = past; 0 = today; positive = future).
+         *     - Ordered soonest-first (expired lots naturally lead).
+         *
+         *     ``within_days`` defaults to 30 and is clamped to ``>= 0`` by the service
+         *     — negative values are never rejected (they behave as 0).
+         *
+         *     Returns an empty list when nothing qualifies.  This is a pure computed
+         *     read — no state is persisted.
+         */
+        get: operations["get_expiring_api_expiring_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -916,6 +950,36 @@ export interface components {
             } | null;
         };
         /**
+         * ExpiringItem
+         * @description Public representation of a single expiring/expired lot (M3 §4.6).
+         */
+        ExpiringItem: {
+            /**
+             * Best Before Date
+             * Format: date
+             */
+            best_before_date: string;
+            /** Days Remaining */
+            days_remaining: number;
+            /** Definition Id */
+            definition_id: number;
+            /** Instance Id */
+            instance_id: number;
+            /** Location Id */
+            location_id: number | null;
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity: string | null;
+            /** Status */
+            status: string;
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
          * HealthResponse
          * @description Shape of the /health response (Step 3+).
          */
@@ -1348,6 +1412,19 @@ export interface components {
             preferred_language?: string | null;
             /** Role */
             role: string;
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
         };
     };
     responses: never;
@@ -2414,6 +2491,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_expiring_api_expiring_get: {
+        parameters: {
+            query?: {
+                /** @description Return lots expiring within this many days from today (inclusive). ``0`` means only expired and expiring-today. Negative values are clamped to 0. */
+                within_days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpiringItem"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
