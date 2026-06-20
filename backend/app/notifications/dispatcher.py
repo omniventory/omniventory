@@ -141,6 +141,58 @@ class NotificationDispatcher:
                 )
 
 
+def publish_mqtt_state(db: Session) -> None:
+    """Publish live inventory state counts to the MQTT state topics.
+
+    This is a best-effort post-commit helper to be called from each dispatch
+    site (daily scan job, ``POST /reminders/run``, and the three event-trigger
+    route handlers: consume, discard, adjust).
+
+    Behaviour
+    ---------
+    - If the MQTT bridge is not connected or ``channels.mqtt.enabled`` is
+      False, this is a no-op.
+    - Computes counts via ``IntegrationStateService`` (reuses existing services;
+      no new SQL outside repositories).
+    - Errors are caught and logged — never propagated to the caller.
+
+    Parameters
+    ----------
+    db:
+        Active SQLAlchemy session (read-only; no writes from this helper).
+    """
+    try:
+        from app.notifications.mqtt import get_mqtt_bridge
+        from app.services.integration_state import IntegrationStateService
+        from app.services.settings import SettingsService
+
+        bridge = get_mqtt_bridge()
+        if not bridge.is_connected:
+            return
+
+        # Guard: check enabled flag before computing counts.
+        cfg = SettingsService(db).mqtt_channel_config()
+        if not cfg.enabled:
+            return
+
+        counts = IntegrationStateService(db).compute()
+        bridge.publish_state(
+            {
+                "low_stock_count": counts["low_stock_count"],
+                "expiring_count": counts["expiring_count"],
+                "expired_count": counts["expired_count"],
+            }
+        )
+        logger.debug(
+            "publish_mqtt_state: published counts low=%d expiring=%d expired=%d.",
+            counts["low_stock_count"],
+            counts["expiring_count"],
+            counts["expired_count"],
+        )
+    except Exception:
+        logger.exception("publish_mqtt_state: error publishing MQTT state — ignored.")
+
+
 def build_dispatcher(db: Session) -> NotificationDispatcher:
     """Build a ``NotificationDispatcher`` pre-registered with enabled channels.
 
@@ -149,15 +201,15 @@ def build_dispatcher(db: Session) -> NotificationDispatcher:
     ``SettingsService`` and registers concrete adapters for every enabled
     channel.
 
-    Currently registered channels (Steps 7–8):
+    Currently registered channels (Steps 7–9):
     - ``EmailChannel``  — SMTP digest; registered unconditionally (the channel
       checks ``is_enabled()`` internally and is a no-op when disabled).
     - ``HttpChannel``   — instant outbound webhook; registered unconditionally
       (the channel checks ``is_enabled()`` internally and is a no-op when
       disabled or unconfigured).
-
-    Future steps will add:
-    - Step 9: ``MqttChannel`` (instant MQTT publish)
+    - ``MqttChannel``  — instant MQTT publish; registered unconditionally (the
+      channel checks ``is_enabled()`` and bridge connectivity internally; no-op
+      when disabled or bridge not connected).
 
     Parameters
     ----------
@@ -174,9 +226,10 @@ def build_dispatcher(db: Session) -> NotificationDispatcher:
     """
     from app.notifications.channels.email import EmailChannel
     from app.notifications.channels.http import HttpChannel
+    from app.notifications.channels.mqtt import MqttChannel
 
     dispatcher = NotificationDispatcher()
     dispatcher.register_channel(EmailChannel(db))
     dispatcher.register_channel(HttpChannel(db))
-    # Step 9: dispatcher.register_channel(MqttChannel(db))
+    dispatcher.register_channel(MqttChannel(db))
     return dispatcher

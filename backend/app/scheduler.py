@@ -43,7 +43,7 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 
 from app.db.base import get_session_factory
-from app.notifications.dispatcher import build_dispatcher
+from app.notifications.dispatcher import build_dispatcher, publish_mqtt_state
 from app.repositories.household import HouseholdRepository
 from app.services.reminder_engine import ReminderEngine
 from app.services.settings import SettingsService
@@ -147,6 +147,8 @@ def _run_scan_job() -> None:
         # Dispatch external channels AFTER commit (F1).
         build_dispatcher(db).dispatch(summary.new_notifications, include_email_digest=True)
         db.commit()  # Persist notification_deliveries rows.
+        # Publish MQTT state counts after each scan (best-effort, post-commit).
+        publish_mqtt_state(db)
     except Exception:
         logger.exception("Scheduled reminder scan failed — rolling back.")
         try:

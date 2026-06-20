@@ -151,6 +151,25 @@ class HttpChannelConfig:
     integration_token: str | None  # noqa: S105 — internal use only, never serialised
 
 
+@dataclass
+class MqttChannelConfig:
+    """Full (decrypted) MQTT channel configuration consumed by MqttBridge / MqttChannel.
+
+    Never returned from API routes — use SettingsService.mqtt_channel_config()
+    inside the bridge and channel adapter only.
+    """
+
+    enabled: bool
+    host: str | None
+    port: int | None
+    username: str | None
+    password: str | None  # noqa: S105 — internal use only, never serialised
+    topic_prefix: str
+    use_tls: bool
+    discovery_enabled: bool
+    commands_enabled: bool
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -420,6 +439,23 @@ class SettingsService:
             webhook_url=self._get_value("channels.http.webhook_url"),
             auth_header=self._get_value("channels.http.auth_header"),
             integration_token=self._get_value("channels.http.integration_token"),
+        )
+
+    def mqtt_channel_config(self) -> MqttChannelConfig:
+        """Return the full (decrypted) MQTT channel config for adapter/bridge use."""
+        raw_port = self._get_value("channels.mqtt.port")
+        # Port is stored as text (default is None); cast to int when present.
+        port: int | None = int(raw_port) if raw_port is not None else None
+        return MqttChannelConfig(
+            enabled=self._get_value("channels.mqtt.enabled"),
+            host=self._get_value("channels.mqtt.host"),
+            port=port,
+            username=self._get_value("channels.mqtt.username"),
+            password=self._get_value("channels.mqtt.password"),
+            topic_prefix=self._get_value("channels.mqtt.topic_prefix"),
+            use_tls=self._get_value("channels.mqtt.use_tls"),
+            discovery_enabled=self._get_value("channels.mqtt.discovery_enabled"),
+            commands_enabled=self._get_value("channels.mqtt.commands_enabled"),
         )
 
     def get_or_create_integration_token(self) -> str:

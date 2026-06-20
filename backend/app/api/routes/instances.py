@@ -36,7 +36,7 @@ from sqlalchemy.orm import Session
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
-from app.notifications.dispatcher import build_dispatcher
+from app.notifications.dispatcher import build_dispatcher, publish_mqtt_state
 from app.schemas.stock_instance import InstanceCreate, InstanceResponse, InstanceUpdate
 from app.schemas.stock_movement import MovementResponse
 from app.schemas.stock_movement_ops import AdjustRequest, DiscardRequest, IntakeRequest, MoveRequest
@@ -227,6 +227,7 @@ def discard(
         if pending:
             build_dispatcher(db).dispatch(pending, include_email_digest=False)
             db.commit()
+        publish_mqtt_state(db)
     except Exception:
         _dispatch_logger.warning(
             "Post-discard instant dispatch failed (best-effort); movement already committed.",
@@ -262,6 +263,7 @@ def adjust(
         if pending:
             build_dispatcher(db).dispatch(pending, include_email_digest=False)
             db.commit()
+        publish_mqtt_state(db)
     except Exception:
         _dispatch_logger.warning(
             "Post-adjust instant dispatch failed (best-effort); movement already committed.",

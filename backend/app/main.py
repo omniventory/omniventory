@@ -139,6 +139,70 @@ def _purge_expired_sessions() -> None:
         db.close()
 
 
+def _start_mqtt_bridge(app: FastAPI) -> None:
+    """Start the MQTT bridge if configured and not in test mode.
+
+    Guard conditions (same as the scheduler — either skips the bridge):
+    - ``settings.environment == "test"`` — no real connections in CI/pytest.
+    - ``channels.mqtt.enabled`` is False — master on/off switch.
+
+    The bridge instance (from ``get_mqtt_bridge()``) is stored on
+    ``app.state.mqtt_bridge`` for the shutdown hook.  It is also accessible
+    globally via ``get_mqtt_bridge()`` from any call site (scheduler, routes).
+    """
+    from app.config import get_settings
+    from app.db.base import get_session_factory
+    from app.notifications.mqtt import MqttBridgeConfig, get_mqtt_bridge
+    from app.services.settings import SettingsService
+
+    settings = get_settings()
+    if settings.environment == "test":
+        logger.debug("_start_mqtt_bridge: environment=test — MQTT bridge suppressed.")
+        app.state.mqtt_bridge = None
+        return
+
+    factory = get_session_factory()
+    db = factory()
+    try:
+        cfg = SettingsService(db).mqtt_channel_config()
+    finally:
+        db.close()
+
+    if not cfg.enabled:
+        logger.info("_start_mqtt_bridge: channels.mqtt.enabled=False — MQTT bridge suppressed.")
+        app.state.mqtt_bridge = None
+        return
+
+    host = cfg.host or ""
+    port = cfg.port or 1883
+
+    bridge_cfg = MqttBridgeConfig(
+        host=host,
+        port=port,
+        username=cfg.username,
+        password=cfg.password,
+        topic_prefix=cfg.topic_prefix or "omniventory",
+        use_tls=cfg.use_tls,
+        discovery_enabled=cfg.discovery_enabled,
+    )
+
+    bridge = get_mqtt_bridge()
+    bridge.start(bridge_cfg)
+    app.state.mqtt_bridge = bridge
+    logger.info("MQTT bridge started (host=%s, port=%d).", host, port)
+
+
+def _stop_mqtt_bridge(app: FastAPI) -> None:
+    """Stop the MQTT bridge if it was started during lifespan startup."""
+    bridge = getattr(app.state, "mqtt_bridge", None)
+    if bridge is not None:
+        try:
+            bridge.stop()
+            logger.info("MQTT bridge stopped cleanly.")
+        except Exception:
+            logger.exception("Error during MQTT bridge shutdown — ignoring.")
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     """FastAPI lifespan: startup tasks and clean shutdown.
@@ -148,17 +212,21 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     2. Purge any expired session rows (best-effort sweep).
     3. Start the APScheduler daily reminder scan (no-op in test environment or
        when ``scheduler_enabled=False``).
+    4. Start the MQTT bridge if ``channels.mqtt.enabled`` and environment is
+       not ``test`` (same gate as the scheduler).
 
     Shutdown (after ``yield``):
     - Gracefully stop the scheduler if it was started (``wait=False`` so the
       shutdown does not block for a currently-running job to complete; the
       job is idempotent and safe to interrupt at the scan level).
+    - Cleanly stop the MQTT bridge if it was started.
     """
     from app.scheduler import start_scheduler
 
     _resolve_secret_key(app)
     _purge_expired_sessions()
     start_scheduler(app)
+    _start_mqtt_bridge(app)
     yield
     # ---- Shutdown -----------------------------------------------------------
     scheduler = getattr(app.state, "scheduler", None)
@@ -168,6 +236,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
             logger.info("Scheduler shut down cleanly.")
         except Exception:
             logger.exception("Error during scheduler shutdown — ignoring.")
+    _stop_mqtt_bridge(app)
 
 
 def create_app() -> FastAPI:

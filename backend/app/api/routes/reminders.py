@@ -29,7 +29,7 @@ from sqlalchemy.orm import Session
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
-from app.notifications.dispatcher import build_dispatcher
+from app.notifications.dispatcher import build_dispatcher, publish_mqtt_state
 from app.schemas.reminders import ReminderRunSummary
 from app.services.reminder_engine import ReminderEngine
 
@@ -73,6 +73,9 @@ def run_reminders(
     # Dispatch external channels post-commit (F1: network I/O after commit).
     build_dispatcher(db).dispatch(summary.new_notifications, include_email_digest=True)
     # delivery rows will be committed by get_db on handler return.
+
+    # Publish MQTT state counts after scan (best-effort, post-commit).
+    publish_mqtt_state(db)
 
     return ReminderRunSummary(
         best_before=summary.best_before,
