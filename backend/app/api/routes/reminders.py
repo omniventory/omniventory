@@ -1,4 +1,4 @@
-"""Reminders API endpoint (M4 §4.7 / §4.10 / §9 Step 3).
+"""Reminders API endpoint (M4 §4.7 / §4.10 / §9 Steps 3 + 7).
 
 Routes (all under the api_prefix, e.g. /api; session-authenticated):
     POST  /reminders/run   Trigger ``ReminderEngine.run_scan()`` on demand and
@@ -8,6 +8,14 @@ This endpoint is the primary way to demo the engine without waiting for the
 daily APScheduler job (Step 5).  It is safe to call multiple times — the engine
 is idempotent (a second call in the same day creates no new notifications for
 the same lots).
+
+Dispatch order (F1 fix — M4 §2: "Network I/O happens after commit"):
+1. ``ReminderEngine.run_scan()`` creates notification rows (not yet committed).
+2. ``get_db`` dependency commits on handler success — rows are now durable.
+3. ``build_dispatcher(db).dispatch(...)`` runs external channels (email, etc.)
+   AFTER commit.  Channel errors are best-effort and never crash this handler.
+4. ``get_db`` commits again on return — ``notification_deliveries`` rows are
+   persisted.
 
 Error contract:
     401  No/invalid session.
@@ -21,6 +29,7 @@ from sqlalchemy.orm import Session
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.notifications.dispatcher import build_dispatcher
 from app.schemas.reminders import ReminderRunSummary
 from app.services.reminder_engine import ReminderEngine
 
@@ -31,32 +40,40 @@ _ERROR_RESPONSES: dict[int | str, dict[str, object]] = {
 router = APIRouter(tags=["reminders"], responses=_ERROR_RESPONSES)
 
 
-def _get_engine(db: Session = Depends(get_db)) -> ReminderEngine:
-    """Dependency: build and return a ReminderEngine bound to the current DB session."""
-    return ReminderEngine(db)
-
-
 @router.post("/reminders/run", response_model=ReminderRunSummary)
 def run_reminders(
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
-    engine: Annotated[ReminderEngine, Depends(_get_engine)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> ReminderRunSummary:
     """Trigger the reminder engine scan on demand.
 
-    Evaluates all date sources (best_before, warranty) across all active users
-    and creates idempotent in-app notification rows.  Returns the count of
-    *newly created* rows per source; zero means "nothing new this scan" (either
-    no lots qualify or they were already notified).
+    Evaluates all sources (best_before, warranty, low_stock) across all active
+    users and creates idempotent in-app notification rows.  Returns the count
+    of *newly created* rows per source; zero means "nothing new this scan"
+    (either no lots qualify or they were already notified).
 
     Re-running is safe: the engine uses a unique ``(user_id, dedup_key)`` to
     prevent duplicate notifications.
 
-    The ``get_db`` dependency auto-commits the session after this handler
-    returns, so newly created notification rows are durably persisted.
-    External channel dispatch (Phase C) runs after commit; in Step 3 no external
-    I/O occurs (dispatcher is a no-op).
+    After the handler returns, ``get_db`` auto-commits so notification rows are
+    durable.  External channel dispatch (email digest etc.) runs next via
+    ``build_dispatcher``; delivery rows are committed by the subsequent
+    ``get_db`` commit.
+
+    Note: dispatch happens AFTER ``get_db`` commits (F1 fix).  To achieve this
+    within a single ``get_db`` dependency scope the handler explicitly commits,
+    dispatches, then returns — ``get_db`` will commit again on exit (idempotent
+    for an empty transaction).
     """
-    summary = engine.run_scan()
+    summary = ReminderEngine(db).run_scan()
+
+    # Commit notification rows so they are durable before any network I/O.
+    db.commit()
+
+    # Dispatch external channels post-commit (F1: network I/O after commit).
+    build_dispatcher(db).dispatch(summary.new_notifications, include_email_digest=True)
+    # delivery rows will be committed by get_db on handler return.
+
     return ReminderRunSummary(
         best_before=summary.best_before,
         warranty=summary.warranty,

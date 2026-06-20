@@ -43,6 +43,7 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI
 
 from app.db.base import get_session_factory
+from app.notifications.dispatcher import build_dispatcher
 from app.repositories.household import HouseholdRepository
 from app.services.reminder_engine import ReminderEngine
 from app.services.settings import SettingsService
@@ -126,18 +127,26 @@ def start_scheduler(app: FastAPI) -> None:
 def _run_scan_job() -> None:
     """APScheduler job: run ``ReminderEngine.run_scan()`` in its own DB session.
 
-    - Opens a fresh session from ``get_session_factory()`` (thread-safe;
-      never shares a session with request context).
-    - Commits on success; rolls back on error.
-    - All exceptions are caught and logged — never propagated to the scheduler
-      thread (best-effort; a single failure must not kill future runs).
+    Execution order (F1 fix — M4 §2: "Network I/O happens after commit"):
+    1. Open a fresh session (thread-safe; never shares with request context).
+    2. Run ``ReminderEngine.run_scan()`` — creates notification rows; returns
+       newly created rows via ``ScanSummary.new_notifications``.
+    3. Commit — notification rows are now durable.
+    4. Dispatch — call ``build_dispatcher(db).dispatch(new_notifications, ...)``
+       to send external channels (email digest, etc.) AFTER commit.  Channel
+       errors are best-effort (logged, recorded) and never crash the scan.
+    5. Commit again — persist ``notification_deliveries`` rows written by channels.
+    6. Errors at any stage: rollback + log; never propagated (best-effort job).
     """
     factory = get_session_factory()
     db = factory()
     try:
-        ReminderEngine(db).run_scan()
+        summary = ReminderEngine(db).run_scan()
         db.commit()
         logger.info("Scheduled reminder scan completed successfully.")
+        # Dispatch external channels AFTER commit (F1).
+        build_dispatcher(db).dispatch(summary.new_notifications, include_email_digest=True)
+        db.commit()  # Persist notification_deliveries rows.
     except Exception:
         logger.exception("Scheduled reminder scan failed — rolling back.")
         try:

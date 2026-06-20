@@ -53,7 +53,6 @@ from sqlalchemy.orm import Session
 from app.models.notification import Notification
 from app.models.stock_instance import StockInstance
 from app.models.user import User
-from app.notifications.dispatcher import NotificationDispatcher
 from app.repositories.household import HouseholdRepository
 from app.repositories.notification import NotificationRepository
 from app.repositories.stock_instance import StockInstanceRepository
@@ -175,11 +174,24 @@ def _resolve_lead(
 
 @dataclass
 class ScanSummary:
-    """Created-notification counts returned by ``run_scan()``."""
+    """Created-notification counts returned by ``run_scan()``.
+
+    ``new_notifications`` carries the freshly created ``Notification`` rows so
+    that the **caller** can dispatch them to external channels *after* committing
+    the DB transaction (F1 fix: dispatch happens post-commit, never inside the
+    engine).  This field is internal only — it is NOT part of the wire schema
+    ``ReminderRunSummary``; existing callers that read ``.best_before``,
+    ``.warranty``, or ``.low_stock`` are unaffected.
+    """
 
     best_before: int = 0
     warranty: int = 0
     low_stock: int = 0
+    new_notifications: list[Notification] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.new_notifications is None:
+            self.new_notifications = []
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +230,6 @@ class ReminderEngine:
         self._notification_repo = NotificationRepository(db)
         self._household_repo = HouseholdRepository(db)
         self._settings_service = SettingsService(db)
-        self._dispatcher = NotificationDispatcher()
 
     # ------------------------------------------------------------------
     # Public API
@@ -297,15 +308,20 @@ class ReminderEngine:
             summary.low_stock += low_count
             all_new.extend(new_notifs)
 
-        # ---- Dispatch (in-app = implicit; external channels are no-ops
-        #     in Steps 3/4; caller commits before calling dispatch) -----------
-        self._dispatcher.dispatch(all_new, include_email_digest=True)
+        # ---- Return new notifications to the caller --------------------------
+        # The caller (scheduler job or route handler) MUST:
+        #   1. Commit the DB transaction (to persist notification rows).
+        #   2. Then call build_dispatcher(db).dispatch(summary.new_notifications, ...)
+        #      so that network I/O happens AFTER commit (F1 fix, M4 §2).
+        # The engine does NOT dispatch itself — it never holds a dispatcher.
+        summary.new_notifications = all_new
 
         logger.info(
-            "run_scan complete: best_before=%d, warranty=%d, low_stock=%d",
+            "run_scan complete: best_before=%d, warranty=%d, low_stock=%d, new=%d",
             summary.best_before,
             summary.warranty,
             summary.low_stock,
+            len(all_new),
         )
         return summary
 
@@ -370,9 +386,13 @@ class ReminderEngine:
             total_created += low_count
             all_new.extend(new_notifs)
 
-        if all_new:
-            self._dispatcher.dispatch(all_new, include_email_digest=False)
-
+        # Note: dispatch for the event-trigger path is intentionally NOT done
+        # here.  Email is digest-only (include_email_digest=False → email no-op)
+        # and HTTP/MQTT instant channels (Steps 8/9) are not yet implemented.
+        # When Step 8/9 land, the caller (StockMovementService) should call
+        # build_dispatcher(db).dispatch(all_new, include_email_digest=False)
+        # after the movement commits.  For now the event path only creates
+        # in-app rows (which is the correct M4 Step 7 scope).
         return total_created
 
     # ------------------------------------------------------------------

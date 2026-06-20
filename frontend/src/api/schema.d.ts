@@ -830,18 +830,23 @@ export interface paths {
          * Run Reminders
          * @description Trigger the reminder engine scan on demand.
          *
-         *     Evaluates all date sources (best_before, warranty) across all active users
-         *     and creates idempotent in-app notification rows.  Returns the count of
-         *     *newly created* rows per source; zero means "nothing new this scan" (either
-         *     no lots qualify or they were already notified).
+         *     Evaluates all sources (best_before, warranty, low_stock) across all active
+         *     users and creates idempotent in-app notification rows.  Returns the count
+         *     of *newly created* rows per source; zero means "nothing new this scan"
+         *     (either no lots qualify or they were already notified).
          *
          *     Re-running is safe: the engine uses a unique ``(user_id, dedup_key)`` to
          *     prevent duplicate notifications.
          *
-         *     The ``get_db`` dependency auto-commits the session after this handler
-         *     returns, so newly created notification rows are durably persisted.
-         *     External channel dispatch (Phase C) runs after commit; in Step 3 no external
-         *     I/O occurs (dispatcher is a no-op).
+         *     After the handler returns, ``get_db`` auto-commits so notification rows are
+         *     durable.  External channel dispatch (email digest etc.) runs next via
+         *     ``build_dispatcher``; delivery rows are committed by the subsequent
+         *     ``get_db`` commit.
+         *
+         *     Note: dispatch happens AFTER ``get_db`` commits (F1 fix).  To achieve this
+         *     within a single ``get_db`` dependency scope the handler explicitly commits,
+         *     dispatches, then returns — ``get_db`` will commit again on exit (idempotent
+         *     for an empty transaction).
          */
         post: operations["run_reminders_api_reminders_run_post"];
         delete?: never;

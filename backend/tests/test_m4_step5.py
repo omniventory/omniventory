@@ -424,13 +424,14 @@ class TestJobBody:
         self,
         db_session: Session,
     ) -> None:
-        """_run_scan_job should call ReminderEngine.run_scan() and commit the session."""
+        """_run_scan_job calls run_scan(), commits (for rows), dispatches, commits again (for deliveries)."""
         mock_session = MagicMock(spec=Session)
         mock_factory = MagicMock(return_value=mock_session)
 
         with (
             patch("app.scheduler.get_session_factory", return_value=mock_factory),
             patch("app.scheduler.ReminderEngine") as mock_engine_cls,
+            patch("app.scheduler.build_dispatcher") as mock_build_dispatcher,
         ):
             from app.scheduler import _run_scan_job
 
@@ -442,8 +443,10 @@ class TestJobBody:
         mock_engine_cls.assert_called_once_with(mock_session)
         # run_scan() was called on the engine instance
         mock_engine_cls.return_value.run_scan.assert_called_once()
-        # Session was committed
-        mock_session.commit.assert_called_once()
+        # Session was committed at least once (once for notifications, once for deliveries)
+        assert mock_session.commit.call_count >= 1
+        # build_dispatcher was called with the session for external channel dispatch
+        mock_build_dispatcher.assert_called_once_with(mock_session)
         # Session was closed in finally block
         mock_session.close.assert_called_once()
 
