@@ -30,6 +30,8 @@
     "trackingModeLabel": "追踪模式：",
     "minStockLabel": "最低库存：",
     "defaultBestBeforeDaysLabel": "默认保质期：",
+    "reminderLeadDaysLabel": "提醒提前量：",
+    "reminderLeadDaysValue": "{{days}} 天",
     "instancesTitle": "实例",
     "registerInstanceBtn": "登记实例",
     "instanceSearchPlaceholder": "按序列号、型号、制造商搜索……",
@@ -67,6 +69,9 @@
     "minStockPlaceholder": "例如 4",
     "defaultBestBeforeDaysLabel": "默认保质期（天）",
     "defaultBestBeforeDaysPlaceholder": "例如 7",
+    "reminderLeadDaysLabel": "提醒提前量（天）",
+    "reminderLeadDaysPlaceholder": "例如 5",
+    "reminderLeadDaysDescription": "在到期/保修前多少天触发提醒（覆盖全局及用户级默认值）。",
     "noneOption": "— 无 —"
   },
   "deleteDefModal": {

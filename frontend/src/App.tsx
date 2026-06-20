@@ -33,6 +33,7 @@ import { InstanceDetail } from "./pages/InstanceDetail";
 import { LowStock } from "./pages/LowStock";
 import { Expiring } from "./pages/Expiring";
 import { Notifications } from "./pages/Notifications";
+import { Configuration } from "./pages/Configuration";
 import { NotFound } from "./pages/NotFound";
 import { client } from "./api/client";
 import i18n from "./i18n";
@@ -117,6 +118,7 @@ function App() {
           <Route path="/low-stock" element={<LowStock />} />
           <Route path="/expiring" element={<Expiring />} />
           <Route path="/notifications" element={<Notifications />} />
+          <Route path="/configuration" element={<Configuration />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </AppShell>

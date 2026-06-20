@@ -1,0 +1,991 @@
+/**
+ * Configuration page — reminders + notification channels.
+ *
+ * Sections:
+ *  1. Reminders (global defaults): best_before_lead_days, warranty_lead_days,
+ *     low_stock_repeat_days, scan_time — via PATCH /api/settings.
+ *  2. Your reminders (per-user): reminder_best_before_lead_days,
+ *     reminder_warranty_lead_days — via PATCH /api/auth/me.
+ *  3. Channels:
+ *     a. Email / SMTP — enabled, host, port, username, password (write-only),
+ *        use_tls, from_address.
+ *     b. HTTP — enabled, webhook_url, auth_header (write-only),
+ *        integration_token (write-only, with regenerate + copy + state-URL hint).
+ *     c. MQTT — enabled, host, port, username, password (write-only),
+ *        topic_prefix, use_tls, discovery_enabled, commands_enabled.
+ *  4. Run scan now — POST /api/reminders/run, shows per-source counts.
+ *
+ * Secrets policy (§2 "Channel secrets write-only"):
+ *  - Password/token fields are NEVER pre-filled from the API (the API only
+ *    returns *_is_set booleans).
+ *  - The UI shows "Set" / "Not set" status.
+ *  - A new value is only sent when the user types in the field.
+ *  - Explicit clear: separate "Clear" button that sends null/empty.
+ *
+ * Integration token:
+ *  - Status shown from integration_token_is_set.
+ *  - "Generate new token": client-side crypto.randomUUID(), displayed once for
+ *    copy, written to settings via PATCH on "Save HTTP settings".
+ *  - State endpoint URL hint: ${location.origin}/api/integrations/state?token=…
+ *
+ * Only changed fields are sent on each section save (partial PATCH).
+ */
+import { useCallback, useEffect, useState } from "react";
+import {
+  Alert,
+  Badge,
+  Button,
+  Checkbox,
+  Code,
+  CopyButton,
+  Divider,
+  Group,
+  NumberInput,
+  Paper,
+  Stack,
+  Switch,
+  Text,
+  TextInput,
+  Title,
+  Tooltip,
+} from "@mantine/core";
+import { AlertCircle } from "react-feather";
+import { useTranslation } from "react-i18next";
+import { client } from "../api/client";
+import { mapApiError } from "../i18n/errors";
+import { notifySuccess } from "../components/notify";
+import { PageShell } from "../components/PageShell";
+import { LoadingState } from "../components/LoadingState";
+import { ErrorState } from "../components/ErrorState";
+import type { components } from "../api/schema";
+
+// ── Schema types ──────────────────────────────────────────────────────────────
+
+type SettingsResponse = components["schemas"]["SettingsResponse"];
+type UserResponse = components["schemas"]["UserResponse"];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Validate "HH:MM" time format. */
+function isValidScanTime(value: string): boolean {
+  return /^\d{2}:\d{2}$/.test(value);
+}
+
+/** Parse a comma-separated string of integers. Returns null if invalid. */
+function parseRepeatDays(raw: string): number[] | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  const parts = trimmed.split(",").map((s) => s.trim());
+  const nums: number[] = [];
+  for (const p of parts) {
+    const n = parseInt(p, 10);
+    if (isNaN(n) || n < 1 || String(n) !== p) return null;
+    nums.push(n);
+  }
+  return nums;
+}
+
+/** Generate a strong random token using the Web Crypto API. */
+function generateToken(): string {
+  return crypto.randomUUID().replace(/-/g, "") + crypto.randomUUID().replace(/-/g, "");
+}
+
+// ── Subcomponents ─────────────────────────────────────────────────────────────
+
+/** Write-only secret field: shows "Set / Not set" badge; input only when user wants to change. */
+function SecretField({
+  label,
+  isSet,
+  newValue,
+  placeholder,
+  clearLabel,
+  onNewValueChange,
+  onClear,
+  testIdPrefix,
+}: {
+  label: string;
+  isSet: boolean;
+  newValue: string;
+  placeholder: string;
+  clearLabel: string;
+  onNewValueChange: (v: string) => void;
+  onClear: () => void;
+  testIdPrefix: string;
+}) {
+  const { t } = useTranslation("configuration");
+  return (
+    <Stack gap={4}>
+      <Group gap={8} align="center">
+        <Text size="sm" fw={500}>
+          {label}
+        </Text>
+        <Badge
+          size="xs"
+          color={isSet ? "teal" : "gray"}
+          variant="light"
+          data-testid={`${testIdPrefix}-status`}
+        >
+          {isSet ? t("secret.set") : t("secret.notSet")}
+        </Badge>
+      </Group>
+      <Group gap={8} align="flex-end">
+        <TextInput
+          style={{ flex: 1 }}
+          type="password"
+          placeholder={placeholder}
+          value={newValue}
+          onChange={(e) => onNewValueChange(e.currentTarget.value)}
+          data-testid={`${testIdPrefix}-input`}
+        />
+        <Button
+          size="xs"
+          variant="subtle"
+          color="red"
+          onClick={onClear}
+          data-testid={`${testIdPrefix}-clear-btn`}
+        >
+          {clearLabel}
+        </Button>
+      </Group>
+    </Stack>
+  );
+}
+
+// ── Configuration page ────────────────────────────────────────────────────────
+
+export function Configuration() {
+  const { t } = useTranslation("configuration");
+
+  // ── Loading state ──
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<SettingsResponse | null>(null);
+  const [me, setMe] = useState<UserResponse | null>(null);
+
+  // ── Reminders (global) form ──
+  const [bbLeadDays, setBbLeadDays] = useState<string>("");
+  const [wLeadDays, setWLeadDays] = useState<string>("");
+  const [repeatDaysRaw, setRepeatDaysRaw] = useState<string>("");
+  const [scanTime, setScanTime] = useState<string>("");
+  const [remindersBusy, setRemindersBusy] = useState(false);
+  const [remindersError, setRemindersError] = useState<string | null>(null);
+
+  // ── Per-user reminders form ──
+  const [userBbLeadDays, setUserBbLeadDays] = useState<string>("");
+  const [userWLeadDays, setUserWLeadDays] = useState<string>("");
+  const [userRemindersBusy, setUserRemindersBusy] = useState(false);
+  const [userRemindersError, setUserRemindersError] = useState<string | null>(null);
+
+  // ── Email channel form ──
+  const [emailEnabled, setEmailEnabled] = useState(false);
+  const [emailHost, setEmailHost] = useState<string>("");
+  const [emailPort, setEmailPort] = useState<string>("");
+  const [emailUsername, setEmailUsername] = useState<string>("");
+  const [emailNewPassword, setEmailNewPassword] = useState<string>("");
+  const [emailClearPassword, setEmailClearPassword] = useState(false);
+  const [emailPasswordIsSet, setEmailPasswordIsSet] = useState(false);
+  const [emailUseTls, setEmailUseTls] = useState(false);
+  const [emailFromAddress, setEmailFromAddress] = useState<string>("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+
+  // ── HTTP channel form ──
+  const [httpEnabled, setHttpEnabled] = useState(false);
+  const [httpWebhookUrl, setHttpWebhookUrl] = useState<string>("");
+  const [httpNewAuthHeader, setHttpNewAuthHeader] = useState<string>("");
+  const [httpClearAuthHeader, setHttpClearAuthHeader] = useState(false);
+  const [httpAuthHeaderIsSet, setHttpAuthHeaderIsSet] = useState(false);
+  const [httpTokenIsSet, setHttpTokenIsSet] = useState(false);
+  const [httpNewToken, setHttpNewToken] = useState<string | null>(null); // generated but not yet saved
+  const [httpBusy, setHttpBusy] = useState(false);
+  const [httpError, setHttpError] = useState<string | null>(null);
+
+  // ── MQTT channel form ──
+  const [mqttEnabled, setMqttEnabled] = useState(false);
+  const [mqttHost, setMqttHost] = useState<string>("");
+  const [mqttPort, setMqttPort] = useState<string>("");
+  const [mqttUsername, setMqttUsername] = useState<string>("");
+  const [mqttNewPassword, setMqttNewPassword] = useState<string>("");
+  const [mqttClearPassword, setMqttClearPassword] = useState(false);
+  const [mqttPasswordIsSet, setMqttPasswordIsSet] = useState(false);
+  const [mqttTopicPrefix, setMqttTopicPrefix] = useState<string>("");
+  const [mqttUseTls, setMqttUseTls] = useState(false);
+  const [mqttDiscoveryEnabled, setMqttDiscoveryEnabled] = useState(false);
+  const [mqttCommandsEnabled, setMqttCommandsEnabled] = useState(false);
+  const [mqttBusy, setMqttBusy] = useState(false);
+  const [mqttError, setMqttError] = useState<string | null>(null);
+
+  // ── Run scan ──
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanResult, setScanResult] = useState<{ best_before: number; warranty: number; low_stock: number } | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+
+  // ── Load data ─────────────────────────────────────────────────────────────
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [settingsRes, meRes] = await Promise.all([
+        client.GET("/api/settings"),
+        client.GET("/api/auth/me"),
+      ]);
+
+      if (settingsRes.error || !settingsRes.data) {
+        setLoadError(t("loadError"));
+        return;
+      }
+      if (meRes.error || !meRes.data) {
+        setLoadError(t("loadError"));
+        return;
+      }
+
+      const s = settingsRes.data;
+      const u = meRes.data.user;
+
+      setSettings(s);
+      setMe(u);
+
+      // Populate reminders (global) form
+      setBbLeadDays(String(s.reminders.best_before_lead_days));
+      setWLeadDays(String(s.reminders.warranty_lead_days));
+      setRepeatDaysRaw(s.reminders.low_stock_repeat_days.join(","));
+      setScanTime(s.reminders.scan_time);
+
+      // Populate per-user form (empty string = inherit)
+      setUserBbLeadDays(u.reminder_best_before_lead_days != null ? String(u.reminder_best_before_lead_days) : "");
+      setUserWLeadDays(u.reminder_warranty_lead_days != null ? String(u.reminder_warranty_lead_days) : "");
+
+      // Populate email form
+      const em = s.channels.email;
+      setEmailEnabled(em.enabled);
+      setEmailHost(em.host ?? "");
+      setEmailPort(em.port != null ? String(em.port) : "");
+      setEmailUsername(em.username ?? "");
+      setEmailNewPassword("");
+      setEmailClearPassword(false);
+      setEmailPasswordIsSet(em.password_is_set);
+      setEmailUseTls(em.use_tls);
+      setEmailFromAddress(em.from_address ?? "");
+
+      // Populate HTTP form
+      const http = s.channels.http;
+      setHttpEnabled(http.enabled);
+      setHttpWebhookUrl(http.webhook_url ?? "");
+      setHttpNewAuthHeader("");
+      setHttpClearAuthHeader(false);
+      setHttpAuthHeaderIsSet(http.auth_header_is_set);
+      setHttpTokenIsSet(http.integration_token_is_set);
+      setHttpNewToken(null);
+
+      // Populate MQTT form
+      const mq = s.channels.mqtt;
+      setMqttEnabled(mq.enabled);
+      setMqttHost(mq.host ?? "");
+      setMqttPort(mq.port != null ? String(mq.port) : "");
+      setMqttUsername(mq.username ?? "");
+      setMqttNewPassword("");
+      setMqttClearPassword(false);
+      setMqttPasswordIsSet(mq.password_is_set);
+      setMqttTopicPrefix(mq.topic_prefix ?? "");
+      setMqttUseTls(mq.use_tls);
+      setMqttDiscoveryEnabled(mq.discovery_enabled);
+      setMqttCommandsEnabled(mq.commands_enabled);
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
+
+  useEffect(() => {
+    void loadAll();
+  }, [loadAll]);
+
+  // ── Save handlers ─────────────────────────────────────────────────────────
+
+  async function handleSaveReminders() {
+    setRemindersBusy(true);
+    setRemindersError(null);
+    try {
+      const repeatDays = parseRepeatDays(repeatDaysRaw);
+      if (repeatDays === null) {
+        setRemindersError(t("reminders.lowStockRepeatDaysDescription"));
+        return;
+      }
+      if (scanTime && !isValidScanTime(scanTime)) {
+        setRemindersError(t("reminders.scanTimeDescription"));
+        return;
+      }
+      const { error } = await client.PATCH("/api/settings", {
+        body: {
+          reminders: {
+            best_before_lead_days: bbLeadDays !== "" ? Number(bbLeadDays) : undefined,
+            warranty_lead_days: wLeadDays !== "" ? Number(wLeadDays) : undefined,
+            low_stock_repeat_days: repeatDays,
+            scan_time: scanTime || undefined,
+          },
+        },
+      });
+      if (error) {
+        setRemindersError(mapApiError(error));
+        return;
+      }
+      notifySuccess(t("reminders.savedReminders"));
+      await loadAll();
+    } finally {
+      setRemindersBusy(false);
+    }
+  }
+
+  async function handleSaveUserReminders() {
+    setUserRemindersBusy(true);
+    setUserRemindersError(null);
+    try {
+      // Empty string = send null (clear override / inherit)
+      // Value = send integer
+      const bbVal = userBbLeadDays.trim() === "" ? null : Number(userBbLeadDays);
+      const wVal = userWLeadDays.trim() === "" ? null : Number(userWLeadDays);
+
+      const { error } = await client.PATCH("/api/auth/me", {
+        body: {
+          reminder_best_before_lead_days: bbVal,
+          reminder_warranty_lead_days: wVal,
+        },
+      });
+      if (error) {
+        setUserRemindersError(mapApiError(error));
+        return;
+      }
+      notifySuccess(t("yourReminders.saved"));
+      await loadAll();
+    } finally {
+      setUserRemindersBusy(false);
+    }
+  }
+
+  async function handleSaveEmail() {
+    setEmailBusy(true);
+    setEmailError(null);
+    try {
+      // Build the password field: clear wins > new value > omit
+      let password: string | null | undefined = undefined;
+      if (emailClearPassword) {
+        password = null;
+      } else if (emailNewPassword) {
+        password = emailNewPassword;
+      }
+
+      const emailUpdate: Record<string, unknown> = {
+        enabled: emailEnabled,
+        host: emailHost || null,
+        port: emailPort !== "" ? Number(emailPort) : null,
+        username: emailUsername || null,
+        use_tls: emailUseTls,
+        from_address: emailFromAddress || null,
+      };
+      if (password !== undefined) {
+        emailUpdate["password"] = password;
+      }
+
+      const { error } = await client.PATCH("/api/settings", {
+        body: {
+          channels: {
+            email: emailUpdate as components["schemas"]["EmailChannelUpdate"],
+          },
+        },
+      });
+      if (error) {
+        setEmailError(mapApiError(error));
+        return;
+      }
+      notifySuccess(t("email.saved"));
+      await loadAll();
+    } finally {
+      setEmailBusy(false);
+    }
+  }
+
+  async function handleSaveHttp() {
+    setHttpBusy(true);
+    setHttpError(null);
+    try {
+      // Build auth_header: clear wins > new value > omit
+      let authHeader: string | null | undefined = undefined;
+      if (httpClearAuthHeader) {
+        authHeader = null;
+      } else if (httpNewAuthHeader) {
+        authHeader = httpNewAuthHeader;
+      }
+
+      // Build integration_token: pending generated token wins, else omit
+      let integrationToken: string | null | undefined = undefined;
+      if (httpNewToken !== null) {
+        integrationToken = httpNewToken;
+      }
+
+      const httpUpdate: Record<string, unknown> = {
+        enabled: httpEnabled,
+        webhook_url: httpWebhookUrl || null,
+      };
+      if (authHeader !== undefined) {
+        httpUpdate["auth_header"] = authHeader;
+      }
+      if (integrationToken !== undefined) {
+        httpUpdate["integration_token"] = integrationToken;
+      }
+
+      const { error } = await client.PATCH("/api/settings", {
+        body: {
+          channels: {
+            http: httpUpdate as components["schemas"]["HttpChannelUpdate"],
+          },
+        },
+      });
+      if (error) {
+        setHttpError(mapApiError(error));
+        return;
+      }
+      notifySuccess(t("http.saved"));
+      await loadAll();
+    } finally {
+      setHttpBusy(false);
+    }
+  }
+
+  async function handleSaveMqtt() {
+    setMqttBusy(true);
+    setMqttError(null);
+    try {
+      // Build password: clear wins > new value > omit
+      let password: string | null | undefined = undefined;
+      if (mqttClearPassword) {
+        password = null;
+      } else if (mqttNewPassword) {
+        password = mqttNewPassword;
+      }
+
+      const mqttUpdate: Record<string, unknown> = {
+        enabled: mqttEnabled,
+        host: mqttHost || null,
+        port: mqttPort !== "" ? Number(mqttPort) : null,
+        username: mqttUsername || null,
+        use_tls: mqttUseTls,
+        topic_prefix: mqttTopicPrefix || null,
+        discovery_enabled: mqttDiscoveryEnabled,
+        commands_enabled: mqttCommandsEnabled,
+      };
+      if (password !== undefined) {
+        mqttUpdate["password"] = password;
+      }
+
+      const { error } = await client.PATCH("/api/settings", {
+        body: {
+          channels: {
+            mqtt: mqttUpdate as components["schemas"]["MqttChannelUpdate"],
+          },
+        },
+      });
+      if (error) {
+        setMqttError(mapApiError(error));
+        return;
+      }
+      notifySuccess(t("mqtt.saved"));
+      await loadAll();
+    } finally {
+      setMqttBusy(false);
+    }
+  }
+
+  async function handleRunScan() {
+    setScanBusy(true);
+    setScanResult(null);
+    setScanError(null);
+    try {
+      const { data, error } = await client.POST("/api/reminders/run");
+      if (error || !data) {
+        setScanError(t("scan.error"));
+        return;
+      }
+      setScanResult(data);
+    } finally {
+      setScanBusy(false);
+    }
+  }
+
+  function handleGenerateToken() {
+    const token = generateToken();
+    setHttpNewToken(token);
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  if (loading) return <LoadingState />;
+  if (loadError) return <ErrorState message={loadError} />;
+  if (!settings || !me) return <ErrorState message={t("loadError")} />;
+
+  const stateEndpointUrl = `${window.location.origin}/api/integrations/state`;
+
+  return (
+    <PageShell title={t("page.title")} subtitle={t("page.subtitle")}>
+      <Stack gap="xl">
+
+        {/* ── Reminders (global defaults) ──────────────────────────────── */}
+        <Paper withBorder p="md">
+          <Stack gap="sm">
+            <Title order={4}>{t("section.reminders")}</Title>
+            <Divider />
+
+            {remindersError && (
+              <Alert icon={<AlertCircle size={16} />} color="red" variant="light" data-testid="reminders-error">
+                {remindersError}
+              </Alert>
+            )}
+
+            <NumberInput
+              label={t("reminders.bestBeforeLeadDaysLabel")}
+              description={t("reminders.bestBeforeLeadDaysDescription")}
+              value={bbLeadDays === "" ? "" : Number(bbLeadDays)}
+              onChange={(v) => setBbLeadDays(v === "" ? "" : String(Math.round(Number(v))))}
+              min={0}
+              allowDecimal={false}
+              suffix=" days"
+              data-testid="reminders-bb-lead-input"
+            />
+            <NumberInput
+              label={t("reminders.warrantyLeadDaysLabel")}
+              description={t("reminders.warrantyLeadDaysDescription")}
+              value={wLeadDays === "" ? "" : Number(wLeadDays)}
+              onChange={(v) => setWLeadDays(v === "" ? "" : String(Math.round(Number(v))))}
+              min={0}
+              allowDecimal={false}
+              suffix=" days"
+              data-testid="reminders-warranty-lead-input"
+            />
+            <TextInput
+              label={t("reminders.lowStockRepeatDaysLabel")}
+              description={t("reminders.lowStockRepeatDaysDescription")}
+              placeholder={t("reminders.lowStockRepeatDaysPlaceholder")}
+              value={repeatDaysRaw}
+              onChange={(e) => setRepeatDaysRaw(e.currentTarget.value)}
+              data-testid="reminders-repeat-days-input"
+            />
+            <TextInput
+              label={t("reminders.scanTimeLabel")}
+              description={t("reminders.scanTimeDescription")}
+              placeholder={t("reminders.scanTimePlaceholder")}
+              value={scanTime}
+              onChange={(e) => setScanTime(e.currentTarget.value)}
+              data-testid="reminders-scan-time-input"
+            />
+
+            <Group justify="flex-end">
+              <Button
+                onClick={() => void handleSaveReminders()}
+                loading={remindersBusy}
+                data-testid="save-reminders-btn"
+              >
+                {t("reminders.saveReminders")}
+              </Button>
+            </Group>
+          </Stack>
+        </Paper>
+
+        {/* ── Your reminders (per-user) ─────────────────────────────────── */}
+        <Paper withBorder p="md">
+          <Stack gap="sm">
+            <Title order={4}>{t("section.yourReminders")}</Title>
+            <Divider />
+            <Text size="sm" c="dimmed">
+              {t("yourReminders.description")}
+            </Text>
+
+            {userRemindersError && (
+              <Alert icon={<AlertCircle size={16} />} color="red" variant="light" data-testid="user-reminders-error">
+                {userRemindersError}
+              </Alert>
+            )}
+
+            <NumberInput
+              label={t("yourReminders.bestBeforeLeadDaysLabel")}
+              description={t("yourReminders.bestBeforeLeadDaysDescription", {
+                globalValue: settings.reminders.best_before_lead_days,
+              })}
+              value={userBbLeadDays === "" ? "" : Number(userBbLeadDays)}
+              onChange={(v) => setUserBbLeadDays(v === "" ? "" : String(Math.round(Number(v))))}
+              min={0}
+              allowDecimal={false}
+              suffix=" days"
+              placeholder={String(settings.reminders.best_before_lead_days)}
+              data-testid="user-bb-lead-input"
+            />
+            <NumberInput
+              label={t("yourReminders.warrantyLeadDaysLabel")}
+              description={t("yourReminders.warrantyLeadDaysDescription", {
+                globalValue: settings.reminders.warranty_lead_days,
+              })}
+              value={userWLeadDays === "" ? "" : Number(userWLeadDays)}
+              onChange={(v) => setUserWLeadDays(v === "" ? "" : String(Math.round(Number(v))))}
+              min={0}
+              allowDecimal={false}
+              suffix=" days"
+              placeholder={String(settings.reminders.warranty_lead_days)}
+              data-testid="user-warranty-lead-input"
+            />
+
+            <Group justify="flex-end">
+              <Button
+                onClick={() => void handleSaveUserReminders()}
+                loading={userRemindersBusy}
+                data-testid="save-user-reminders-btn"
+              >
+                {t("yourReminders.save")}
+              </Button>
+            </Group>
+          </Stack>
+        </Paper>
+
+        {/* ── Email / SMTP ──────────────────────────────────────────────── */}
+        <Paper withBorder p="md">
+          <Stack gap="sm">
+            <Title order={4}>{t("section.email")}</Title>
+            <Divider />
+
+            {emailError && (
+              <Alert icon={<AlertCircle size={16} />} color="red" variant="light" data-testid="email-error">
+                {emailError}
+              </Alert>
+            )}
+
+            <Switch
+              label={t("email.enabledLabel")}
+              checked={emailEnabled}
+              onChange={(e) => setEmailEnabled(e.currentTarget.checked)}
+              data-testid="email-enabled-switch"
+            />
+            <TextInput
+              label={t("email.hostLabel")}
+              value={emailHost}
+              onChange={(e) => setEmailHost(e.currentTarget.value)}
+              data-testid="email-host-input"
+            />
+            <NumberInput
+              label={t("email.portLabel")}
+              value={emailPort === "" ? "" : Number(emailPort)}
+              onChange={(v) => setEmailPort(v === "" ? "" : String(Number(v)))}
+              min={1}
+              max={65535}
+              allowDecimal={false}
+              data-testid="email-port-input"
+            />
+            <TextInput
+              label={t("email.usernameLabel")}
+              value={emailUsername}
+              onChange={(e) => setEmailUsername(e.currentTarget.value)}
+              data-testid="email-username-input"
+            />
+            <SecretField
+              label={t("email.passwordLabel")}
+              isSet={emailPasswordIsSet}
+              newValue={emailNewPassword}
+              placeholder={t("email.passwordNewPlaceholder")}
+              clearLabel={t("email.clearPassword")}
+              onNewValueChange={(v) => {
+                setEmailNewPassword(v);
+                if (emailClearPassword) setEmailClearPassword(false);
+              }}
+              onClear={() => {
+                setEmailClearPassword(true);
+                setEmailNewPassword("");
+              }}
+              testIdPrefix="email-password"
+            />
+            <Checkbox
+              label={t("email.useTlsLabel")}
+              checked={emailUseTls}
+              onChange={(e) => setEmailUseTls(e.currentTarget.checked)}
+              data-testid="email-use-tls-checkbox"
+            />
+            <TextInput
+              label={t("email.fromAddressLabel")}
+              value={emailFromAddress}
+              onChange={(e) => setEmailFromAddress(e.currentTarget.value)}
+              data-testid="email-from-address-input"
+            />
+            <Text size="xs" c="dimmed">
+              {t("email.recipientsNote")}
+            </Text>
+
+            <Group justify="flex-end">
+              <Button
+                onClick={() => void handleSaveEmail()}
+                loading={emailBusy}
+                data-testid="save-email-btn"
+              >
+                {t("email.save")}
+              </Button>
+            </Group>
+          </Stack>
+        </Paper>
+
+        {/* ── HTTP channel ──────────────────────────────────────────────── */}
+        <Paper withBorder p="md">
+          <Stack gap="sm">
+            <Title order={4}>{t("section.http")}</Title>
+            <Divider />
+
+            {httpError && (
+              <Alert icon={<AlertCircle size={16} />} color="red" variant="light" data-testid="http-error">
+                {httpError}
+              </Alert>
+            )}
+
+            <Switch
+              label={t("http.enabledLabel")}
+              checked={httpEnabled}
+              onChange={(e) => setHttpEnabled(e.currentTarget.checked)}
+              data-testid="http-enabled-switch"
+            />
+            <TextInput
+              label={t("http.webhookUrlLabel")}
+              description={t("http.webhookUrlDescription")}
+              value={httpWebhookUrl}
+              onChange={(e) => setHttpWebhookUrl(e.currentTarget.value)}
+              data-testid="http-webhook-url-input"
+            />
+
+            {/* Auth header (write-only) */}
+            <SecretField
+              label={t("http.authHeaderLabel")}
+              isSet={httpAuthHeaderIsSet}
+              newValue={httpNewAuthHeader}
+              placeholder={t("http.authHeaderNewPlaceholder")}
+              clearLabel={t("http.clearAuthHeader")}
+              onNewValueChange={(v) => {
+                setHttpNewAuthHeader(v);
+                if (httpClearAuthHeader) setHttpClearAuthHeader(false);
+              }}
+              onClear={() => {
+                setHttpClearAuthHeader(true);
+                setHttpNewAuthHeader("");
+              }}
+              testIdPrefix="http-auth-header"
+            />
+
+            {/* Integration token */}
+            <Stack gap={4}>
+              <Group gap={8} align="center">
+                <Text size="sm" fw={500}>
+                  {t("http.integrationTokenLabel")}
+                </Text>
+                <Badge
+                  size="xs"
+                  color={httpTokenIsSet || httpNewToken !== null ? "teal" : "gray"}
+                  variant="light"
+                  data-testid="integration-token-status"
+                >
+                  {httpTokenIsSet || httpNewToken !== null ? t("secret.set") : t("secret.notSet")}
+                </Badge>
+              </Group>
+              <Text size="xs" c="dimmed">
+                {t("http.integrationTokenDescription")}
+              </Text>
+
+              {httpNewToken !== null && (
+                <Alert color="blue" variant="light" data-testid="new-token-alert">
+                  <Stack gap={4}>
+                    <Text size="xs" fw={500}>
+                      {t("http.integrationTokenGenerated")}
+                    </Text>
+                    <Group gap={8} align="center">
+                      <Code data-testid="new-token-value" style={{ wordBreak: "break-all", flex: 1 }}>
+                        {httpNewToken}
+                      </Code>
+                      <CopyButton value={httpNewToken}>
+                        {({ copied, copy }) => (
+                          <Tooltip label={copied ? t("http.integrationTokenCopied") : t("http.copyToken")}>
+                            <Button
+                              size="xs"
+                              variant={copied ? "filled" : "outline"}
+                              color={copied ? "teal" : "blue"}
+                              onClick={copy}
+                              data-testid="copy-token-btn"
+                            >
+                              {t("http.copyToken")}
+                            </Button>
+                          </Tooltip>
+                        )}
+                      </CopyButton>
+                    </Group>
+                  </Stack>
+                </Alert>
+              )}
+
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={handleGenerateToken}
+                data-testid="generate-token-btn"
+              >
+                {t("http.regenerateToken")}
+              </Button>
+            </Stack>
+
+            {/* State endpoint URL hint */}
+            <Stack gap={4}>
+              <Text size="sm" fw={500}>
+                {t("http.stateEndpointLabel")}
+              </Text>
+              <Text size="xs" c="dimmed">
+                {t("http.stateEndpointDescription")}
+              </Text>
+              <Code data-testid="state-endpoint-url">
+                {stateEndpointUrl}?token=…
+              </Code>
+            </Stack>
+
+            <Group justify="flex-end">
+              <Button
+                onClick={() => void handleSaveHttp()}
+                loading={httpBusy}
+                data-testid="save-http-btn"
+              >
+                {t("http.save")}
+              </Button>
+            </Group>
+          </Stack>
+        </Paper>
+
+        {/* ── MQTT channel ──────────────────────────────────────────────── */}
+        <Paper withBorder p="md">
+          <Stack gap="sm">
+            <Title order={4}>{t("section.mqtt")}</Title>
+            <Divider />
+
+            {mqttError && (
+              <Alert icon={<AlertCircle size={16} />} color="red" variant="light" data-testid="mqtt-error">
+                {mqttError}
+              </Alert>
+            )}
+
+            <Switch
+              label={t("mqtt.enabledLabel")}
+              checked={mqttEnabled}
+              onChange={(e) => setMqttEnabled(e.currentTarget.checked)}
+              data-testid="mqtt-enabled-switch"
+            />
+            <TextInput
+              label={t("mqtt.hostLabel")}
+              value={mqttHost}
+              onChange={(e) => setMqttHost(e.currentTarget.value)}
+              data-testid="mqtt-host-input"
+            />
+            <NumberInput
+              label={t("mqtt.portLabel")}
+              value={mqttPort === "" ? "" : Number(mqttPort)}
+              onChange={(v) => setMqttPort(v === "" ? "" : String(Number(v)))}
+              min={1}
+              max={65535}
+              allowDecimal={false}
+              data-testid="mqtt-port-input"
+            />
+            <TextInput
+              label={t("mqtt.usernameLabel")}
+              value={mqttUsername}
+              onChange={(e) => setMqttUsername(e.currentTarget.value)}
+              data-testid="mqtt-username-input"
+            />
+            <SecretField
+              label={t("mqtt.passwordLabel")}
+              isSet={mqttPasswordIsSet}
+              newValue={mqttNewPassword}
+              placeholder={t("mqtt.passwordNewPlaceholder")}
+              clearLabel={t("mqtt.clearPassword")}
+              onNewValueChange={(v) => {
+                setMqttNewPassword(v);
+                if (mqttClearPassword) setMqttClearPassword(false);
+              }}
+              onClear={() => {
+                setMqttClearPassword(true);
+                setMqttNewPassword("");
+              }}
+              testIdPrefix="mqtt-password"
+            />
+            <TextInput
+              label={t("mqtt.topicPrefixLabel")}
+              value={mqttTopicPrefix}
+              onChange={(e) => setMqttTopicPrefix(e.currentTarget.value)}
+              data-testid="mqtt-topic-prefix-input"
+            />
+            <Checkbox
+              label={t("mqtt.useTlsLabel")}
+              checked={mqttUseTls}
+              onChange={(e) => setMqttUseTls(e.currentTarget.checked)}
+              data-testid="mqtt-use-tls-checkbox"
+            />
+            <Checkbox
+              label={t("mqtt.discoveryEnabledLabel")}
+              checked={mqttDiscoveryEnabled}
+              onChange={(e) => setMqttDiscoveryEnabled(e.currentTarget.checked)}
+              data-testid="mqtt-discovery-checkbox"
+            />
+            <Stack gap={4}>
+              <Checkbox
+                label={t("mqtt.commandsEnabledLabel")}
+                checked={mqttCommandsEnabled}
+                onChange={(e) => setMqttCommandsEnabled(e.currentTarget.checked)}
+                data-testid="mqtt-commands-checkbox"
+              />
+              <Text size="xs" c="dimmed">
+                {t("mqtt.commandsEnabledDescription")}
+              </Text>
+            </Stack>
+
+            <Group justify="flex-end">
+              <Button
+                onClick={() => void handleSaveMqtt()}
+                loading={mqttBusy}
+                data-testid="save-mqtt-btn"
+              >
+                {t("mqtt.save")}
+              </Button>
+            </Group>
+          </Stack>
+        </Paper>
+
+        {/* ── Run scan now ──────────────────────────────────────────────── */}
+        <Paper withBorder p="md">
+          <Stack gap="sm">
+            <Title order={4}>{t("section.runScan")}</Title>
+            <Divider />
+
+            {scanError && (
+              <Alert icon={<AlertCircle size={16} />} color="red" variant="light" data-testid="scan-error">
+                {scanError}
+              </Alert>
+            )}
+
+            {scanResult && (
+              <Alert color="teal" variant="light" data-testid="scan-result">
+                {t("scan.result", {
+                  best_before: scanResult.best_before,
+                  warranty: scanResult.warranty,
+                  low_stock: scanResult.low_stock,
+                })}
+              </Alert>
+            )}
+
+            <Group>
+              <Button
+                onClick={() => void handleRunScan()}
+                loading={scanBusy}
+                data-testid="run-scan-btn"
+              >
+                {t("scan.runNow")}
+              </Button>
+            </Group>
+          </Stack>
+        </Paper>
+
+      </Stack>
+    </PageShell>
+  );
+}

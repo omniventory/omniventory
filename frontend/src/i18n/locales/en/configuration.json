@@ -1,0 +1,105 @@
+{
+  "page": {
+    "title": "Configuration",
+    "subtitle": "Reminders and notification channels"
+  },
+  "section": {
+    "reminders": "Reminders (global defaults)",
+    "yourReminders": "Your reminders",
+    "channels": "Channels",
+    "email": "Email / SMTP",
+    "http": "HTTP",
+    "mqtt": "MQTT",
+    "runScan": "Run scan"
+  },
+  "reminders": {
+    "bestBeforeLeadDaysLabel": "Best-before lead (days)",
+    "bestBeforeLeadDaysDescription": "How many days before a best-before date to trigger a reminder.",
+    "warrantyLeadDaysLabel": "Warranty lead (days)",
+    "warrantyLeadDaysDescription": "How many days before a warranty expiry to trigger a reminder.",
+    "lowStockRepeatDaysLabel": "Low-stock repeat schedule (days)",
+    "lowStockRepeatDaysDescription": "Comma-separated list of day offsets after the episode opens (each ≥ 1, e.g. 1,3,7).",
+    "lowStockRepeatDaysPlaceholder": "e.g. 1,3,7",
+    "scanTimeLabel": "Daily scan time (HH:MM)",
+    "scanTimeDescription": "Time of day the reminder scan runs (household local time, 24-hour format).",
+    "scanTimePlaceholder": "e.g. 08:00",
+    "saveReminders": "Save reminder settings",
+    "savedReminders": "Reminder settings saved."
+  },
+  "yourReminders": {
+    "description": "Override the global lead times for your account. Leave blank to inherit the global default.",
+    "bestBeforeLeadDaysLabel": "Your best-before lead (days)",
+    "bestBeforeLeadDaysDescription": "Blank = inherit global ({{globalValue}} days).",
+    "warrantyLeadDaysLabel": "Your warranty lead (days)",
+    "warrantyLeadDaysDescription": "Blank = inherit global ({{globalValue}} days).",
+    "save": "Save your reminders",
+    "saved": "Your reminder preferences saved."
+  },
+  "email": {
+    "enabledLabel": "Enable email (SMTP)",
+    "hostLabel": "SMTP host",
+    "portLabel": "SMTP port",
+    "usernameLabel": "Username",
+    "passwordLabel": "Password",
+    "passwordSet": "Password is set",
+    "passwordNotSet": "Password not set",
+    "passwordNewPlaceholder": "Enter new password to change…",
+    "clearPassword": "Clear password",
+    "useTlsLabel": "Use TLS",
+    "fromAddressLabel": "From address",
+    "recipientsNote": "Email digests are sent to all active users who have an email address.",
+    "save": "Save email settings",
+    "saved": "Email settings saved."
+  },
+  "http": {
+    "enabledLabel": "Enable HTTP channel",
+    "webhookUrlLabel": "Outbound webhook URL",
+    "webhookUrlDescription": "Each new notification is POSTed to this URL.",
+    "authHeaderLabel": "Authorization header",
+    "authHeaderSet": "Auth header is set",
+    "authHeaderNotSet": "Auth header not set",
+    "authHeaderNewPlaceholder": "Enter new value to change…",
+    "clearAuthHeader": "Clear auth header",
+    "integrationTokenLabel": "Integration token",
+    "integrationTokenSet": "Token is set",
+    "integrationTokenNotSet": "Token not set",
+    "integrationTokenDescription": "Used to authenticate GET /api/integrations/state (for Home Assistant RESTful sensor).",
+    "integrationTokenGenerated": "New token generated — copy it now, it will not be shown again.",
+    "integrationTokenCopied": "Token copied to clipboard.",
+    "regenerateToken": "Generate new token",
+    "copyToken": "Copy",
+    "stateEndpointLabel": "State endpoint URL (for HA RESTful sensor)",
+    "stateEndpointDescription": "GET this URL with ?token=<your-token> to retrieve live inventory counts.",
+    "save": "Save HTTP settings",
+    "saved": "HTTP settings saved."
+  },
+  "mqtt": {
+    "enabledLabel": "Enable MQTT",
+    "hostLabel": "Broker host",
+    "portLabel": "Broker port",
+    "usernameLabel": "Username",
+    "passwordLabel": "Password",
+    "passwordSet": "Password is set",
+    "passwordNotSet": "Password not set",
+    "passwordNewPlaceholder": "Enter new password to change…",
+    "clearPassword": "Clear password",
+    "topicPrefixLabel": "Topic prefix",
+    "useTlsLabel": "Use TLS",
+    "discoveryEnabledLabel": "Home Assistant auto-discovery",
+    "commandsEnabledLabel": "Accept inbound commands",
+    "commandsEnabledDescription": "When enabled, the bridge subscribes to {prefix}/command/# and executes stock operations (consume/intake/adjust).",
+    "save": "Save MQTT settings",
+    "saved": "MQTT settings saved."
+  },
+  "scan": {
+    "runNow": "Run scan now",
+    "running": "Running…",
+    "result": "Scan complete — best-before: {{best_before}}, warranty: {{warranty}}, low-stock: {{low_stock}} new notifications.",
+    "error": "Scan failed. Please try again."
+  },
+  "loadError": "Failed to load configuration.",
+  "secret": {
+    "set": "Set",
+    "notSet": "Not set"
+  }
+}

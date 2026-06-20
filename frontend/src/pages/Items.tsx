@@ -77,6 +77,7 @@ interface DefinitionFormState {
   stock_tracking_mode: string; // "exact" | "level" | "none"
   min_stock: string; // numeric string or "" when not set
   default_best_before_days: string; // integer string or "" when not set
+  reminder_lead_days: string; // integer string or "" when not set (M4 per-item override)
 }
 
 const emptyDefForm = (): DefinitionFormState => ({
@@ -89,6 +90,7 @@ const emptyDefForm = (): DefinitionFormState => ({
   stock_tracking_mode: "exact",
   min_stock: "",
   default_best_before_days: "",
+  reminder_lead_days: "",
 });
 
 const emptyInstanceForm = (definitionId?: number): InstanceFormState => ({
@@ -262,6 +264,17 @@ function DefinitionFormModal({
           suffix=" days"
           data-testid="def-default-best-before-days-input"
         />
+        <NumberInput
+          label={t("defForm.reminderLeadDaysLabel")}
+          description={t("defForm.reminderLeadDaysDescription")}
+          placeholder={t("defForm.reminderLeadDaysPlaceholder")}
+          value={form.reminder_lead_days === "" ? "" : Number(form.reminder_lead_days)}
+          onChange={(v) => setForm((f) => ({ ...f, reminder_lead_days: v === "" ? "" : String(Math.round(Number(v))) }))}
+          min={0}
+          allowDecimal={false}
+          suffix=" days"
+          data-testid="def-reminder-lead-days-input"
+        />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose} disabled={busy}>
             {t("common:actions.cancel", "Cancel")}
@@ -367,6 +380,8 @@ export function Items() {
       min_stock: def.min_stock != null ? String(def.min_stock) : "",
       default_best_before_days:
         def.default_best_before_days != null ? String(def.default_best_before_days) : "",
+      reminder_lead_days:
+        def.reminder_lead_days != null ? String(def.reminder_lead_days) : "",
     });
     setDefError(null);
     setDefModal({ kind: "edit", def });
@@ -405,6 +420,10 @@ export function Items() {
           default_best_before_days:
             defForm.default_best_before_days !== ""
               ? Number(defForm.default_best_before_days)
+              : null,
+          reminder_lead_days:
+            defForm.reminder_lead_days !== ""
+              ? Number(defForm.reminder_lead_days)
               : null,
         },
       });
@@ -447,6 +466,10 @@ export function Items() {
             default_best_before_days:
               defForm.default_best_before_days !== ""
                 ? Number(defForm.default_best_before_days)
+                : null,
+            reminder_lead_days:
+              defForm.reminder_lead_days !== ""
+                ? Number(defForm.reminder_lead_days)
                 : null,
           },
         },
@@ -810,6 +833,8 @@ export function ItemDetail() {
       min_stock: def.min_stock != null ? String(def.min_stock) : "",
       default_best_before_days:
         def.default_best_before_days != null ? String(def.default_best_before_days) : "",
+      reminder_lead_days:
+        def.reminder_lead_days != null ? String(def.reminder_lead_days) : "",
     });
     setDefError(null);
     setDefModal({ kind: "edit", def });
@@ -847,6 +872,10 @@ export function ItemDetail() {
             default_best_before_days:
               defForm.default_best_before_days !== ""
                 ? Number(defForm.default_best_before_days)
+                : null,
+            reminder_lead_days:
+              defForm.reminder_lead_days !== ""
+                ? Number(defForm.reminder_lead_days)
                 : null,
           },
         },
@@ -1294,6 +1323,16 @@ export function ItemDetail() {
                 </Text>
                 <Text size="sm" data-testid="def-default-best-before-days-value">
                   {t("expiry:shelfLifeDisplay", { days: def.default_best_before_days })}
+                </Text>
+              </Stack>
+            )}
+            {def.reminder_lead_days != null && (
+              <Stack gap={2}>
+                <Text size="xs" c="dimmed" fw={500} tt="uppercase">
+                  {t("detail.reminderLeadDaysLabel")}
+                </Text>
+                <Text size="sm" data-testid="def-reminder-lead-days-value">
+                  {t("detail.reminderLeadDaysValue", { days: def.reminder_lead_days })}
                 </Text>
               </Stack>
             )}

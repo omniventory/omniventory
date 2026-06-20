@@ -51,6 +51,7 @@ import {
   Package,
   Clock,
   Bell,
+  Settings,
 } from "react-feather";
 import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
@@ -165,6 +166,12 @@ function NavContent({ onClose }: { onClose?: () => void }) {
         to="/notifications"
         label={t("notifications")}
         icon={<Bell size={16} />}
+        onClick={onClose}
+      />
+      <NavItem
+        to="/configuration"
+        label={t("configuration")}
+        icon={<Settings size={16} />}
         onClick={onClose}
       />
     </Stack>
