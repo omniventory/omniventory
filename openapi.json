@@ -2338,6 +2338,98 @@
         "title": "MqttChannelUpdate",
         "type": "object"
       },
+      "NotificationResponse": {
+        "description": "Public shape of a single in-app notification row.\n\nFields\n------\nid              Surrogate PK.\nsource          ``best_before`` / ``warranty`` / ``low_stock``.\nsubject_type    ``instance`` / ``definition``.\nsubject_id      PK of the referenced lot or definition.\nmessage_code    i18n code \u2014 frontend localises with ``t(message_code, params)``.\nparams          Deserialized render params (dict) or ``None``.\n                The backend stores params as a JSON text blob; this schema\n                surfaces the parsed dict so the frontend does not need to\n                JSON-parse again.\noffset_days     Low-stock only: which repeat offset this row represents.\n                ``None`` for date sources.\ncreated_at      Row-creation timestamp (UTC).\nread_at         When the notification was first marked read; ``None`` if\n                still unread.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "message_code": {
+            "title": "Message Code",
+            "type": "string"
+          },
+          "offset_days": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset Days"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "subject_id": {
+            "title": "Subject Id",
+            "type": "integer"
+          },
+          "subject_type": {
+            "title": "Subject Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "subject_type",
+          "subject_id",
+          "message_code",
+          "params",
+          "offset_days",
+          "created_at",
+          "read_at"
+        ],
+        "title": "NotificationResponse",
+        "type": "object"
+      },
+      "ReadAllResponse": {
+        "description": "Result of ``POST /notifications/read-all``.\n\n``marked`` is the number of rows that were actually updated (rows that were\nunread before the call).  Zero means there was nothing to mark.",
+        "properties": {
+          "marked": {
+            "title": "Marked",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "marked"
+        ],
+        "title": "ReadAllResponse",
+        "type": "object"
+      },
       "ReminderRunSummary": {
         "description": "Summary of a single reminder scan run.\n\nFields\n------\nbest_before\n    Number of new best-before notifications created in this scan.\nwarranty\n    Number of new warranty notifications created in this scan.\nlow_stock\n    Number of new low-stock notifications created in this scan.\n    Always 0 in Step 3; Step 4 fills it in.",
         "properties": {
@@ -2545,6 +2637,20 @@
           "setup_required"
         ],
         "title": "SetupStatusResponse",
+        "type": "object"
+      },
+      "UnreadCountResponse": {
+        "description": "Badge count for the notification bell.\n\n``count`` is the number of notifications where ``read_at IS NULL`` for the\ncurrent user.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count"
+        ],
+        "title": "UnreadCountResponse",
         "type": "object"
       },
       "UserPreferencesUpdate": {
@@ -5590,6 +5696,237 @@
         "summary": "Reverse",
         "tags": [
           "movements"
+        ]
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "description": "Return the current user's notification inbox, newest-first.\n\n``unread_only=true`` restricts the result to rows where ``read_at IS NULL``.\n``limit`` caps the number of rows (default 50, max 200).",
+        "operationId": "list_notifications_api_notifications_get",
+        "parameters": [
+          {
+            "description": "When true, return only unread notifications.",
+            "in": "query",
+            "name": "unread_only",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "When true, return only unread notifications.",
+              "title": "Unread Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Maximum number of notifications to return (1\u2013200, default 50).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "Maximum number of notifications to return (1\u2013200, default 50).",
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NotificationResponse"
+                  },
+                  "title": "Response List Notifications Api Notifications Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Notifications",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/read-all": {
+      "post": {
+        "description": "Mark all unread notifications for the current user as read.\n\nReturns ``{ marked: N }`` where ``N`` is the number of rows that were\nactually updated.  Zero means there were no unread notifications.",
+        "operationId": "mark_all_notifications_read_api_notifications_read_all_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadAllResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Mark All Notifications Read",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/unread-count": {
+      "get": {
+        "description": "Return the number of unread notifications for the current user.\n\nUsed to drive the bell badge in the frontend.  Returns ``{ count: 0 }``\nwhen there are no unread notifications.",
+        "operationId": "get_unread_count_api_notifications_unread_count_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnreadCountResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        },
+        "summary": "Get Unread Count",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/{notification_id}/read": {
+      "post": {
+        "description": "Mark a single notification as read and return the updated row.\n\nThe notification must belong to the current user; if the id is missing or\nowned by another user the endpoint returns 404 ``notification.not_found``.\n\nIdempotent: calling this endpoint on an already-read notification is a\nno-op that returns the row unchanged (the original ``read_at`` is preserved).",
+        "operationId": "mark_notification_read_api_notifications__notification_id__read_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notification_id",
+            "required": true,
+            "schema": {
+              "title": "Notification Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mark Notification Read",
+        "tags": [
+          "notifications"
         ]
       }
     },

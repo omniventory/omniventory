@@ -722,6 +722,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Notifications
+         * @description Return the current user's notification inbox, newest-first.
+         *
+         *     ``unread_only=true`` restricts the result to rows where ``read_at IS NULL``.
+         *     ``limit`` caps the number of rows (default 50, max 200).
+         */
+        get: operations["list_notifications_api_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/read-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark All Notifications Read
+         * @description Mark all unread notifications for the current user as read.
+         *
+         *     Returns ``{ marked: N }`` where ``N`` is the number of rows that were
+         *     actually updated.  Zero means there were no unread notifications.
+         */
+        post: operations["mark_all_notifications_read_api_notifications_read_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/unread-count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Unread Count
+         * @description Return the number of unread notifications for the current user.
+         *
+         *     Used to drive the bell badge in the frontend.  Returns ``{ count: 0 }``
+         *     when there are no unread notifications.
+         */
+        get: operations["get_unread_count_api_notifications_unread_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/{notification_id}/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Notification Read
+         * @description Mark a single notification as read and return the updated row.
+         *
+         *     The notification must belong to the current user; if the id is missing or
+         *     owned by another user the endpoint returns 404 ``notification.not_found``.
+         *
+         *     Idempotent: calling this endpoint on an already-read notification is a
+         *     no-op that returns the row unchanged (the original ``read_at`` is preserved).
+         */
+        post: operations["mark_notification_read_api_notifications__notification_id__read_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reminders/run": {
         parameters: {
             query?: never;
@@ -1544,6 +1639,63 @@ export interface components {
             username?: string | null;
         };
         /**
+         * NotificationResponse
+         * @description Public shape of a single in-app notification row.
+         *
+         *     Fields
+         *     ------
+         *     id              Surrogate PK.
+         *     source          ``best_before`` / ``warranty`` / ``low_stock``.
+         *     subject_type    ``instance`` / ``definition``.
+         *     subject_id      PK of the referenced lot or definition.
+         *     message_code    i18n code — frontend localises with ``t(message_code, params)``.
+         *     params          Deserialized render params (dict) or ``None``.
+         *                     The backend stores params as a JSON text blob; this schema
+         *                     surfaces the parsed dict so the frontend does not need to
+         *                     JSON-parse again.
+         *     offset_days     Low-stock only: which repeat offset this row represents.
+         *                     ``None`` for date sources.
+         *     created_at      Row-creation timestamp (UTC).
+         *     read_at         When the notification was first marked read; ``None`` if
+         *                     still unread.
+         */
+        NotificationResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Message Code */
+            message_code: string;
+            /** Offset Days */
+            offset_days: number | null;
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            } | null;
+            /** Read At */
+            read_at: string | null;
+            /** Source */
+            source: string;
+            /** Subject Id */
+            subject_id: number;
+            /** Subject Type */
+            subject_type: string;
+        };
+        /**
+         * ReadAllResponse
+         * @description Result of ``POST /notifications/read-all``.
+         *
+         *     ``marked`` is the number of rows that were actually updated (rows that were
+         *     unread before the call).  Zero means there was nothing to mark.
+         */
+        ReadAllResponse: {
+            /** Marked */
+            marked: number;
+        };
+        /**
          * ReminderRunSummary
          * @description Summary of a single reminder scan run.
          *
@@ -1638,6 +1790,17 @@ export interface components {
         SetupStatusResponse: {
             /** Setup Required */
             setup_required: boolean;
+        };
+        /**
+         * UnreadCountResponse
+         * @description Badge count for the notification bell.
+         *
+         *     ``count`` is the number of notifications where ``read_at IS NULL`` for the
+         *     current user.
+         */
+        UnreadCountResponse: {
+            /** Count */
+            count: number;
         };
         /**
          * UserPreferencesUpdate
@@ -3958,6 +4121,183 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_notifications_api_notifications_get: {
+        parameters: {
+            query?: {
+                /** @description When true, return only unread notifications. */
+                unread_only?: boolean;
+                /** @description Maximum number of notifications to return (1–200, default 50). */
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_all_notifications_read_api_notifications_read_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadAllResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_unread_count_api_notifications_unread_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnreadCountResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    mark_notification_read_api_notifications__notification_id__read_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notification_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

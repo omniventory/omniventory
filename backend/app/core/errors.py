@@ -98,6 +98,9 @@ class ErrorCode:
     STOCK_CANNOT_REVERSE_REVERSAL = "stock.cannot_reverse_reversal"
     STOCK_REVERSE_WOULD_GO_NEGATIVE = "stock.reverse_would_go_negative"
 
+    # --- Notifications (M4 Step 6) ---
+    NOTIFICATION_NOT_FOUND = "notification.not_found"
+
     # --- Internal / catch-all ---
     INTERNAL_ERROR = "internal.error"
 
@@ -137,6 +140,7 @@ _DEFAULT_MESSAGES: dict[str, str] = {
     ErrorCode.STOCK_MOVEMENT_ALREADY_REVERSED: "This movement has already been reversed.",
     ErrorCode.STOCK_CANNOT_REVERSE_REVERSAL: "Cannot reverse a movement that is itself a reversal.",
     ErrorCode.STOCK_REVERSE_WOULD_GO_NEGATIVE: "Reversing this movement would drive the lot quantity below zero.",
+    ErrorCode.NOTIFICATION_NOT_FOUND: "Notification not found or does not belong to the current user.",
     ErrorCode.INTERNAL_ERROR: "An internal error occurred.",
 }
 

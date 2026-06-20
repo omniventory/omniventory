@@ -41,7 +41,7 @@ import logging
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -197,6 +197,124 @@ class NotificationRepository:
             Notification.resolved_at.is_(None),
         )
         return list(self._db.execute(stmt).scalars().all())
+
+    # ---------------------------------------------------------------------- #
+    # Read: inbox API (Step 6)                                                #
+    # ---------------------------------------------------------------------- #
+
+    def list_for_user(
+        self,
+        user_id: int,
+        *,
+        unread_only: bool = False,
+        limit: int = 50,
+    ) -> list[Notification]:
+        """Return notifications for a user, newest-first.
+
+        Parameters
+        ----------
+        user_id:
+            Only rows belonging to this user are returned.
+        unread_only:
+            When ``True``, filter to rows where ``read_at IS NULL``.
+        limit:
+            Maximum number of rows to return.  Callers should validate
+            the value before calling (route layer enforces 1 ≤ limit ≤ 200).
+
+        Ordering is ``created_at DESC, id DESC`` — the secondary ``id DESC``
+        break ties deterministically when multiple rows land in the same
+        second (e.g. a batch scan).
+        """
+        stmt = (
+            select(Notification)
+            .where(Notification.user_id == user_id)
+            .order_by(Notification.created_at.desc(), Notification.id.desc())
+            .limit(limit)
+        )
+        if unread_only:
+            stmt = stmt.where(Notification.read_at.is_(None))
+        return list(self._db.execute(stmt).scalars().all())
+
+    def unread_count(self, user_id: int) -> int:
+        """Return the number of unread notifications for a user.
+
+        Counts rows where ``read_at IS NULL`` for the given user.
+        """
+        stmt = (
+            select(func.count())
+            .select_from(Notification)
+            .where(
+                Notification.user_id == user_id,
+                Notification.read_at.is_(None),
+            )
+        )
+        return self._db.execute(stmt).scalar_one()
+
+    def mark_read(self, user_id: int, notification_id: int) -> Notification | None:
+        """Stamp ``read_at`` on a notification owned by the given user.
+
+        Only marks the row if it belongs to ``user_id``; returns ``None`` when
+        the row does not exist or belongs to a different user (the route layer
+        raises 404 in that case).
+
+        Idempotency: if the row is already read, the existing ``read_at`` is
+        preserved (not refreshed).  This avoids spurious updates and keeps
+        the timestamp semantically accurate ("when was it first read").
+
+        Flushes but does not commit.
+        """
+        stmt = select(Notification).where(
+            Notification.id == notification_id,
+            Notification.user_id == user_id,
+        )
+        notification = self._db.execute(stmt).scalar_one_or_none()
+        if notification is None:
+            return None
+        if notification.read_at is None:
+            notification.read_at = datetime.now(tz=UTC)
+            self._db.flush()
+        return notification
+
+    def mark_all_read(self, user_id: int) -> int:
+        """Mark all unread notifications for a user as read.
+
+        Returns the number of rows affected (rows that were actually unread
+        and had ``read_at`` stamped on them).
+
+        Strategy: count unread rows first, then bulk-UPDATE.  The pre-count is
+        a cheap index-only scan (``ix_notifications_user_read_at``); returning
+        the count lets the caller report "N marked" without an extra query after
+        the UPDATE.  The two operations are within the same transaction, so the
+        count cannot race with an external writer inside a single-user deployment.
+
+        Flushes but does not commit.
+        """
+        count_stmt = (
+            select(func.count())
+            .select_from(Notification)
+            .where(
+                Notification.user_id == user_id,
+                Notification.read_at.is_(None),
+            )
+        )
+        affected: int = self._db.execute(count_stmt).scalar_one()
+
+        if affected == 0:
+            return 0
+
+        now_utc = datetime.now(tz=UTC)
+        update_stmt = (
+            update(Notification)
+            .where(
+                Notification.user_id == user_id,
+                Notification.read_at.is_(None),
+            )
+            .values(read_at=now_utc)
+            .execution_options(synchronize_session="fetch")
+        )
+        self._db.execute(update_stmt)
+        self._db.flush()
+        return affected
 
     # ---------------------------------------------------------------------- #
     # Read (internal helpers)                                                  #
