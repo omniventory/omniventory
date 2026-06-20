@@ -542,8 +542,32 @@ class ReminderEngine:
 
             if opener is None:
                 # No open episode -- open a new one (opener row, offset_days=0).
+                #
+                # Same-day re-open disambiguation (walkthrough fix #3):
+                # When a definition goes low, recovers, and goes low again on the
+                # SAME calendar day, the naive dedup key
+                # "low_stock:u{uid}:d{def}:{today}:o0" collides with the
+                # already-resolved opener for the earlier episode.
+                # create_if_absent matches purely by (user_id, dedup_key) and
+                # ignores resolved_at, so it returns created=False on the clash
+                # and the user gets no new notification.
+                #
+                # Fix: count ALL opener rows (regardless of resolved_at) anchored
+                # on today.  If this is the first episode of the day (seq==0), use
+                # the legacy bare key so already-stored rows are unaffected.
+                # If seq>=1 (a re-open), append "#<seq>" to produce a fresh key
+                # that has never been written before.
+                seq = self._notification_repo.count_low_stock_openers_on(
+                    user.id, def_id, today_local
+                )
                 params = _build_low_stock_params(item)
-                dedup = f"low_stock:u{user.id}:d{def_id}:{today_local.isoformat()}:o0"
+                base_dedup = f"low_stock:u{user.id}:d{def_id}:{today_local.isoformat()}:o0"
+                # The "#<seq>" suffix is ONLY for opener (offset_days=0) disambiguation
+                # on the same anchor date.  Repeat keys (offset_days>=1) carry NO such
+                # suffix: among episodes sharing one anchor date, only the last open one
+                # can reach the repeat stage -- the earlier ones resolved the same day
+                # (elapsed=0 < every repeat offset>=1), so they never wrote a repeat row.
+                dedup = base_dedup if seq == 0 else f"{base_dedup}#{seq}"
                 notification, created = self._notification_repo.create_if_absent(
                     user_id=user.id,
                     source="low_stock",

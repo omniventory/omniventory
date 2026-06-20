@@ -163,6 +163,38 @@ class NotificationRepository:
     # Read: low-stock episode helpers                                          #
     # ---------------------------------------------------------------------- #
 
+    def count_low_stock_openers_on(self, user_id: int, subject_id: int, anchor_date: date) -> int:
+        """Return the count of low-stock opener rows for (user, definition, date).
+
+        Counts ALL opener rows (offset_days=0) for the given (user_id, subject_id,
+        episode_started_on == anchor_date) regardless of ``resolved_at``.  Used by
+        the engine to assign a sequential suffix to same-day re-opened episodes so
+        that the new opener gets a non-colliding dedup key.
+
+        Parameters
+        ----------
+        user_id:
+            The recipient user.
+        subject_id:
+            The definition ID (subject_type is implicitly 'definition' for
+            low-stock episodes).
+        anchor_date:
+            The calendar date to count openers for (matches ``episode_started_on``).
+        """
+        stmt = (
+            select(func.count())
+            .select_from(Notification)
+            .where(
+                Notification.user_id == user_id,
+                Notification.source == "low_stock",
+                Notification.subject_type == "definition",
+                Notification.subject_id == subject_id,
+                Notification.offset_days == 0,
+                Notification.episode_started_on == anchor_date,
+            )
+        )
+        return self._db.execute(stmt).scalar_one()
+
     def open_low_stock_opener(self, user_id: int, definition_id: int) -> Notification | None:
         """Return the open low-stock opener for (user, definition), or None.
 

@@ -1005,6 +1005,541 @@ class TestLowStockEpisodes:
 
 
 # ---------------------------------------------------------------------------
+# 3b. Same-day reopen fix (walkthrough fix #3)
+# ---------------------------------------------------------------------------
+
+
+class TestSameDayReopen:
+    """Tests for the same-day low→recovered→low reopen bug fix.
+
+    The fix: when a definition goes low again on the SAME calendar day after
+    recovery, the engine computes seq = count_low_stock_openers_on(...) and
+    appends "#<seq>" to the base dedup key, so the new opener never collides
+    with the already-resolved opener from the earlier episode.
+    """
+
+    def _make_engine(self, db: Session) -> Any:
+        from app.services.reminder_engine import ReminderEngine
+
+        return ReminderEngine(db)
+
+    def test_count_low_stock_openers_on_repo_method(self, db_session: Session) -> None:
+        """count_low_stock_openers_on counts ALL openers (open + resolved) for (user, def, date)."""
+        from datetime import UTC, datetime
+
+        from app.repositories.notification import NotificationRepository
+
+        _hh, user, defn, _inst = _seed_minimal_exact(db_session)
+        repo = NotificationRepository(db_session)
+        today = date(2025, 6, 1)
+
+        # Zero before any openers exist
+        assert repo.count_low_stock_openers_on(user.id, defn.id, today) == 0
+
+        # Insert an opener row
+        opener, _ = repo.create_if_absent(
+            user_id=user.id,
+            source="low_stock",
+            subject_type="definition",
+            subject_id=defn.id,
+            dedup_key=f"low_stock:u{user.id}:d{defn.id}:{today.isoformat()}:o0",
+            message_code="reminder.low_stock",
+            episode_started_on=today,
+            offset_days=0,
+        )
+        assert repo.count_low_stock_openers_on(user.id, defn.id, today) == 1
+
+        # Resolve it -- count should still be 1 (counts regardless of resolved_at)
+        opener.resolved_at = datetime.now(tz=UTC)
+        db_session.flush()
+        assert repo.count_low_stock_openers_on(user.id, defn.id, today) == 1
+
+        # Insert a second opener with a #1 suffix
+        repo.create_if_absent(
+            user_id=user.id,
+            source="low_stock",
+            subject_type="definition",
+            subject_id=defn.id,
+            dedup_key=f"low_stock:u{user.id}:d{defn.id}:{today.isoformat()}:o0#1",
+            message_code="reminder.low_stock",
+            episode_started_on=today,
+            offset_days=0,
+        )
+        assert repo.count_low_stock_openers_on(user.id, defn.id, today) == 2
+
+        # A different date should not be counted
+        other_day = today + timedelta(days=1)
+        assert repo.count_low_stock_openers_on(user.id, defn.id, other_day) == 0
+
+        # A repeat row (offset_days=1) should NOT count
+        repo.create_if_absent(
+            user_id=user.id,
+            source="low_stock",
+            subject_type="definition",
+            subject_id=defn.id,
+            dedup_key=f"low_stock:u{user.id}:d{defn.id}:{today.isoformat()}:o1",
+            message_code="reminder.low_stock_repeat",
+            episode_started_on=today,
+            offset_days=1,
+        )
+        assert repo.count_low_stock_openers_on(user.id, defn.id, today) == 2  # still 2
+
+    def test_same_day_reopen_creates_new_opener_with_suffix(self, db_session: Session) -> None:
+        """The core bug fix: same-day low→recover→low creates a new opener with #1 suffix."""
+        _hh, user, defn, inst = _seed_minimal_exact(
+            db_session, min_stock=Decimal("5"), quantity=Decimal("3")
+        )
+        engine = self._make_engine(db_session)
+        today = date(2025, 6, 1)
+
+        # Step 1: go low → opener created (legacy key, no suffix)
+        summary1 = engine.run_scan(today_local=today)
+        assert summary1.low_stock == 1
+
+        from app.models.notification import Notification
+        from app.repositories.notification import NotificationRepository
+        from app.services.reminder_engine import ReminderEngine
+
+        repo = NotificationRepository(db_session)
+        first_opener = repo.open_low_stock_opener(user.id, defn.id)
+        assert first_opener is not None
+        assert "#" not in first_opener.dedup_key  # legacy bare key
+
+        # Step 2: recover (no longer low)
+        inst.quantity = Decimal("10")
+        db_session.commit()
+
+        # Same-day scan closes the episode
+        summary2 = ReminderEngine(db_session).run_scan(today_local=today)
+        assert summary2.low_stock == 0  # no new notifications
+
+        # Confirm first episode is closed
+        db_session.expire_all()
+        first_row = db_session.get(Notification, first_opener.id)
+        assert first_row is not None
+        assert first_row.resolved_at is not None
+
+        # Step 3: go low AGAIN the same day
+        inst.quantity = Decimal("2")
+        db_session.commit()
+
+        summary3 = ReminderEngine(db_session).run_scan(today_local=today)
+        assert summary3.low_stock == 1, "Re-opened episode must produce a new opener"
+
+        # Exactly 2 opener rows for (user, def, today): first (resolved) + second (open)
+        all_openers_today = _count_openers_on(db_session, user.id, defn.id, today)
+        assert len(all_openers_today) == 2
+
+        # New opener has #1 suffix and is open
+        new_opener = repo.open_low_stock_opener(user.id, defn.id)
+        assert new_opener is not None
+        assert new_opener.id != first_opener.id
+        assert new_opener.dedup_key.endswith("#1"), (
+            f"Expected dedup_key to end with '#1', got: {new_opener.dedup_key!r}"
+        )
+        assert new_opener.episode_started_on == today
+        assert new_opener.resolved_at is None
+
+    def test_first_episode_uses_legacy_key_no_suffix(self, db_session: Session) -> None:
+        """The very first episode of a (user, def, day) always uses the bare legacy key."""
+        _hh, user, defn, _inst = _seed_minimal_exact(
+            db_session, min_stock=Decimal("5"), quantity=Decimal("3")
+        )
+        engine = self._make_engine(db_session)
+        today = date(2025, 6, 1)
+
+        engine.run_scan(today_local=today)
+
+        from app.repositories.notification import NotificationRepository
+
+        repo = NotificationRepository(db_session)
+        opener = repo.open_low_stock_opener(user.id, defn.id)
+        assert opener is not None
+        expected_key = f"low_stock:u{user.id}:d{defn.id}:{today.isoformat()}:o0"
+        assert opener.dedup_key == expected_key
+
+    def test_open_episode_rescan_idempotent_no_double_opener(self, db_session: Session) -> None:
+        """While the episode is STILL OPEN, re-scanning does NOT create a duplicate opener."""
+        _hh, user, defn, _inst = _seed_minimal_exact(
+            db_session, min_stock=Decimal("5"), quantity=Decimal("3")
+        )
+        engine = self._make_engine(db_session)
+        today = date(2025, 6, 1)
+
+        # First scan: opener created
+        summary1 = engine.run_scan(today_local=today)
+        assert summary1.low_stock == 1
+
+        # Second scan same day, still low: must be idempotent
+        from app.services.reminder_engine import ReminderEngine
+
+        summary2 = ReminderEngine(db_session).run_scan(today_local=today)
+        assert summary2.low_stock == 0  # no duplicate
+
+        # Still exactly 1 opener row
+        from app.repositories.notification import NotificationRepository
+
+        repo = NotificationRepository(db_session)
+        all_openers = _count_openers_on(db_session, user.id, defn.id, today)
+        assert len(all_openers) == 1
+        assert repo.count_low_stock_openers_on(user.id, defn.id, today) == 1
+
+    def test_seq_increments_second_same_day_reopen(self, db_session: Session) -> None:
+        """A second same-day reopen (low→recover→low→recover→low) produces #2 suffix."""
+        _hh, user, defn, inst = _seed_minimal_exact(
+            db_session, min_stock=Decimal("5"), quantity=Decimal("3")
+        )
+        engine = self._make_engine(db_session)
+        today = date(2025, 6, 1)
+
+        from app.repositories.notification import NotificationRepository
+        from app.services.reminder_engine import ReminderEngine
+
+        repo = NotificationRepository(db_session)
+
+        # Episode 1
+        engine.run_scan(today_local=today)
+        opener1 = repo.open_low_stock_opener(user.id, defn.id)
+        assert opener1 is not None
+        assert "#" not in opener1.dedup_key  # bare key (seq==0)
+
+        # Recover → close episode 1
+        inst.quantity = Decimal("10")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+
+        # Episode 2 (re-open #1)
+        inst.quantity = Decimal("2")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+        opener2 = repo.open_low_stock_opener(user.id, defn.id)
+        assert opener2 is not None
+        assert opener2.dedup_key.endswith("#1")
+
+        # Recover → close episode 2
+        inst.quantity = Decimal("10")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+
+        # Episode 3 (re-open #2)
+        inst.quantity = Decimal("2")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+        opener3 = repo.open_low_stock_opener(user.id, defn.id)
+        assert opener3 is not None
+        assert opener3.dedup_key.endswith("#2")
+
+        # 3 opener rows total for today
+        assert repo.count_low_stock_openers_on(user.id, defn.id, today) == 3
+
+    def test_cross_day_reopen_uses_legacy_key(self, db_session: Session) -> None:
+        """Cross-day reopen: new anchor date means seq==0, so legacy bare key is used."""
+        _hh, user, defn, inst = _seed_minimal_exact(
+            db_session, min_stock=Decimal("5"), quantity=Decimal("3")
+        )
+        engine = self._make_engine(db_session)
+        day0 = date(2025, 6, 1)
+
+        # Day 0: first episode
+        engine.run_scan(today_local=day0)
+
+        from app.repositories.notification import NotificationRepository
+        from app.services.reminder_engine import ReminderEngine
+
+        repo = NotificationRepository(db_session)
+
+        # Recover on day0
+        inst.quantity = Decimal("10")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=day0)
+
+        # Go low again on day1 (DIFFERENT day)
+        inst.quantity = Decimal("2")
+        db_session.commit()
+        day1 = day0 + timedelta(days=1)
+        summary = ReminderEngine(db_session).run_scan(today_local=day1)
+        assert summary.low_stock == 1
+
+        new_opener = repo.open_low_stock_opener(user.id, defn.id)
+        assert new_opener is not None
+        assert new_opener.episode_started_on == day1
+        # seq==0 on day1 (no previous openers for day1)
+        assert "#" not in new_opener.dedup_key
+        expected_key = f"low_stock:u{user.id}:d{defn.id}:{day1.isoformat()}:o0"
+        assert new_opener.dedup_key == expected_key
+
+    def test_reopened_episode_repeat_fires_correctly(self, db_session: Session) -> None:
+        """A reopened (#1) episode still fires its repeat notifications at the right offsets."""
+        _hh, user, defn, inst = _seed_minimal_exact(
+            db_session, min_stock=Decimal("5"), quantity=Decimal("3")
+        )
+        engine = self._make_engine(db_session)
+        today = date(2025, 6, 1)
+
+        from app.repositories.notification import NotificationRepository
+        from app.services.reminder_engine import ReminderEngine
+
+        repo = NotificationRepository(db_session)
+
+        # Episode 1: open and close same day
+        engine.run_scan(today_local=today)
+        inst.quantity = Decimal("10")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+
+        # Episode 2 (reopen on same day)
+        inst.quantity = Decimal("2")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+
+        opener2 = repo.open_low_stock_opener(user.id, defn.id)
+        assert opener2 is not None
+        assert opener2.dedup_key.endswith("#1")
+
+        # Day 1 after the anchor: repeat o=1 should fire for episode 2
+        day1 = today + timedelta(days=1)
+        summary = ReminderEngine(db_session).run_scan(today_local=day1)
+        assert summary.low_stock == 1, "Repeat o=1 must fire for the reopened episode"
+
+        # Verify the repeat row has episode_started_on == today (same anchor as opener2)
+        from app.models.notification import Notification
+
+        stmt = select(Notification).where(
+            Notification.user_id == user.id,
+            Notification.source == "low_stock",
+            Notification.subject_id == defn.id,
+            Notification.offset_days == 1,
+            Notification.resolved_at.is_(None),
+        )
+        repeat_row = db_session.execute(stmt).scalar_one_or_none()
+        assert repeat_row is not None
+        assert repeat_row.episode_started_on == today
+
+    def test_reopened_episode_repeat_keys_no_collision_with_prior_episode(
+        self, db_session: Session
+    ) -> None:
+        """Repeat dedup keys for the reopened episode do not collide with the prior episode.
+
+        Episode 1 anchor == episode 2 anchor == today (same-day reopen).
+        The prior episode 1 was resolved without firing any repeats (recovered too
+        quickly).  Episode 2 (opener key ends in #1) fires repeat o=1 on day1.
+        The repeat dedup for episode 2 is:
+            "low_stock:u{uid}:d{def}:{today}:o1"
+        Episode 1's repeat dedup would have been the same string -- BUT episode 1
+        resolved before any repeats fired, so that row does NOT exist.  Episode 2's
+        repeat row is therefore inserted cleanly (created=True).
+
+        This test asserts that created=True (no collision) and that the repeat row
+        has episode_started_on == today.
+        """
+        _hh, user, defn, inst = _seed_minimal_exact(
+            db_session, min_stock=Decimal("5"), quantity=Decimal("3")
+        )
+        engine = self._make_engine(db_session)
+        today = date(2025, 6, 1)
+
+        from app.repositories.notification import NotificationRepository
+        from app.services.reminder_engine import ReminderEngine
+
+        repo = NotificationRepository(db_session)
+
+        # Episode 1: open and close the same day WITHOUT firing any repeats
+        # (so no repeat row for "...:{today}:o1" is written for episode 1)
+        engine.run_scan(today_local=today)
+        first_opener = repo.open_low_stock_opener(user.id, defn.id)
+        assert first_opener is not None
+        inst.quantity = Decimal("10")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+
+        # Episode 2: reopen the same day
+        inst.quantity = Decimal("2")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+        opener2 = repo.open_low_stock_opener(user.id, defn.id)
+        assert opener2 is not None
+
+        # Day 1: repeat o=1 fires for episode 2
+        day1 = today + timedelta(days=1)
+        from app.models.notification import Notification
+
+        before_count = len(
+            db_session.execute(
+                select(Notification).where(
+                    Notification.user_id == user.id,
+                    Notification.source == "low_stock",
+                    Notification.subject_id == defn.id,
+                    Notification.offset_days == 1,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert before_count == 0, "No repeat rows should exist yet"
+
+        summary = ReminderEngine(db_session).run_scan(today_local=day1)
+        assert summary.low_stock == 1  # repeat o=1 created
+
+        after_rows = (
+            db_session.execute(
+                select(Notification).where(
+                    Notification.user_id == user.id,
+                    Notification.source == "low_stock",
+                    Notification.subject_id == defn.id,
+                    Notification.offset_days == 1,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(after_rows) == 1, "Exactly one repeat row should be created"
+        assert after_rows[0].episode_started_on == today
+
+    def test_three_same_day_reopens_produce_exactly_one_repeat(self, db_session: Session) -> None:
+        """Three same-day reopens (A→close→B→close→C, still open) produce exactly one repeat.
+
+        Episodes A and B both resolve the same day their anchor was created
+        (elapsed=0 < every repeat offset>=1), so they never write a repeat row.
+        Only episode C (still open at D+1) fires repeat o=1.  There must be
+        exactly one offset_days==1 row for (user, def), and it belongs to
+        episode C (episode_started_on == today).
+        """
+        _hh, user, defn, inst = _seed_minimal_exact(
+            db_session, min_stock=Decimal("5"), quantity=Decimal("3")
+        )
+        engine = self._make_engine(db_session)
+        today = date(2025, 6, 1)
+
+        from app.repositories.notification import NotificationRepository
+        from app.services.reminder_engine import ReminderEngine
+
+        repo = NotificationRepository(db_session)
+
+        # Episode A: go low → opener (bare key), recover → close same day
+        engine.run_scan(today_local=today)
+        opener_a = repo.open_low_stock_opener(user.id, defn.id)
+        assert opener_a is not None
+        assert "#" not in opener_a.dedup_key
+        inst.quantity = Decimal("10")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+
+        # Episode B: go low again same day → opener (#1), recover → close same day
+        inst.quantity = Decimal("2")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+        opener_b = repo.open_low_stock_opener(user.id, defn.id)
+        assert opener_b is not None
+        assert opener_b.dedup_key.endswith("#1")
+        inst.quantity = Decimal("10")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+
+        # Episode C: go low a third time same day → opener (#2), stays open
+        inst.quantity = Decimal("2")
+        db_session.commit()
+        ReminderEngine(db_session).run_scan(today_local=today)
+        opener_c = repo.open_low_stock_opener(user.id, defn.id)
+        assert opener_c is not None
+        assert opener_c.dedup_key.endswith("#2")
+        assert opener_c.resolved_at is None
+
+        # 3 opener rows total on day D (A resolved, B resolved, C open)
+        all_openers = _count_openers_on(db_session, user.id, defn.id, today)
+        assert len(all_openers) == 3
+        assert repo.count_low_stock_openers_on(user.id, defn.id, today) == 3
+
+        # Advance to D+1 with definition still low; repeat o=1 must fire
+        from app.models.notification import Notification
+
+        day1 = today + timedelta(days=1)
+        summary = ReminderEngine(db_session).run_scan(today_local=day1)
+        assert summary.low_stock >= 1, "Repeat o=1 must fire for episode C"
+
+        # Exactly ONE offset_days==1 row for (user, def) -- no duplicates/collisions
+        repeat_rows = (
+            db_session.execute(
+                select(Notification).where(
+                    Notification.user_id == user.id,
+                    Notification.source == "low_stock",
+                    Notification.subject_id == defn.id,
+                    Notification.offset_days == 1,
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(repeat_rows) == 1, (
+            f"Expected exactly 1 repeat row at offset_days=1, got {len(repeat_rows)}"
+        )
+        # The repeat belongs to episode C (same anchor date = today)
+        assert repeat_rows[0].episode_started_on == today
+
+    def test_event_trigger_same_day_reopen(self, db_session: Session) -> None:
+        """evaluate_low_stock (event trigger) also produces correct same-day reopen behavior."""
+        _hh, user, defn, inst = _seed_minimal_exact(
+            db_session, min_stock=Decimal("5"), quantity=Decimal("3")
+        )
+        engine = self._make_engine(db_session)
+        today = date(2025, 6, 1)
+
+        from app.repositories.notification import NotificationRepository
+        from app.services.reminder_engine import ReminderEngine
+
+        repo = NotificationRepository(db_session)
+
+        # Episode 1 via event trigger
+        new_notifs = engine.evaluate_low_stock(defn.id, today_local=today)
+        assert len(new_notifs) == 1
+        opener1 = repo.open_low_stock_opener(user.id, defn.id)
+        assert opener1 is not None
+        assert "#" not in opener1.dedup_key  # bare key
+
+        # Recover via event trigger (close episode)
+        inst.quantity = Decimal("10")
+        db_session.commit()
+        ReminderEngine(db_session).evaluate_low_stock(defn.id, today_local=today)
+
+        db_session.expire_all()
+        from app.models.notification import Notification
+
+        opener1_row = db_session.get(Notification, opener1.id)
+        assert opener1_row is not None
+        assert opener1_row.resolved_at is not None
+
+        # Go low again → event trigger → must create a new opener with #1
+        inst.quantity = Decimal("2")
+        db_session.commit()
+        new_notifs2 = ReminderEngine(db_session).evaluate_low_stock(defn.id, today_local=today)
+        assert len(new_notifs2) == 1, "Re-opened episode must produce a new opener notification"
+
+        opener2 = repo.open_low_stock_opener(user.id, defn.id)
+        assert opener2 is not None
+        assert opener2.id != opener1.id
+        assert opener2.dedup_key.endswith("#1")
+        assert opener2.resolved_at is None
+
+        # No double-insert: calling event trigger again with still-open episode
+        new_notifs3 = ReminderEngine(db_session).evaluate_low_stock(defn.id, today_local=today)
+        assert len(new_notifs3) == 0  # idempotent
+
+
+# Helper for same-day reopen tests
+def _count_openers_on(db: Session, user_id: int, def_id: int, anchor_date: date) -> list[Any]:
+    """Return all opener (offset_days=0) rows for (user, definition, anchor_date)."""
+    from app.models.notification import Notification
+
+    stmt = select(Notification).where(
+        Notification.user_id == user_id,
+        Notification.source == "low_stock",
+        Notification.subject_id == def_id,
+        Notification.offset_days == 0,
+        Notification.episode_started_on == anchor_date,
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
+# ---------------------------------------------------------------------------
 # 4. Decimal params handling
 # ---------------------------------------------------------------------------
 
