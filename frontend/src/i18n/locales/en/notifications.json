@@ -1,0 +1,46 @@
+{
+  "title": "Notifications",
+  "bell": {
+    "ariaLabel": "Notifications",
+    "noNotifications": "No new notifications",
+    "viewAll": "View all",
+    "markAllRead": "Mark all as read"
+  },
+  "unread": "unread",
+  "filter": {
+    "allNotifications": "All",
+    "unreadOnly": "Unread only"
+  },
+  "empty": {
+    "all": "No notifications yet.",
+    "unread": "No unread notifications."
+  },
+  "markRead": "Mark as read",
+  "markReadDone": "Marked as read",
+  "subject": {
+    "viewItem": "View item",
+    "viewInstance": "View lot"
+  },
+  "reminder": {
+    "best_before": "{{name}} expires on {{date}} ({{days_remaining}} days remaining)",
+    "warranty": "{{name}} warranty expires on {{date}} ({{days_remaining}} days remaining)",
+    "low_stock": "{{name}} is running low (current: {{current}}, threshold: {{threshold}})",
+    "low_stock_repeat": "{{name}} is still running low (current: {{current}}, threshold: {{threshold}}, since {{offset}} days ago)"
+  },
+  "col": {
+    "message": "Message",
+    "subject": "Subject",
+    "date": "Date",
+    "status": "Status"
+  },
+  "time": {
+    "justNow": "just now",
+    "minutesAgo": "{{count}}m ago",
+    "hoursAgo": "{{count}}h ago",
+    "daysAgo": "{{count}}d ago"
+  },
+  "loadError": "Failed to load notifications.",
+  "markAllReadDone": "All notifications marked as read.",
+  "markAllReadError": "Failed to mark all as read.",
+  "markReadError": "Failed to mark notification as read."
+}

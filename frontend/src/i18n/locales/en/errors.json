@@ -53,6 +53,12 @@
     "cannot_reverse_reversal": "Cannot reverse movement #{{id}} because it is itself a reversal.",
     "reverse_would_go_negative": "Reversing movement #{{id}} would drive the lot quantity below zero."
   },
+  "notification": {
+    "not_found": "Notification #{{id}} was not found."
+  },
+  "integration": {
+    "invalid_token": "Invalid or missing integration token."
+  },
   "internal": {
     "error": "An internal error occurred. Please try again later."
   },

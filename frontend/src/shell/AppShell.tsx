@@ -50,11 +50,13 @@ import {
   Tag,
   Package,
   Clock,
+  Bell,
 } from "react-feather";
 import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { UserButton } from "../components/UserButton";
+import { NotificationBell } from "../components/NotificationBell";
 import type { components } from "../api/schema";
 
 type UserData = components["schemas"]["UserResponse"];
@@ -159,6 +161,12 @@ function NavContent({ onClose }: { onClose?: () => void }) {
         icon={<Clock size={16} />}
         onClick={onClose}
       />
+      <NavItem
+        to="/notifications"
+        label={t("notifications")}
+        icon={<Bell size={16} />}
+        onClick={onClose}
+      />
     </Stack>
   );
 }
@@ -197,8 +205,9 @@ function HeaderContent({
         </Text>
       </Group>
 
-      {/* Right: language switcher + color-scheme toggle + logout (quick access) */}
+      {/* Right: notification bell + language switcher + color-scheme toggle + logout */}
       <Group gap="xs">
+        <NotificationBell />
         <LanguageSwitcher mode="authed" />
         <ActionIcon
           variant="default"

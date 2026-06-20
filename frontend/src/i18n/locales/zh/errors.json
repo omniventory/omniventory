@@ -53,6 +53,12 @@
     "cannot_reverse_reversal": "无法撤销库存移动记录 #{{id}}，因为它本身是一条撤销记录。",
     "reverse_would_go_negative": "撤销库存移动记录 #{{id}} 将导致批次数量变为负数。"
   },
+  "notification": {
+    "not_found": "未找到通知 #{{id}}。"
+  },
+  "integration": {
+    "invalid_token": "集成令牌无效或缺失。"
+  },
   "internal": {
     "error": "服务器内部错误，请稍后重试。"
   },

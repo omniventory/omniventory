@@ -1,0 +1,46 @@
+{
+  "title": "通知",
+  "bell": {
+    "ariaLabel": "通知",
+    "noNotifications": "暂无新通知",
+    "viewAll": "查看全部",
+    "markAllRead": "全部标为已读"
+  },
+  "unread": "未读",
+  "filter": {
+    "allNotifications": "全部",
+    "unreadOnly": "仅未读"
+  },
+  "empty": {
+    "all": "暂无通知。",
+    "unread": "暂无未读通知。"
+  },
+  "markRead": "标为已读",
+  "markReadDone": "已标为已读",
+  "subject": {
+    "viewItem": "查看物品",
+    "viewInstance": "查看批次"
+  },
+  "reminder": {
+    "best_before": "{{name}} 将于 {{date}} 到期（剩余 {{days_remaining}} 天）",
+    "warranty": "{{name}} 保修将于 {{date}} 到期（剩余 {{days_remaining}} 天）",
+    "low_stock": "{{name}} 库存不足（当前：{{current}}，阈值：{{threshold}}）",
+    "low_stock_repeat": "{{name}} 库存仍然不足（当前：{{current}}，阈值：{{threshold}}，已持续 {{offset}} 天）"
+  },
+  "col": {
+    "message": "消息",
+    "subject": "关联对象",
+    "date": "日期",
+    "status": "状态"
+  },
+  "time": {
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前",
+    "daysAgo": "{{count}} 天前"
+  },
+  "loadError": "通知加载失败。",
+  "markAllReadDone": "所有通知已标为已读。",
+  "markAllReadError": "全部标为已读失败。",
+  "markReadError": "标为已读失败。"
+}
