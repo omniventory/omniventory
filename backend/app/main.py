@@ -184,6 +184,7 @@ def _start_mqtt_bridge(app: FastAPI) -> None:
         topic_prefix=cfg.topic_prefix or "omniventory",
         use_tls=cfg.use_tls,
         discovery_enabled=cfg.discovery_enabled,
+        commands_enabled=cfg.commands_enabled,
     )
 
     bridge = get_mqtt_bridge()

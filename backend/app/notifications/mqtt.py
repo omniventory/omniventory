@@ -97,6 +97,7 @@ class MqttBridgeConfig:
     password: str | None = None  # noqa: S105 — internal, never serialised
     use_tls: bool = False
     discovery_enabled: bool = False
+    commands_enabled: bool = False  # default off (opt-in: mutates stock)
 
 
 # ---------------------------------------------------------------------------
@@ -173,6 +174,13 @@ class MqttBridge:
                     logger.info("MqttBridge: connected to broker.")
                     if config.discovery_enabled:
                         bridge_ref._publish_discovery_unsafe(client, config.topic_prefix)
+                    if config.commands_enabled:
+                        cmd_topic = f"{config.topic_prefix}/command/#"
+                        # Use the captured ``client`` from the outer closure
+                        # (same object as ``_client`` in real paho; tests may
+                        # pass None as the first callback arg).
+                        client.subscribe(cmd_topic)
+                        logger.info("MqttBridge: subscribed to command topic %s.", cmd_topic)
                 else:
                     logger.warning("MqttBridge: connection failed (rc=%d).", rc)
 
@@ -186,8 +194,14 @@ class MqttBridge:
                 else:
                     logger.info("MqttBridge: disconnected cleanly.")
 
+            def on_message(_client: Any, _userdata: Any, msg: Any) -> None:
+                """Handle inbound commands on ``{prefix}/command/<op>``."""
+                bridge_ref._handle_command(msg, _client, config.topic_prefix)
+
             client.on_connect = on_connect
             client.on_disconnect = on_disconnect
+            if config.commands_enabled:
+                client.on_message = on_message
 
             try:
                 client.connect(config.host, config.port)
@@ -335,6 +349,233 @@ class MqttBridge:
             payload = json.dumps(_discovery_payload(metric, name, state_topic))
             self._publish_safe(client, discovery_topic, payload, retain=True)
         logger.info("MqttBridge: HA discovery configs published.")
+
+    def _handle_command(self, msg: Any, client: Any, prefix: str) -> None:
+        """Handle an inbound MQTT command message (called from the paho thread).
+
+        Topic convention: ``{prefix}/command/<op>``
+
+        Bounded op set: ``consume``, ``intake``, ``adjust``.  Any other op
+        (unknown or malformed topic) is dropped with a log + error result.
+
+        The entire handler is wrapped in a try/except so that *no exception*
+        can propagate to the paho background thread and kill the connection.
+
+        Security note: the MQTT broker is operator-trusted (see §2 and §12).
+        ``commands_enabled`` defaults to ``False`` (opt-in).  Tighter
+        command-level auth / allow-listing is deferred to M6.
+        """
+        result_topic = f"{prefix}/command_result"
+
+        def _publish_result(op: str, status: str, detail: object) -> None:
+            payload = json.dumps({"op": op, "status": status, "detail": detail})
+            self._publish_safe(client, result_topic, payload, retain=False)
+
+        try:
+            # Extract the op from the trailing topic segment.
+            topic: str = msg.topic if hasattr(msg, "topic") else ""
+            # Topic is: {prefix}/command/<op>
+            expected_prefix = f"{prefix}/command/"
+            if not topic.startswith(expected_prefix):
+                logger.warning("MqttBridge: unexpected command topic %r — dropped.", topic)
+                _publish_result("unknown", "error", f"unexpected topic: {topic}")
+                return
+
+            op = topic[len(expected_prefix) :]
+            if "/" in op or not op:
+                logger.warning(
+                    "MqttBridge: malformed command op %r in topic %r — dropped.", op, topic
+                )
+                _publish_result(op or "unknown", "error", "malformed op")
+                return
+
+            # Parse JSON payload.
+            try:
+                raw_payload = msg.payload
+                if isinstance(raw_payload, (bytes, bytearray)):
+                    raw_payload = raw_payload.decode("utf-8", errors="replace")
+                payload_dict: dict[str, object] = json.loads(raw_payload)
+            except (ValueError, TypeError) as exc:
+                logger.warning("MqttBridge: malformed JSON in command %r — dropped. (%s)", op, exc)
+                _publish_result(op, "error", f"malformed JSON: {exc}")
+                return
+
+            if op not in ("consume", "intake", "adjust"):
+                logger.warning(
+                    "MqttBridge: unknown command op %r — dropped (not in bounded set).", op
+                )
+                _publish_result(op, "error", f"unknown op: {op}")
+                return
+
+            # Dispatch to the command executor.
+            self._execute_command(op, payload_dict, client, prefix)
+
+        except Exception:
+            logger.exception(
+                "MqttBridge: unhandled exception in _handle_command — paho thread protected."
+            )
+
+    def _execute_command(
+        self,
+        op: str,
+        payload: dict[str, object],
+        client: Any,
+        prefix: str,
+    ) -> None:
+        """Execute a bounded stock command in a fresh DB session as the system actor.
+
+        Opens an independent SQLAlchemy session (paho callback thread, not the
+        request thread), builds a system-actor ``RequestContext`` (``user=None``
+        ⇒ ``movement.user_id=NULL``), delegates to ``StockMovementService``,
+        commits on success, rolls back on ``AppError``.
+
+        Post-commit (best-effort): dispatches pending low-stock notifications
+        and publishes MQTT state — failures here must not affect the command
+        result already sent.
+        """
+        import contextlib
+        from decimal import Decimal, InvalidOperation
+
+        from app.core.context import RequestContext
+        from app.core.errors import AppError
+        from app.db.base import get_session_factory
+        from app.notifications.dispatcher import build_dispatcher, publish_mqtt_state
+        from app.repositories.household import HouseholdRepository
+        from app.repositories.item_definition import ItemDefinitionRepository
+        from app.repositories.stock_instance import StockInstanceRepository
+        from app.services.stock_movement import StockMovementService
+
+        result_topic = f"{prefix}/command_result"
+
+        def _publish_result(status: str, detail: object) -> None:
+            p = json.dumps({"op": op, "status": status, "detail": detail})
+            self._publish_safe(client, result_topic, p, retain=False)
+
+        db = get_session_factory()()
+        try:
+            household = HouseholdRepository(db).ensure()
+            ctx = RequestContext(household=household, user=None)
+            svc = StockMovementService(db, ctx)
+
+            if op == "consume":
+                # payload: {definition_id, quantity}
+                try:
+                    def_id = int(str(payload["definition_id"]))
+                    qty = Decimal(str(payload["quantity"]))
+                except (KeyError, TypeError, ValueError, InvalidOperation) as exc:
+                    logger.warning("MqttBridge: bad payload for consume: %s — dropped.", exc)
+                    _publish_result("error", f"bad payload: {exc}")
+                    return
+
+                defn_repo = ItemDefinitionRepository(db)
+                defn = defn_repo.get(def_id)
+                if defn is None:
+                    _publish_result("error", f"definition {def_id} not found")
+                    return
+
+                try:
+                    touched = svc.consume_fifo(defn, qty)
+                    db.commit()
+                    detail: object = {
+                        "definition_id": def_id,
+                        "consumed": str(qty),
+                        "lots_touched": len(touched),
+                    }
+                    _publish_result("ok", detail)
+                except AppError as exc:
+                    db.rollback()
+                    _publish_result("error", {"code": exc.code, "message": exc.message})
+                    return
+
+            elif op == "intake":
+                # payload: {instance_id, quantity}
+                try:
+                    inst_id = int(str(payload["instance_id"]))
+                    qty = Decimal(str(payload["quantity"]))
+                except (KeyError, TypeError, ValueError, InvalidOperation) as exc:
+                    logger.warning("MqttBridge: bad payload for intake: %s — dropped.", exc)
+                    _publish_result("error", f"bad payload: {exc}")
+                    return
+
+                inst_repo = StockInstanceRepository(db)
+                inst = inst_repo.get(inst_id)
+                if inst is None:
+                    _publish_result("error", f"instance {inst_id} not found")
+                    return
+
+                try:
+                    svc.intake(inst, qty)
+                    db.commit()
+                    detail = {
+                        "instance_id": inst_id,
+                        "new_quantity": str(inst.quantity),
+                    }
+                    _publish_result("ok", detail)
+                except AppError as exc:
+                    db.rollback()
+                    _publish_result("error", {"code": exc.code, "message": exc.message})
+                    return
+
+            elif op == "adjust":
+                # payload: {instance_id, counted_quantity}
+                try:
+                    inst_id = int(str(payload["instance_id"]))
+                    counted = Decimal(str(payload["counted_quantity"]))
+                except (KeyError, TypeError, ValueError, InvalidOperation) as exc:
+                    logger.warning("MqttBridge: bad payload for adjust: %s — dropped.", exc)
+                    _publish_result("error", f"bad payload: {exc}")
+                    return
+
+                inst_repo = StockInstanceRepository(db)
+                inst = inst_repo.get(inst_id)
+                if inst is None:
+                    _publish_result("error", f"instance {inst_id} not found")
+                    return
+
+                try:
+                    svc.adjust(inst, counted)
+                    db.commit()
+                    detail = {
+                        "instance_id": inst_id,
+                        "new_quantity": str(inst.quantity),
+                    }
+                    _publish_result("ok", detail)
+                except AppError as exc:
+                    db.rollback()
+                    _publish_result("error", {"code": exc.code, "message": exc.message})
+                    return
+
+            else:
+                # Should not be reached (guarded in _handle_command), but defensive.
+                _publish_result("error", f"unknown op: {op}")
+                return
+
+            # Best-effort post-commit: dispatch pending notifications + publish state.
+            # Failures here must not alter the command result already published above.
+            # The dispatch() call writes notification_deliveries rows (only flush,
+            # no commit); we must commit here to persist those delivery rows and
+            # preserve idempotency for future dispatches (mirrors the three existing
+            # route dispatch sites: instances.py:228-229, :264-265,
+            # definitions.py:171-172).
+            try:
+                if svc.pending_notifications:
+                    build_dispatcher(db).dispatch(
+                        svc.pending_notifications, include_email_digest=False
+                    )
+                    db.commit()
+                publish_mqtt_state(db)
+            except Exception:
+                logger.exception(
+                    "MqttBridge: post-commit dispatch/state failed (best-effort) — ignored."
+                )
+
+        except Exception:
+            logger.exception("MqttBridge: unhandled exception in _execute_command — op=%r.", op)
+            with contextlib.suppress(Exception):
+                db.rollback()
+        finally:
+            with contextlib.suppress(Exception):
+                db.close()
 
 
 # ---------------------------------------------------------------------------
