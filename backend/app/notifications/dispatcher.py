@@ -149,12 +149,14 @@ def build_dispatcher(db: Session) -> NotificationDispatcher:
     ``SettingsService`` and registers concrete adapters for every enabled
     channel.
 
-    Currently registered channels (Step 7):
+    Currently registered channels (Steps 7–8):
     - ``EmailChannel``  — SMTP digest; registered unconditionally (the channel
       checks ``is_enabled()`` internally and is a no-op when disabled).
+    - ``HttpChannel``   — instant outbound webhook; registered unconditionally
+      (the channel checks ``is_enabled()`` internally and is a no-op when
+      disabled or unconfigured).
 
     Future steps will add:
-    - Step 8: ``HttpChannel`` (instant webhook)
     - Step 9: ``MqttChannel`` (instant MQTT publish)
 
     Parameters
@@ -171,9 +173,10 @@ def build_dispatcher(db: Session) -> NotificationDispatcher:
         A dispatcher with all currently-supported channels registered.
     """
     from app.notifications.channels.email import EmailChannel
+    from app.notifications.channels.http import HttpChannel
 
     dispatcher = NotificationDispatcher()
     dispatcher.register_channel(EmailChannel(db))
-    # Step 8: dispatcher.register_channel(HttpChannel(db))
+    dispatcher.register_channel(HttpChannel(db))
     # Step 9: dispatcher.register_channel(MqttChannel(db))
     return dispatcher

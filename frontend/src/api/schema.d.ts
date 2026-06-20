@@ -561,6 +561,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/integrations/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Integration State
+         * @description Return live inventory-state counts for Home Assistant's RESTful sensor.
+         *
+         *     Computes the current:
+         *     - ``low_stock_count``  — definitions below their low-stock threshold.
+         *     - ``expiring_count``   — lots expiring within the best-before lead window.
+         *     - ``expired_count``    — lots that have already expired.
+         *     - ``generated_at``     — UTC ISO-8601 timestamp (not cached).
+         *
+         *     Requires a valid ``integration_token`` in the ``X-Omniventory-Token``
+         *     header or ``?token=`` query parameter.  Returns 401
+         *     ``integration.invalid_token`` for missing or wrong tokens.
+         *
+         *     This endpoint is **not** behind the session-cookie dependency.  Home
+         *     Assistant's RESTful sensor configuration points at this URL with the
+         *     token in a header or query parameter.
+         */
+        get: operations["get_integration_state_api_integrations_state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/kinds": {
         parameters: {
             query?: never;
@@ -870,6 +904,13 @@ export interface paths {
          *     are never echoed; each is replaced by a ``*_is_set`` boolean flag.
          *     Un-set keys return their code-defined defaults (the table only stores
          *     user overrides).
+         *
+         *     **Integration token auto-generation (Step 8):** when the HTTP channel is
+         *     enabled and no ``integration_token`` has been set, this endpoint generates
+         *     one and persists it so that the next ``GET /settings`` returns
+         *     ``integration_token_is_set: True``.  The token itself is never echoed;
+         *     the caller can retrieve it via ``PATCH /settings`` flow or from the
+         *     Configuration UI (Step 12).
          */
         get: operations["get_settings_api_settings_get"];
         put?: never;
@@ -1400,6 +1441,23 @@ export interface components {
             occurred_at?: string | null;
             /** Quantity */
             quantity: number | string;
+        };
+        /**
+         * IntegrationStateResponse
+         * @description Live inventory-state counts for the Home Assistant RESTful sensor.
+         *
+         *     Authorised by the ``integration_token`` (header or query param) — not the
+         *     session cookie.  See ``GET /api/integrations/state``.
+         */
+        IntegrationStateResponse: {
+            /** Expired Count */
+            expired_count: number;
+            /** Expiring Count */
+            expiring_count: number;
+            /** Generated At */
+            generated_at: string;
+            /** Low Stock Count */
+            low_stock_count: number;
         };
         /**
          * KindResponse
@@ -3626,6 +3684,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_integration_state_api_integrations_state_get: {
+        parameters: {
+            query?: {
+                token?: string | null;
+            };
+            header?: {
+                "X-Omniventory-Token"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IntegrationStateResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

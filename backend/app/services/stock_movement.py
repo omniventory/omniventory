@@ -38,6 +38,7 @@ from sqlalchemy.orm import Session
 from app.core.context import RequestContext
 from app.core.errors import AppError, ErrorCode
 from app.models.item_definition import ItemDefinition
+from app.models.notification import Notification
 from app.models.stock_instance import StockInstance
 from app.models.stock_movement import StockMovement
 from app.repositories.item_definition import ItemDefinitionRepository
@@ -61,6 +62,10 @@ class StockMovementService:
         self._def_repo = ItemDefinitionRepository(db)
         self._loc_repo = LocationRepository(db)
         self._instance_svc = StockInstanceService(db)
+        # Accumulated new Notification rows from event hooks (evaluate_low_stock).
+        # Route handlers read this AFTER db.commit() to dispatch instant channels
+        # (Step 8 §4.6: event path → dispatch(pending, include_email_digest=False)).
+        self.pending_notifications: list[Notification] = []
 
     # ---------------------------------------------------------------------- #
     # Private helpers                                                          #
@@ -287,11 +292,14 @@ class StockMovementService:
 
         # Event hook: evaluate low-stock for this definition after the discard.
         # Best-effort + savepoint-isolated (failure must not roll back movement).
+        # New notifications are accumulated in self.pending_notifications so that
+        # the route handler can dispatch instant channels post-commit (Step 8).
         try:
             from app.services.reminder_engine import ReminderEngine
 
             with self._db.begin_nested():
-                ReminderEngine(self._db).evaluate_low_stock(instance.definition_id)
+                new_notifs = ReminderEngine(self._db).evaluate_low_stock(instance.definition_id)
+                self.pending_notifications.extend(new_notifs)
         except Exception:
             import logging
 
@@ -357,11 +365,14 @@ class StockMovementService:
         # An upward adjust may close an open episode; a downward adjust may open
         # one.  Best-effort + savepoint-isolated (failure must not roll back
         # movement).
+        # New notifications are accumulated in self.pending_notifications so that
+        # the route handler can dispatch instant channels post-commit (Step 8).
         try:
             from app.services.reminder_engine import ReminderEngine
 
             with self._db.begin_nested():
-                ReminderEngine(self._db).evaluate_low_stock(instance.definition_id)
+                new_notifs = ReminderEngine(self._db).evaluate_low_stock(instance.definition_id)
+                self.pending_notifications.extend(new_notifs)
         except Exception:
             import logging
 
@@ -543,11 +554,14 @@ class StockMovementService:
         # a failure in the reminder logic must never roll back the movement.
         # Local import to avoid circular imports (reminder_engine imports
         # services indirectly; keeping the import local breaks the cycle).
+        # New notifications are accumulated in self.pending_notifications so that
+        # the route handler can dispatch instant channels post-commit (Step 8).
         try:
             from app.services.reminder_engine import ReminderEngine
 
             with self._db.begin_nested():
-                ReminderEngine(self._db).evaluate_low_stock(definition.id)
+                new_notifs = ReminderEngine(self._db).evaluate_low_stock(definition.id)
+                self.pending_notifications.extend(new_notifs)
         except Exception:
             import logging
 

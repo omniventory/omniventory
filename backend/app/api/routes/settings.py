@@ -39,6 +39,7 @@ def _get_service(db: Session = Depends(get_db)) -> SettingsService:
 def get_settings(
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
     service: Annotated[SettingsService, Depends(_get_service)],
+    db: Session = Depends(get_db),
 ) -> SettingsResponse:
     """Return the current reminders and channels configuration.
 
@@ -46,7 +47,21 @@ def get_settings(
     are never echoed; each is replaced by a ``*_is_set`` boolean flag.
     Un-set keys return their code-defined defaults (the table only stores
     user overrides).
+
+    **Integration token auto-generation (Step 8):** when the HTTP channel is
+    enabled and no ``integration_token`` has been set, this endpoint generates
+    one and persists it so that the next ``GET /settings`` returns
+    ``integration_token_is_set: True``.  The token itself is never echoed;
+    the caller can retrieve it via ``PATCH /settings`` flow or from the
+    Configuration UI (Step 12).
     """
+    # Auto-generate the integration token when the HTTP channel is enabled
+    # and no token exists yet.  This makes ``integration_token_is_set`` flip
+    # to True on the first GET after enabling the channel, so HA users can
+    # immediately see that a token is available.
+    cfg = service.http_channel_config()
+    if cfg.enabled and not cfg.integration_token:
+        service.get_or_create_integration_token()
     return service.get_settings()
 
 

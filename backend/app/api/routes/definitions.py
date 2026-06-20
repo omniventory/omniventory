@@ -25,11 +25,14 @@ from sqlalchemy.orm import Session
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.notifications.dispatcher import build_dispatcher
 from app.schemas.item_definition import DefinitionCreate, DefinitionResponse, DefinitionUpdate
 from app.schemas.stock_instance import InstanceResponse
 from app.schemas.stock_movement_ops import ConsumeRequest
 from app.services.item_definition import ItemDefinitionService
 from app.services.stock_movement import StockMovementService
+
+_dispatch_logger = __import__("logging").getLogger(__name__)
 
 _ERROR_RESPONSES: dict[int | str, dict[str, object]] = {
     401: {"model": ErrorResponse},
@@ -159,6 +162,19 @@ def consume(
         defn, body.quantity, occurred_at=body.occurred_at, note=body.note
     )
     db.commit()
+    # Instant dispatch after commit: fire HTTP/MQTT channels for any new
+    # low-stock notifications created by the event hook.  Best-effort —
+    # dispatch failure must not roll back the committed movement.
+    try:
+        pending = getattr(movement_svc, "pending_notifications", [])
+        if pending:
+            build_dispatcher(db).dispatch(pending, include_email_digest=False)
+            db.commit()
+    except Exception:
+        _dispatch_logger.warning(
+            "Post-consume instant dispatch failed (best-effort); movement already committed.",
+            exc_info=True,
+        )
     for inst in touched:
         db.refresh(inst)
     return [InstanceResponse.model_validate(inst) for inst in touched]

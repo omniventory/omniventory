@@ -90,10 +90,12 @@ class EmailChannel:
 
         If either condition fails the channel is disabled and ``deliver()``
         is a complete no-op.
+
+        Uses the public ``email_channel_config()`` getter (Step 8 minor fix:
+        no direct access to the private ``_get_value`` method).
         """
-        enabled: bool = self._settings._get_value("channels.email.enabled")
-        host: str | None = self._settings._get_value("channels.email.host")
-        return bool(enabled and host)
+        cfg = self._settings.email_channel_config()
+        return bool(cfg.enabled and cfg.host)
 
     def deliver(
         self,
@@ -231,13 +233,17 @@ class EmailChannel:
 
         Uses ``smtplib.SMTP`` with optional STARTTLS (``use_tls=True``).
         Raises on any SMTP error — callers must catch.
+
+        Uses the public ``email_channel_config()`` getter (Step 8 minor fix:
+        no direct access to the private ``_get_value`` method).
         """
-        host: str = self._settings._get_value("channels.email.host")
-        port: int | None = self._settings._get_value("channels.email.port")
-        username: str | None = self._settings._get_value("channels.email.username")
-        password: str | None = self._settings._get_value("channels.email.password")
-        use_tls: bool = self._settings._get_value("channels.email.use_tls")
-        from_address: str | None = self._settings._get_value("channels.email.from_address")
+        cfg = self._settings.email_channel_config()
+        host: str = cfg.host  # type: ignore[assignment]
+        port: int | None = cfg.port
+        username: str | None = cfg.username
+        password: str | None = cfg.password
+        use_tls: bool = cfg.use_tls
+        from_address: str | None = cfg.from_address
 
         from_addr = from_address or username or f"omniventory@{host}"
 

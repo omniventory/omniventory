@@ -101,6 +101,9 @@ class ErrorCode:
     # --- Notifications (M4 Step 6) ---
     NOTIFICATION_NOT_FOUND = "notification.not_found"
 
+    # --- Integrations (M4 Step 8) ---
+    INTEGRATION_INVALID_TOKEN = "integration.invalid_token"
+
     # --- Internal / catch-all ---
     INTERNAL_ERROR = "internal.error"
 
@@ -141,6 +144,7 @@ _DEFAULT_MESSAGES: dict[str, str] = {
     ErrorCode.STOCK_CANNOT_REVERSE_REVERSAL: "Cannot reverse a movement that is itself a reversal.",
     ErrorCode.STOCK_REVERSE_WOULD_GO_NEGATIVE: "Reversing this movement would drive the lot quantity below zero.",
     ErrorCode.NOTIFICATION_NOT_FOUND: "Notification not found or does not belong to the current user.",
+    ErrorCode.INTEGRATION_INVALID_TOKEN: "Missing or invalid integration token.",
     ErrorCode.INTERNAL_ERROR: "An internal error occurred.",
 }
 

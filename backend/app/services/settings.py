@@ -8,6 +8,9 @@
 - **Write-only secret handling**: passwords and the integration token are
   stored in the KV store but are NEVER echoed in read paths; the response
   schema substitutes ``*_is_set`` boolean flags.
+- **Public channel config getters** (Step 8): ``email_channel_config()`` and
+  ``http_channel_config()`` return typed dataclasses consumed by channel
+  adapters — never exposed via the API in plain text.
 
 Key-name conventions (dot-namespaced, matching §3.1):
     reminders.best_before_lead_days
@@ -44,6 +47,8 @@ All DB access is via ``SettingsRepository``; no raw queries here.
 from __future__ import annotations
 
 import json
+import secrets
+from dataclasses import dataclass
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -108,6 +113,42 @@ _SECRET_KEYS: frozenset[str] = frozenset(
         "channels.mqtt.password",
     }
 )
+
+
+# ---------------------------------------------------------------------------
+# Channel config dataclasses (for adapter use only — never echoed via API)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class EmailChannelConfig:
+    """Full (decrypted) email channel configuration consumed by EmailChannel.
+
+    Never returned from API routes — use SettingsService.email_channel_config()
+    inside channel adapter code only.
+    """
+
+    enabled: bool
+    host: str | None
+    port: int | None
+    username: str | None
+    password: str | None  # noqa: S105 — internal use only, never serialised
+    use_tls: bool
+    from_address: str | None
+
+
+@dataclass
+class HttpChannelConfig:
+    """Full (decrypted) HTTP channel configuration consumed by HttpChannel.
+
+    Never returned from API routes — use SettingsService.http_channel_config()
+    inside channel adapter code only.
+    """
+
+    enabled: bool
+    webhook_url: str | None
+    auth_header: str | None  # noqa: S105 — internal use only, never serialised
+    integration_token: str | None  # noqa: S105 — internal use only, never serialised
 
 
 # ---------------------------------------------------------------------------
@@ -349,3 +390,56 @@ class SettingsService:
     def scan_time(self) -> str:
         """Return the daily scan time as HH:MM."""
         return str(self._get_value("reminders.scan_time"))
+
+    def best_before_lead_days_value(self) -> int:
+        """Alias matching the reminder engine accessor name pattern."""
+        return self.best_before_lead_days()
+
+    # ------------------------------------------------------------------
+    # Public channel config getters (Step 8)
+    # These return typed dataclasses for use by channel adapters only —
+    # they must NEVER be serialised and returned via the API in plain text.
+    # ------------------------------------------------------------------
+
+    def email_channel_config(self) -> EmailChannelConfig:
+        """Return the full (decrypted) email channel config for adapter use."""
+        return EmailChannelConfig(
+            enabled=self._get_value("channels.email.enabled"),
+            host=self._get_value("channels.email.host"),
+            port=self._get_value("channels.email.port"),
+            username=self._get_value("channels.email.username"),
+            password=self._get_value("channels.email.password"),
+            use_tls=self._get_value("channels.email.use_tls"),
+            from_address=self._get_value("channels.email.from_address"),
+        )
+
+    def http_channel_config(self) -> HttpChannelConfig:
+        """Return the full (decrypted) HTTP channel config for adapter use."""
+        return HttpChannelConfig(
+            enabled=self._get_value("channels.http.enabled"),
+            webhook_url=self._get_value("channels.http.webhook_url"),
+            auth_header=self._get_value("channels.http.auth_header"),
+            integration_token=self._get_value("channels.http.integration_token"),
+        )
+
+    def get_or_create_integration_token(self) -> str:
+        """Return the integration token, generating and persisting one if absent.
+
+        Called during ``GET /settings`` when ``channels.http.enabled`` is True
+        and no token has been set yet.  The generated token is a 32-byte
+        URL-safe secret stored in the ``settings`` KV table (same as any other
+        channel secret — write-only on the API surface).
+
+        Returns
+        -------
+        str
+            The token value (plain text — for internal use only; never echoed
+            in API responses, only ``integration_token_is_set: bool`` is).
+        """
+        existing = self._get_value("channels.http.integration_token")
+        if existing:
+            return str(existing)
+        token = secrets.token_urlsafe(32)
+        self._set_value("channels.http.integration_token", token)
+        self._db.flush()
+        return token

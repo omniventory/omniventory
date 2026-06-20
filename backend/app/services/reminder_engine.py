@@ -329,13 +329,17 @@ class ReminderEngine:
         self,
         definition_id: int,
         today_local: date | None = None,
-    ) -> int:
+    ) -> list[Notification]:
         """Evaluate low-stock for a single definition across all active recipients.
 
         This is the event-trigger path called by StockMovementService after
         consume/discard/adjust.  It applies the same open/repeat/close logic as
         run_scan but scoped to one definition.  Used for immediate in-app
         feedback without waiting for the daily scan.
+
+        Returns the list of newly created ``Notification`` rows so that the
+        caller (route handler) can dispatch instant channels post-commit
+        (Step 8 §4.6: "scan + event paths"; dispatch after commit is the F1 fix).
 
         Parameters
         ----------
@@ -346,8 +350,9 @@ class ReminderEngine:
 
         Returns
         -------
-        int
-            Number of newly created notification rows (0 or more).
+        list[Notification]
+            Newly created notification rows (may be empty if definition is
+            not low or notifications already existed from prior evaluation).
         """
         if today_local is None:
             household = self._household_repo.ensure()
@@ -355,7 +360,7 @@ class ReminderEngine:
 
         recipients = self._user_repo.list_active()
         if not recipients:
-            return 0
+            return []
 
         from app.services.low_stock import LowStockService
 
@@ -371,11 +376,10 @@ class ReminderEngine:
         # per-user loop only touches this definition.
         scoped_low_now: set[int] = {definition_id} if definition_id in low_now else set()
 
-        total_created = 0
         all_new: list[Notification] = []
 
         for user in recipients:
-            low_count, new_notifs = self._evaluate_low_stock_for_user(
+            _count, new_notifs = self._evaluate_low_stock_for_user(
                 user=user,
                 low_now=scoped_low_now,
                 low_item_map=low_item_map,
@@ -383,17 +387,12 @@ class ReminderEngine:
                 today_local=today_local,
                 scoped_definition_id=definition_id,
             )
-            total_created += low_count
             all_new.extend(new_notifs)
 
-        # Note: dispatch for the event-trigger path is intentionally NOT done
-        # here.  Email is digest-only (include_email_digest=False → email no-op)
-        # and HTTP/MQTT instant channels (Steps 8/9) are not yet implemented.
-        # When Step 8/9 land, the caller (StockMovementService) should call
-        # build_dispatcher(db).dispatch(all_new, include_email_digest=False)
-        # after the movement commits.  For now the event path only creates
-        # in-app rows (which is the correct M4 Step 7 scope).
-        return total_created
+        # Callers (route handlers) dispatch instant channels post-commit:
+        #   build_dispatcher(db).dispatch(all_new, include_email_digest=False)
+        # The engine does NOT dispatch itself (F1 fix: network I/O after commit).
+        return all_new
 
     # ------------------------------------------------------------------
     # Internal: date-source evaluation

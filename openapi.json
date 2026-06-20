@@ -1634,6 +1634,35 @@
         "title": "IntakeRequest",
         "type": "object"
       },
+      "IntegrationStateResponse": {
+        "description": "Live inventory-state counts for the Home Assistant RESTful sensor.\n\nAuthorised by the ``integration_token`` (header or query param) \u2014 not the\nsession cookie.  See ``GET /api/integrations/state``.",
+        "properties": {
+          "expired_count": {
+            "title": "Expired Count",
+            "type": "integer"
+          },
+          "expiring_count": {
+            "title": "Expiring Count",
+            "type": "integer"
+          },
+          "generated_at": {
+            "title": "Generated At",
+            "type": "string"
+          },
+          "low_stock_count": {
+            "title": "Low Stock Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "low_stock_count",
+          "expiring_count",
+          "expired_count",
+          "generated_at"
+        ],
+        "title": "IntegrationStateResponse",
+        "type": "object"
+      },
       "KindResponse": {
         "description": "Public representation of an ItemKind.",
         "properties": {
@@ -5056,6 +5085,82 @@
         ]
       }
     },
+    "/api/integrations/state": {
+      "get": {
+        "description": "Return live inventory-state counts for Home Assistant's RESTful sensor.\n\nComputes the current:\n- ``low_stock_count``  \u2014 definitions below their low-stock threshold.\n- ``expiring_count``   \u2014 lots expiring within the best-before lead window.\n- ``expired_count``    \u2014 lots that have already expired.\n- ``generated_at``     \u2014 UTC ISO-8601 timestamp (not cached).\n\nRequires a valid ``integration_token`` in the ``X-Omniventory-Token``\nheader or ``?token=`` query parameter.  Returns 401\n``integration.invalid_token`` for missing or wrong tokens.\n\nThis endpoint is **not** behind the session-cookie dependency.  Home\nAssistant's RESTful sensor configuration points at this URL with the\ntoken in a header or query parameter.",
+        "operationId": "get_integration_state_api_integrations_state_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Token"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Omniventory-Token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Omniventory-Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntegrationStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Integration State",
+        "tags": [
+          "integrations"
+        ]
+      }
+    },
     "/api/kinds": {
       "get": {
         "description": "Return all item kinds (seeded: durable / consumable / perishable).\n\nThis endpoint is read-only \u2014 there are no write endpoints for kinds in M1.",
@@ -5964,7 +6069,7 @@
     },
     "/api/settings": {
       "get": {
-        "description": "Return the current reminders and channels configuration.\n\nSecrets (SMTP password, MQTT password, integration token, auth header)\nare never echoed; each is replaced by a ``*_is_set`` boolean flag.\nUn-set keys return their code-defined defaults (the table only stores\nuser overrides).",
+        "description": "Return the current reminders and channels configuration.\n\nSecrets (SMTP password, MQTT password, integration token, auth header)\nare never echoed; each is replaced by a ``*_is_set`` boolean flag.\nUn-set keys return their code-defined defaults (the table only stores\nuser overrides).\n\n**Integration token auto-generation (Step 8):** when the HTTP channel is\nenabled and no ``integration_token`` has been set, this endpoint generates\none and persists it so that the next ``GET /settings`` returns\n``integration_token_is_set: True``.  The token itself is never echoed;\nthe caller can retrieve it via ``PATCH /settings`` flow or from the\nConfiguration UI (Step 12).",
         "operationId": "get_settings_api_settings_get",
         "responses": {
           "200": {

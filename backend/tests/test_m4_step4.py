@@ -1108,8 +1108,8 @@ class TestEvaluateLowStock:
         engine = self._make_engine(db_session)
         today = date(2025, 6, 1)
 
-        count = engine.evaluate_low_stock(defn.id, today_local=today)
-        assert count == 1
+        new_notifs = engine.evaluate_low_stock(defn.id, today_local=today)
+        assert len(new_notifs) == 1
 
         from app.repositories.notification import NotificationRepository
 
@@ -1125,8 +1125,8 @@ class TestEvaluateLowStock:
         engine = self._make_engine(db_session)
         today = date(2025, 6, 1)
 
-        count = engine.evaluate_low_stock(defn.id, today_local=today)
-        assert count == 0
+        new_notifs = engine.evaluate_low_stock(defn.id, today_local=today)
+        assert len(new_notifs) == 0
 
     def test_event_and_scan_produce_same_rows_no_duplicate(self, db_session: Session) -> None:
         """Event hook then scan: no duplicate rows created."""
@@ -1137,8 +1137,8 @@ class TestEvaluateLowStock:
         today = date(2025, 6, 1)
 
         # Event fires first
-        count_event = engine.evaluate_low_stock(defn.id, today_local=today)
-        assert count_event == 1
+        new_notifs_event = engine.evaluate_low_stock(defn.id, today_local=today)
+        assert len(new_notifs_event) == 1
 
         # Daily scan runs: should not create another opener
         from app.services.reminder_engine import ReminderEngine
@@ -1175,10 +1175,10 @@ class TestEvaluateLowStock:
         summary = ReminderEngine(db_session).run_scan(today_local=today)
         assert summary.low_stock == 1
 
-        # Event fires: should be idempotent
+        # Event fires: should be idempotent (returns empty list when no new rows)
         engine = ReminderEngine(db_session)
-        count = engine.evaluate_low_stock(defn.id, today_local=today)
-        assert count == 0
+        new_notifs = engine.evaluate_low_stock(defn.id, today_local=today)
+        assert len(new_notifs) == 0
 
     def test_evaluate_low_stock_closes_episode_when_recovered(self, db_session: Session) -> None:
         """evaluate_low_stock closes an open episode when definition is no longer low."""
