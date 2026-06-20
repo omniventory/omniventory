@@ -92,11 +92,16 @@ def _make_in_memory_session() -> tuple[Session, Any]:
     ):
         importlib.reload(mod)
 
-    from sqlalchemy.orm import configure_mappers
-
-    configure_mappers()
-
+    # Configure ONLY this Base's registry rather than the global
+    # ``configure_mappers()``: earlier test modules in the same pytest process
+    # also reload model modules, leaving orphaned registries whose relationship
+    # strings now point at reloaded-away classes.  The global call walks those
+    # orphans and raises ``InvalidRequestError`` while resolving e.g. 'ItemKind';
+    # scoping configuration to the freshly reloaded registry sidesteps that
+    # cross-file pollution.
     from app.db.base import Base as _Base
+
+    _Base.registry.configure()
 
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
 

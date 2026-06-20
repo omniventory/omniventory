@@ -85,8 +85,9 @@ const baseSettings: AnyResult = {
       port: null,
       username: null,
       password_is_set: false,
-      use_tls: false,
+      encryption: "none",
       from_address: null,
+      from_name: null,
     },
     http: {
       enabled: false,
@@ -117,6 +118,8 @@ const settingsWithSecrets: AnyResult = {
       password_is_set: true,
       host: "smtp.example.com",
       port: 587,
+      encryption: "starttls",
+      from_name: "Omni",
     },
     http: {
       ...baseSettings.channels.http,
@@ -731,6 +734,163 @@ describe("per-item reminder_lead_days — definition form", () => {
     });
 
     expect(screen.queryByTestId("def-reminder-lead-days-value")).toBeNull();
+  });
+});
+
+// ── Tests: Email encryption / from_name / test button (Walkthrough Fix 1) ────
+
+describe("Configuration page — email encryption and from_name", () => {
+  it("encryption Select is rendered in the email section", async () => {
+    mockSettingsAndMe();
+
+    await act(async () => {
+      renderConfiguration();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("email-encryption-select")).toBeDefined();
+    });
+  });
+
+  it("from_name TextInput is rendered in the email section", async () => {
+    mockSettingsAndMe();
+
+    await act(async () => {
+      renderConfiguration();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("email-from-name-input")).toBeDefined();
+    });
+  });
+
+  it("saving email sends encryption (not use_tls) in the PATCH body", async () => {
+    mockSettingsAndMe();
+
+    let patchBody: AnyResult = null;
+    vi.mocked(client.PATCH).mockImplementation(async (_path: AnyResult, opts: AnyResult) => {
+      patchBody = opts?.body;
+      return { data: baseSettings, response: new Response(null, { status: 200 }) };
+    });
+
+    await act(async () => {
+      renderConfiguration();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("save-email-btn")).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-email-btn"));
+    });
+
+    await waitFor(() => {
+      expect(patchBody).not.toBeNull();
+    });
+
+    // Must have encryption field, must NOT have use_tls
+    expect("encryption" in (patchBody?.channels?.email ?? {})).toBe(true);
+    expect("use_tls" in (patchBody?.channels?.email ?? {})).toBe(false);
+  });
+
+  it("saving email sends from_name in the PATCH body", async () => {
+    mockSettingsAndMe();
+
+    let patchBody: AnyResult = null;
+    vi.mocked(client.PATCH).mockImplementation(async (_path: AnyResult, opts: AnyResult) => {
+      patchBody = opts?.body;
+      return { data: baseSettings, response: new Response(null, { status: 200 }) };
+    });
+
+    await act(async () => {
+      renderConfiguration();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("email-from-name-input")).toBeDefined();
+    });
+
+    // Type a from_name value — the testid is on the wrapper div; get the inner input
+    const fromNameWrapper = screen.getByTestId("email-from-name-input");
+    const fromNameInput = (fromNameWrapper.querySelector("input") ?? fromNameWrapper) as HTMLInputElement;
+    fireEvent.change(fromNameInput, { target: { value: "My Server" } });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("save-email-btn"));
+    });
+
+    await waitFor(() => {
+      expect(patchBody).not.toBeNull();
+    });
+
+    expect(patchBody?.channels?.email?.from_name).toBe("My Server");
+  });
+
+  it("test-email-btn calls POST /api/settings/email/test and shows success notification on ok=true", async () => {
+    mockSettingsAndMe();
+
+    vi.mocked(client.POST).mockImplementation(async (path: AnyResult) => {
+      if (path === "/api/settings/email/test") {
+        return {
+          data: { ok: true, detail: null, recipient: "admin@example.com" },
+          response: new Response(null, { status: 200 }),
+        };
+      }
+      return { data: null, error: {}, response: new Response(null, { status: 404 }) };
+    });
+
+    await act(async () => {
+      renderConfiguration();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("test-email-btn")).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("test-email-btn"));
+    });
+
+    await waitFor(() => {
+      expect(client.POST).toHaveBeenCalledWith("/api/settings/email/test");
+    });
+
+    // On success, no error alert should be shown
+    expect(screen.queryByTestId("email-test-result")).toBeNull();
+  });
+
+  it("test-email-btn shows error alert on ok=false", async () => {
+    mockSettingsAndMe();
+
+    vi.mocked(client.POST).mockImplementation(async (path: AnyResult) => {
+      if (path === "/api/settings/email/test") {
+        return {
+          data: { ok: false, detail: "Connection refused", recipient: "admin@example.com" },
+          response: new Response(null, { status: 200 }),
+        };
+      }
+      return { data: null, error: {}, response: new Response(null, { status: 404 }) };
+    });
+
+    await act(async () => {
+      renderConfiguration();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("test-email-btn")).toBeDefined();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("test-email-btn"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("email-test-result")).toBeDefined();
+    });
+
+    const resultAlert = screen.getByTestId("email-test-result");
+    expect(resultAlert.textContent).toContain("Connection refused");
   });
 });
 

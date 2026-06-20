@@ -932,6 +932,36 @@ export interface paths {
         patch: operations["patch_settings_api_settings_patch"];
         trace?: never;
     };
+    "/api/settings/email/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Email
+         * @description Send a test email to the currently-authenticated user.
+         *
+         *     **Diagnostic semantics — always returns HTTP 200 when authenticated.**
+         *     A failed SMTP connection is an expected diagnostic outcome, not an API
+         *     error.  The ``ok`` field in the response indicates success or failure.
+         *
+         *     The test uses the currently-saved email settings and **ignores the
+         *     ``enabled`` flag** — this allows the user to verify the SMTP settings
+         *     before enabling the channel.  Only ``host`` is required.
+         *
+         *     The test email is sent in the user's preferred language (or EN if unset).
+         */
+        post: operations["test_email_api_settings_email_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1176,16 +1206,21 @@ export interface components {
         EmailChannelResponse: {
             /** Enabled */
             enabled: boolean;
+            /**
+             * Encryption
+             * @enum {string}
+             */
+            encryption: "none" | "starttls" | "ssl";
             /** From Address */
             from_address: string | null;
+            /** From Name */
+            from_name: string | null;
             /** Host */
             host: string | null;
             /** Password Is Set */
             password_is_set: boolean;
             /** Port */
             port: number | null;
-            /** Use Tls */
-            use_tls: boolean;
             /** Username */
             username: string | null;
         };
@@ -1196,18 +1231,32 @@ export interface components {
         EmailChannelUpdate: {
             /** Enabled */
             enabled?: boolean | null;
+            /** Encryption */
+            encryption?: ("none" | "starttls" | "ssl") | null;
             /** From Address */
             from_address?: string | null;
+            /** From Name */
+            from_name?: string | null;
             /** Host */
             host?: string | null;
             /** Password */
             password?: string | null;
             /** Port */
             port?: number | null;
-            /** Use Tls */
-            use_tls?: boolean | null;
             /** Username */
             username?: string | null;
+        };
+        /**
+         * EmailTestResult
+         * @description Result of a POST /settings/email/test request.
+         */
+        EmailTestResult: {
+            /** Detail */
+            detail: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Recipient */
+            recipient: string;
         };
         /**
          * ErrorResponse
@@ -4503,6 +4552,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_email_api_settings_email_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailTestResult"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

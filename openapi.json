@@ -734,6 +734,15 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "encryption": {
+            "enum": [
+              "none",
+              "starttls",
+              "ssl"
+            ],
+            "title": "Encryption",
+            "type": "string"
+          },
           "from_address": {
             "anyOf": [
               {
@@ -744,6 +753,17 @@
               }
             ],
             "title": "From Address"
+          },
+          "from_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Name"
           },
           "host": {
             "anyOf": [
@@ -771,10 +791,6 @@
             ],
             "title": "Port"
           },
-          "use_tls": {
-            "title": "Use Tls",
-            "type": "boolean"
-          },
           "username": {
             "anyOf": [
               {
@@ -793,8 +809,9 @@
           "port",
           "username",
           "password_is_set",
-          "use_tls",
-          "from_address"
+          "encryption",
+          "from_address",
+          "from_name"
         ],
         "title": "EmailChannelResponse",
         "type": "object"
@@ -813,6 +830,22 @@
             ],
             "title": "Enabled"
           },
+          "encryption": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "starttls",
+                  "ssl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Encryption"
+          },
           "from_address": {
             "anyOf": [
               {
@@ -823,6 +856,17 @@
               }
             ],
             "title": "From Address"
+          },
+          "from_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Name"
           },
           "host": {
             "anyOf": [
@@ -859,17 +903,6 @@
             ],
             "title": "Port"
           },
-          "use_tls": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Use Tls"
-          },
           "username": {
             "anyOf": [
               {
@@ -883,6 +916,37 @@
           }
         },
         "title": "EmailChannelUpdate",
+        "type": "object"
+      },
+      "EmailTestResult": {
+        "description": "Result of a POST /settings/email/test request.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "recipient": {
+            "title": "Recipient",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "detail",
+          "recipient"
+        ],
+        "title": "EmailTestResult",
         "type": "object"
       },
       "ErrorResponse": {
@@ -6144,6 +6208,38 @@
           }
         },
         "summary": "Patch Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/email/test": {
+      "post": {
+        "description": "Send a test email to the currently-authenticated user.\n\n**Diagnostic semantics \u2014 always returns HTTP 200 when authenticated.**\nA failed SMTP connection is an expected diagnostic outcome, not an API\nerror.  The ``ok`` field in the response indicates success or failure.\n\nThe test uses the currently-saved email settings and **ignores the\n``enabled`` flag** \u2014 this allows the user to verify the SMTP settings\nbefore enabling the channel.  Only ``host`` is required.\n\nThe test email is sent in the user's preferred language (or EN if unset).",
+        "operationId": "test_email_api_settings_email_test_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailTestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Test Email",
         "tags": [
           "settings"
         ]

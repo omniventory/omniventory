@@ -1061,15 +1061,15 @@ class TestEmailChannelDeliver:
         # Now there's a 'sent' row
         assert delivery_repo.exists_sent(n.id, "email") is True  # type: ignore[arg-type]
 
-    def test_starttls_called_when_use_tls_true(self, db_session: Session) -> None:
-        """When use_tls=True, smtp.starttls() is called."""
+    def test_starttls_called_when_encryption_starttls(self, db_session: Session) -> None:
+        """When encryption='starttls', smtp.starttls() is called."""
         _seed_minimal(db_session)
         from app.repositories.setting import SettingsRepository
 
         repo = SettingsRepository(db_session)
         repo.set("channels.email.enabled", "true")
         repo.set("channels.email.host", "smtp.example.com")
-        repo.set("channels.email.use_tls", "true")
+        repo.set("channels.email.encryption", "starttls")
         db_session.flush()
 
         n = _make_notification(db_session, 1)
@@ -1085,6 +1085,63 @@ class TestEmailChannelDeliver:
             channel.deliver([n], include_email_digest=True)  # type: ignore[list-item]
 
         mock_smtp_instance.starttls.assert_called_once()
+
+    def test_ssl_uses_smtp_ssl_not_smtp(self, db_session: Session) -> None:
+        """When encryption='ssl', smtplib.SMTP_SSL is used and starttls() is NOT called."""
+        _seed_minimal(db_session)
+        from app.repositories.setting import SettingsRepository
+
+        repo = SettingsRepository(db_session)
+        repo.set("channels.email.enabled", "true")
+        repo.set("channels.email.host", "smtp.example.com")
+        repo.set("channels.email.encryption", "ssl")
+        db_session.flush()
+
+        n = _make_notification(db_session, 1)
+
+        from app.notifications.channels.email import EmailChannel
+
+        channel = EmailChannel(db_session)
+
+        with (
+            patch("smtplib.SMTP") as mock_smtp_cls,
+            patch("smtplib.SMTP_SSL") as mock_smtp_ssl_cls,
+        ):
+            mock_smtp_ssl_instance = MagicMock()
+            mock_smtp_ssl_cls.return_value.__enter__ = MagicMock(
+                return_value=mock_smtp_ssl_instance
+            )
+            mock_smtp_ssl_cls.return_value.__exit__ = MagicMock(return_value=False)
+            channel.deliver([n], include_email_digest=True)  # type: ignore[list-item]
+
+        mock_smtp_ssl_cls.assert_called_once()
+        mock_smtp_cls.assert_not_called()
+        mock_smtp_ssl_instance.starttls.assert_not_called()
+
+    def test_encryption_none_no_starttls(self, db_session: Session) -> None:
+        """When encryption='none', smtp.starttls() is NOT called."""
+        _seed_minimal(db_session)
+        from app.repositories.setting import SettingsRepository
+
+        repo = SettingsRepository(db_session)
+        repo.set("channels.email.enabled", "true")
+        repo.set("channels.email.host", "smtp.example.com")
+        repo.set("channels.email.encryption", "none")
+        db_session.flush()
+
+        n = _make_notification(db_session, 1)
+
+        from app.notifications.channels.email import EmailChannel
+
+        channel = EmailChannel(db_session)
+
+        with patch("smtplib.SMTP") as mock_smtp_cls:
+            mock_smtp_instance = MagicMock()
+            mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_smtp_instance)
+            mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+            channel.deliver([n], include_email_digest=True)  # type: ignore[list-item]
+
+        mock_smtp_instance.starttls.assert_not_called()
 
     def test_login_called_when_credentials_set(self, db_session: Session) -> None:
         """When username and password are set, smtp.login() is called."""
@@ -1298,3 +1355,308 @@ class TestRemindersRunWithEmail:
         mock_dispatcher.dispatch.assert_called_once()
         call_kwargs = mock_dispatcher.dispatch.call_args
         assert call_kwargs.kwargs.get("include_email_digest") is True
+
+
+# ---------------------------------------------------------------------------
+# Tests: Walkthrough Fix 1 — encryption, from_name, legacy shim, test endpoint
+# ---------------------------------------------------------------------------
+
+
+class TestLegacyEncryptionShim:
+    """Legacy use_tls shim: existing stored use_tls is mapped to encryption value."""
+
+    def test_legacy_use_tls_true_maps_to_starttls(self, db_session: Session) -> None:
+        """Stored use_tls='true' with NO encryption key → email_channel_config().encryption == 'starttls'."""
+        _seed_minimal(db_session)
+        from app.repositories.setting import SettingsRepository
+
+        repo = SettingsRepository(db_session)
+        repo.set("channels.email.enabled", "true")
+        repo.set("channels.email.host", "smtp.example.com")
+        repo.set("channels.email.use_tls", "true")
+        # Do NOT set channels.email.encryption
+        db_session.flush()
+
+        from app.services.settings import SettingsService
+
+        svc = SettingsService(db_session)
+        cfg = svc.email_channel_config()
+        assert cfg.encryption == "starttls"
+
+    def test_legacy_use_tls_false_maps_to_none(self, db_session: Session) -> None:
+        """Stored use_tls='false' with NO encryption key → email_channel_config().encryption == 'none'."""
+        _seed_minimal(db_session)
+        from app.repositories.setting import SettingsRepository
+
+        repo = SettingsRepository(db_session)
+        repo.set("channels.email.enabled", "true")
+        repo.set("channels.email.host", "smtp.example.com")
+        repo.set("channels.email.use_tls", "false")
+        # Do NOT set channels.email.encryption
+        db_session.flush()
+
+        from app.services.settings import SettingsService
+
+        svc = SettingsService(db_session)
+        cfg = svc.email_channel_config()
+        assert cfg.encryption == "none"
+
+    def test_new_encryption_key_takes_precedence_over_legacy_use_tls(
+        self, db_session: Session
+    ) -> None:
+        """When both old use_tls and new encryption are stored, new key wins."""
+        _seed_minimal(db_session)
+        from app.repositories.setting import SettingsRepository
+
+        repo = SettingsRepository(db_session)
+        repo.set("channels.email.enabled", "true")
+        repo.set("channels.email.host", "smtp.example.com")
+        repo.set("channels.email.use_tls", "true")  # legacy: would map to 'starttls'
+        repo.set("channels.email.encryption", "ssl")  # new key: should win
+        db_session.flush()
+
+        from app.services.settings import SettingsService
+
+        svc = SettingsService(db_session)
+        cfg = svc.email_channel_config()
+        assert cfg.encryption == "ssl"
+
+    def test_no_keys_stored_defaults_to_none(self, db_session: Session) -> None:
+        """When neither key is stored, encryption defaults to 'none'."""
+        _seed_minimal(db_session)
+        from app.services.settings import SettingsService
+
+        svc = SettingsService(db_session)
+        cfg = svc.email_channel_config()
+        assert cfg.encryption == "none"
+
+
+class TestFromNameHeader:
+    """from_name is included in the email From header using formataddr."""
+
+    def test_from_name_in_from_header(self, db_session: Session) -> None:
+        """When from_name is set, the From header uses 'Display Name <addr>' format."""
+        _seed_minimal(db_session)
+        from app.repositories.setting import SettingsRepository
+
+        repo = SettingsRepository(db_session)
+        repo.set("channels.email.enabled", "true")
+        repo.set("channels.email.host", "smtp.example.com")
+        repo.set("channels.email.from_address", "noreply@example.com")
+        repo.set("channels.email.from_name", "Omniventory Alerts")
+        db_session.flush()
+
+        n = _make_notification(db_session, 1)
+
+        from app.notifications.channels.email import EmailChannel
+
+        channel = EmailChannel(db_session)
+
+        captured_msgs: list[object] = []
+
+        def _capture(msg: object) -> None:
+            captured_msgs.append(msg)
+
+        with patch("smtplib.SMTP") as mock_smtp_cls:
+            mock_smtp_instance = MagicMock()
+            mock_smtp_instance.send_message.side_effect = _capture
+            mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_smtp_instance)
+            mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+            channel.deliver([n], include_email_digest=True)  # type: ignore[list-item]
+
+        assert len(captured_msgs) == 1
+        from_header = captured_msgs[0]["From"]  # type: ignore[index]
+        # Should contain both the name and the address
+        assert "Omniventory Alerts" in from_header
+        assert "noreply@example.com" in from_header
+
+    def test_no_from_name_uses_plain_addr(self, db_session: Session) -> None:
+        """When from_name is not set, the From header is just the raw address."""
+        _seed_minimal(db_session)
+        from app.repositories.setting import SettingsRepository
+
+        repo = SettingsRepository(db_session)
+        repo.set("channels.email.enabled", "true")
+        repo.set("channels.email.host", "smtp.example.com")
+        repo.set("channels.email.from_address", "noreply@example.com")
+        # No from_name
+        db_session.flush()
+
+        n = _make_notification(db_session, 1)
+
+        from app.notifications.channels.email import EmailChannel
+
+        channel = EmailChannel(db_session)
+
+        captured_msgs: list[object] = []
+
+        def _capture(msg: object) -> None:
+            captured_msgs.append(msg)
+
+        with patch("smtplib.SMTP") as mock_smtp_cls:
+            mock_smtp_instance = MagicMock()
+            mock_smtp_instance.send_message.side_effect = _capture
+            mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_smtp_instance)
+            mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+            channel.deliver([n], include_email_digest=True)  # type: ignore[list-item]
+
+        assert len(captured_msgs) == 1
+        from_header = captured_msgs[0]["From"]  # type: ignore[index]
+        assert from_header == "noreply@example.com"
+
+
+class TestRenderTestEmail:
+    """render_test_email returns bilingual subject/body tuple."""
+
+    def test_render_test_email_en_subject_and_body(self) -> None:
+        from app.notifications.messages import render_test_email
+
+        subject, body = render_test_email("en")
+        assert isinstance(subject, str)
+        assert isinstance(body, str)
+        assert len(subject) > 0
+        assert len(body) > 0
+        # EN text should NOT contain Chinese characters
+        for char in "测试邮件已":
+            assert char not in subject
+            assert char not in body
+
+    def test_render_test_email_zh_subject_and_body(self) -> None:
+        from app.notifications.messages import render_test_email
+
+        subject, body = render_test_email("zh")
+        assert isinstance(subject, str)
+        assert isinstance(body, str)
+        # ZH should contain Chinese
+        assert any(ord(c) > 0x4E00 for c in subject + body), (
+            "ZH render should contain Chinese characters"
+        )
+
+    def test_render_test_email_unknown_lang_defaults_en(self) -> None:
+        from app.notifications.messages import render_test_email
+
+        subject, body = render_test_email("fr")
+        # Should fall back to EN — no Chinese
+        for char in "测试":
+            assert char not in subject
+            assert char not in body
+
+
+class TestEmailTestEndpoint:
+    """POST /settings/email/test diagnostic endpoint."""
+
+    def test_success_ok_true(self, http_client: object) -> None:
+        """With host configured and SMTP mocked to succeed → ok=true, recipient=admin email."""
+        # Configure host
+        http_client.patch(  # type: ignore[attr-defined]
+            "/api/settings",
+            json={"channels": {"email": {"host": "smtp.example.com"}}},
+        )
+
+        with patch("smtplib.SMTP") as mock_smtp_cls:
+            mock_smtp_instance = MagicMock()
+            mock_smtp_cls.return_value.__enter__ = MagicMock(return_value=mock_smtp_instance)
+            mock_smtp_cls.return_value.__exit__ = MagicMock(return_value=False)
+
+            resp = http_client.post("/api/settings/email/test")  # type: ignore[attr-defined]
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+        assert data["detail"] is None
+        assert data["recipient"] == "admin@example.com"
+        mock_smtp_instance.send_message.assert_called_once()
+
+    def test_smtp_error_ok_false_with_detail(self, http_client: object) -> None:
+        """When SMTP raises → ok=false, detail is non-null."""
+        http_client.patch(  # type: ignore[attr-defined]
+            "/api/settings",
+            json={"channels": {"email": {"host": "smtp.example.com"}}},
+        )
+
+        with patch("smtplib.SMTP") as mock_smtp_cls:
+            mock_smtp_cls.side_effect = ConnectionRefusedError("Connection refused")
+            resp = http_client.post("/api/settings/email/test")  # type: ignore[attr-defined]
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is False
+        assert data["detail"] is not None
+        assert "refused" in data["detail"].lower() or "Connection" in data["detail"]
+
+    def test_no_host_ok_false_message(self, http_client: object) -> None:
+        """When no host is configured → ok=false with 'not configured' message."""
+        # Do NOT configure a host (default state)
+        resp = http_client.post("/api/settings/email/test")  # type: ignore[attr-defined]
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is False
+        assert "not configured" in (data["detail"] or "").lower()
+
+    def test_unauthenticated_returns_401(self, http_client: object) -> None:
+        """An unauthenticated request to the test endpoint returns 401.
+
+        The http_client fixture uses an authenticated session (via cookies).
+        To test unauthenticated access, we send the request without any
+        session cookie by using a raw ``requests``-style call that bypasses
+        the cookie jar.  Since TestClient always carries the session cookie
+        from the login step, we explicitly clear cookies for this call.
+        """
+        import httpx
+
+        # Use the underlying httpx client to call the endpoint without cookies.
+        # The TestClient's cookie jar carries the session; we bypass it by
+        # building a request without session cookies.
+        base_url = "http://testserver"
+        with httpx.Client(base_url=base_url, transport=http_client._transport) as bare_client:  # type: ignore[attr-defined]
+            resp = bare_client.post("/api/settings/email/test")
+        assert resp.status_code == 401
+
+
+class TestEmailSettingsRoundTrip:
+    """Settings round-trip: PATCH encryption + from_name → GET reflects them."""
+
+    def test_patch_encryption_and_from_name_reflected_in_get(self, http_client: object) -> None:
+        """PATCH encryption='starttls' and from_name='Omni' → GET shows those values."""
+        patch_resp = http_client.patch(  # type: ignore[attr-defined]
+            "/api/settings",
+            json={
+                "channels": {
+                    "email": {
+                        "encryption": "starttls",
+                        "from_name": "Omni",
+                    }
+                }
+            },
+        )
+        assert patch_resp.status_code == 200
+        body = patch_resp.json()
+        assert body["channels"]["email"]["encryption"] == "starttls"
+        assert body["channels"]["email"]["from_name"] == "Omni"
+        # Password must still be masked
+        assert "password" not in body["channels"]["email"]
+        assert "password_is_set" in body["channels"]["email"]
+
+    def test_invalid_encryption_value_returns_422(self, http_client: object) -> None:
+        """Invalid encryption value (e.g. 'tls') → 422 validation error."""
+        resp = http_client.patch(  # type: ignore[attr-defined]
+            "/api/settings",
+            json={
+                "channels": {
+                    "email": {
+                        "encryption": "tls",  # invalid — not in the 3-way enum
+                    }
+                }
+            },
+        )
+        assert resp.status_code == 422
+
+    def test_ssl_encryption_round_trips(self, http_client: object) -> None:
+        """PATCH encryption='ssl' → GET reflects 'ssl'."""
+        patch_resp = http_client.patch(  # type: ignore[attr-defined]
+            "/api/settings",
+            json={"channels": {"email": {"encryption": "ssl"}}},
+        )
+        assert patch_resp.status_code == 200
+        assert patch_resp.json()["channels"]["email"]["encryption"] == "ssl"

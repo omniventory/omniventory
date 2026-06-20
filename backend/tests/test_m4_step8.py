@@ -396,8 +396,9 @@ class TestSettingsPublicGetters:
         assert cfg.port is None
         assert cfg.username is None
         assert cfg.password is None
-        assert cfg.use_tls is False
+        assert cfg.encryption == "none"  # default encryption mode
         assert cfg.from_address is None
+        assert cfg.from_name is None
 
     def test_email_channel_config_after_set(self, db_session: Session) -> None:
         from app.repositories.setting import SettingsRepository
@@ -409,8 +410,9 @@ class TestSettingsPublicGetters:
         repo.set("channels.email.port", "587")
         repo.set("channels.email.username", "user@test.com")
         repo.set("channels.email.password", "secret")
-        repo.set("channels.email.use_tls", "true")
+        repo.set("channels.email.encryption", "starttls")
         repo.set("channels.email.from_address", "from@test.com")
+        repo.set("channels.email.from_name", "Test Sender")
         db_session.flush()
 
         svc = SettingsService(db_session)
@@ -421,8 +423,9 @@ class TestSettingsPublicGetters:
         assert str(cfg.port) == "587"
         assert cfg.username == "user@test.com"
         assert cfg.password == "secret"
-        assert cfg.use_tls is True
+        assert cfg.encryption == "starttls"
         assert cfg.from_address == "from@test.com"
+        assert cfg.from_name == "Test Sender"
 
     def test_http_channel_config_defaults(self, db_session: Session) -> None:
         from app.services.settings import SettingsService
@@ -519,7 +522,7 @@ class TestEmailChannelPublicGetter:
         repo.set("channels.email.enabled", "true")
         repo.set("channels.email.host", "smtp.example.com")
         repo.set("channels.email.port", "25")
-        repo.set("channels.email.use_tls", "false")
+        repo.set("channels.email.encryption", "none")
         db_session.flush()
 
         ch = EmailChannel(db_session)

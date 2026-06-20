@@ -49,7 +49,7 @@ from __future__ import annotations
 import json
 import secrets
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
@@ -85,8 +85,9 @@ _DEFAULTS: dict[str, Any] = {
     "channels.email.port": None,
     "channels.email.username": None,
     "channels.email.password": None,  # secret — never echoed
-    "channels.email.use_tls": False,
+    "channels.email.encryption": "none",
     "channels.email.from_address": None,
+    "channels.email.from_name": None,
     # HTTP channel
     "channels.http.enabled": False,
     "channels.http.webhook_url": None,
@@ -133,8 +134,9 @@ class EmailChannelConfig:
     port: int | None
     username: str | None
     password: str | None  # noqa: S105 — internal use only, never serialised
-    use_tls: bool
+    encryption: Literal["none", "starttls", "ssl"]
     from_address: str | None
+    from_name: str | None
 
 
 @dataclass
@@ -258,6 +260,38 @@ class SettingsService:
             scan_time=self._get_value("reminders.scan_time"),
         )
 
+    def _email_encryption(self) -> Literal["none", "starttls", "ssl"]:
+        """Return the effective encryption mode for the email channel.
+
+        Resolution order (legacy shim for upgrade compatibility):
+        1. If ``channels.email.encryption`` is explicitly stored → return it.
+        2. Else if legacy ``channels.email.use_tls`` is explicitly stored →
+           map ``"true"`` → ``"starttls"``; anything else → ``"none"``.
+        3. Else → ``"none"`` (the new default).
+
+        This allows an instance that had ``use_tls=true`` saved before the
+        upgrade to keep its STARTTLS behaviour without a data migration.
+        """
+        # 1. Check for the new key first.
+        raw_encryption = self._repo.get("channels.email.encryption")
+        if raw_encryption is not None:
+            # Stored value is present; validate it.
+            val = raw_encryption.strip()
+            if val == "starttls":
+                return "starttls"
+            if val == "ssl":
+                return "ssl"
+            # Stored value is "none" or unrecognised (fall through to default).
+            return "none"
+
+        # 2. Legacy shim: check the old use_tls key.
+        raw_use_tls = self._repo.get("channels.email.use_tls")
+        if raw_use_tls is not None:
+            return "starttls" if raw_use_tls.lower() == "true" else "none"
+
+        # 3. Default.
+        return "none"
+
     def _build_email_response(self) -> EmailChannelResponse:
         return EmailChannelResponse(
             enabled=self._get_value("channels.email.enabled"),
@@ -265,8 +299,9 @@ class SettingsService:
             port=self._get_value("channels.email.port"),
             username=self._get_value("channels.email.username"),
             password_is_set=bool(self._get_value("channels.email.password")),
-            use_tls=self._get_value("channels.email.use_tls"),
+            encryption=self._email_encryption(),
             from_address=self._get_value("channels.email.from_address"),
+            from_name=self._get_value("channels.email.from_name"),
         )
 
     def _build_http_response(self) -> HttpChannelResponse:
@@ -347,10 +382,13 @@ class SettingsService:
         # Secret: always process (None = clear, "" = clear, non-empty = set)
         if upd.password is not None:
             self._set_value("channels.email.password", upd.password if upd.password else None)
-        if upd.use_tls is not None:
-            self._set_value("channels.email.use_tls", upd.use_tls)
+        if upd.encryption is not None:
+            self._repo.set("channels.email.encryption", upd.encryption)
         if upd.from_address is not None:
             self._set_value("channels.email.from_address", upd.from_address)
+        # from_name: accept explicit None to clear, or a string to set
+        if "from_name" in upd.model_fields_set:
+            self._set_value("channels.email.from_name", upd.from_name)
 
     def _apply_http_update(self, upd: HttpChannelUpdate) -> None:
         if upd.enabled is not None:
@@ -428,8 +466,9 @@ class SettingsService:
             port=self._get_value("channels.email.port"),
             username=self._get_value("channels.email.username"),
             password=self._get_value("channels.email.password"),
-            use_tls=self._get_value("channels.email.use_tls"),
+            encryption=self._email_encryption(),
             from_address=self._get_value("channels.email.from_address"),
+            from_name=self._get_value("channels.email.from_name"),
         )
 
     def http_channel_config(self) -> HttpChannelConfig:

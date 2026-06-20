@@ -40,6 +40,7 @@ Validation:
 from __future__ import annotations
 
 import re
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -126,8 +127,9 @@ class EmailChannelResponse(BaseModel):
     port: int | None
     username: str | None
     password_is_set: bool  # write-only secret masked as boolean
-    use_tls: bool
+    encryption: Literal["none", "starttls", "ssl"]
     from_address: str | None
+    from_name: str | None
 
 
 class EmailChannelUpdate(BaseModel):
@@ -138,8 +140,17 @@ class EmailChannelUpdate(BaseModel):
     port: int | None = Field(default=None, ge=1, le=65535)
     username: str | None = None
     password: str | None = None  # write-only; empty string = clear
-    use_tls: bool | None = None
+    encryption: Literal["none", "starttls", "ssl"] | None = None
     from_address: str | None = None
+    from_name: str | None = None
+
+
+class EmailTestResult(BaseModel):
+    """Result of a POST /settings/email/test request."""
+
+    ok: bool
+    detail: str | None
+    recipient: str
 
 
 # ---------------------------------------------------------------------------

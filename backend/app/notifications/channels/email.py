@@ -30,8 +30,9 @@ Configuration (all via ``SettingsService``)
 - ``channels.email.port``         — SMTP port (default system default when None).
 - ``channels.email.username``     — SMTP auth username (optional).
 - ``channels.email.password``     — SMTP auth password (write-only secret).
-- ``channels.email.use_tls``      — use STARTTLS when True.
+- ``channels.email.encryption``   — ``"none"`` | ``"starttls"`` | ``"ssl"``.
 - ``channels.email.from_address`` — envelope From address.
+- ``channels.email.from_name``    — optional From display name.
 
 The channel is considered **enabled** when ``enabled=True`` AND ``host`` is
 non-empty.  Any other combination is treated as disabled (no-op).
@@ -43,11 +44,12 @@ import json
 import logging
 import smtplib
 from email.message import EmailMessage
+from email.utils import formataddr
 from typing import TYPE_CHECKING
 
 from sqlalchemy.orm import Session
 
-from app.notifications.messages import render_digest, render_line
+from app.notifications.messages import render_digest, render_line, render_test_email
 from app.repositories.notification_delivery import NotificationDeliveryRepository
 from app.repositories.user import UserRepository
 from app.services.settings import SettingsService
@@ -228,10 +230,30 @@ class EmailChannel:
                         n.id,
                     )
 
+    def send_test(self, to_address: str, lang: str) -> None:
+        """Send a test email to ``to_address`` using the currently-saved settings.
+
+        Renders a bilingual test subject/body via ``render_test_email`` and
+        delivers it via ``_send_smtp``.  Raises on any SMTP error; the caller
+        (the API route) wraps it in a try/except to produce the diagnostic result.
+
+        Does NOT log to ``notification_deliveries`` — there is no Notification
+        row for a test send.
+        """
+        subject, body = render_test_email(lang)
+        self._send_smtp(to_address, subject, body)
+
     def _send_smtp(self, to_address: str, subject: str, body: str) -> None:
         """Send a plain-text email via SMTP using the configured settings.
 
-        Uses ``smtplib.SMTP`` with optional STARTTLS (``use_tls=True``).
+        Supports three encryption modes (``encryption`` field):
+        - ``"ssl"``:      connect via ``smtplib.SMTP_SSL`` (implicit TLS).
+        - ``"starttls"``: connect via ``smtplib.SMTP`` then call ``smtp.starttls()``.
+        - ``"none"``:     connect via ``smtplib.SMTP``, no TLS.
+
+        The ``from_name`` field (when set) is used with ``email.utils.formataddr``
+        to produce a "Display Name <addr>" From header.
+
         Raises on any SMTP error — callers must catch.
 
         Uses the public ``email_channel_config()`` getter (Step 8 minor fix:
@@ -242,23 +264,34 @@ class EmailChannel:
         port: int | None = cfg.port
         username: str | None = cfg.username
         password: str | None = cfg.password
-        use_tls: bool = cfg.use_tls
+        encryption: str = cfg.encryption
         from_address: str | None = cfg.from_address
+        from_name: str | None = cfg.from_name
 
-        from_addr = from_address or username or f"omniventory@{host}"
+        raw_from_addr = from_address or username or f"omniventory@{host}"
+        # Build the From header with optional display name.
+        from_header = formataddr((from_name, raw_from_addr)) if from_name else raw_from_addr
 
         msg = EmailMessage()
         msg["Subject"] = subject
-        msg["From"] = from_addr
+        msg["From"] = from_header
         msg["To"] = to_address
         msg.set_content(body)
 
         # Connect to SMTP (port is optional — pass 0 to let smtplib use the default).
         smtp_port: int = int(port) if port is not None else 0
 
-        with smtplib.SMTP(host=host, port=smtp_port) as smtp:
-            if use_tls:
-                smtp.starttls()
-            if username and password:
-                smtp.login(username, password)
-            smtp.send_message(msg)
+        if encryption == "ssl":
+            # Implicit TLS — use SMTP_SSL from the start.
+            with smtplib.SMTP_SSL(host=host, port=smtp_port) as smtp:
+                if username and password:
+                    smtp.login(username, password)
+                smtp.send_message(msg)
+        else:
+            # "starttls" or "none" — plain SMTP, optionally upgraded.
+            with smtplib.SMTP(host=host, port=smtp_port) as smtp:
+                if encryption == "starttls":
+                    smtp.starttls()
+                if username and password:
+                    smtp.login(username, password)
+                smtp.send_message(msg)

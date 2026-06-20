@@ -157,6 +157,40 @@ def render_line(code: str, params: dict[str, Any], lang: str) -> str:
     return renderer(params, normalised_lang)
 
 
+def render_test_email(lang: str) -> tuple[str, str]:
+    """Render a test email subject and body for the SMTP test endpoint.
+
+    Parameters
+    ----------
+    lang:
+        BCP-47 language tag.  ``'zh'`` renders in Chinese; any other value
+        renders in English.
+
+    Returns
+    -------
+    (subject, body)
+        A simple bilingual test email for diagnostics.
+    """
+    normalised_lang = "zh" if lang == "zh" else "en"
+
+    if normalised_lang == "zh":
+        subject = "Omniventory SMTP 连通性测试"
+        body = (
+            "您好，\n\n"
+            "这是来自 Omniventory 的 SMTP 连通性测试邮件。\n\n"
+            "若您收到此邮件，则表示 SMTP 配置已正确生效。\n"
+        )
+    else:
+        subject = "Omniventory SMTP connectivity test"
+        body = (
+            "Hello,\n\n"
+            "This is a test email from Omniventory to verify your SMTP configuration.\n\n"
+            "If you received this, your SMTP settings are working correctly.\n"
+        )
+
+    return subject, body
+
+
 def render_digest(lines: list[str], lang: str) -> tuple[str, str]:
     """Wrap rendered reminder lines into an email digest (subject + body).
 

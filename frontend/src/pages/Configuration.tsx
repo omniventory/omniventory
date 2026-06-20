@@ -8,7 +8,7 @@
  *     reminder_warranty_lead_days — via PATCH /api/auth/me.
  *  3. Channels:
  *     a. Email / SMTP — enabled, host, port, username, password (write-only),
- *        use_tls, from_address.
+ *        encryption (none/starttls/ssl), from_address, from_name; test-connection button.
  *     b. HTTP — enabled, webhook_url, auth_header (write-only),
  *        integration_token (write-only, with regenerate + copy + state-URL hint).
  *     c. MQTT — enabled, host, port, username, password (write-only),
@@ -42,6 +42,7 @@ import {
   Group,
   NumberInput,
   Paper,
+  Select,
   Stack,
   Switch,
   Text,
@@ -184,10 +185,13 @@ export function Configuration() {
   const [emailNewPassword, setEmailNewPassword] = useState<string>("");
   const [emailClearPassword, setEmailClearPassword] = useState(false);
   const [emailPasswordIsSet, setEmailPasswordIsSet] = useState(false);
-  const [emailUseTls, setEmailUseTls] = useState(false);
+  const [emailEncryption, setEmailEncryption] = useState<string>("none");
   const [emailFromAddress, setEmailFromAddress] = useState<string>("");
+  const [emailFromName, setEmailFromName] = useState<string>("");
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailTestBusy, setEmailTestBusy] = useState(false);
+  const [emailTestResult, setEmailTestResult] = useState<{ ok: boolean; detail: string | null; recipient: string } | null>(null);
 
   // ── HTTP channel form ──
   const [httpEnabled, setHttpEnabled] = useState(false);
@@ -265,8 +269,10 @@ export function Configuration() {
       setEmailNewPassword("");
       setEmailClearPassword(false);
       setEmailPasswordIsSet(em.password_is_set);
-      setEmailUseTls(em.use_tls);
+      setEmailEncryption(em.encryption);
       setEmailFromAddress(em.from_address ?? "");
+      setEmailFromName(em.from_name ?? "");
+      setEmailTestResult(null);
 
       // Populate HTTP form
       const http = s.channels.http;
@@ -379,8 +385,9 @@ export function Configuration() {
         host: emailHost || null,
         port: emailPort !== "" ? Number(emailPort) : null,
         username: emailUsername || null,
-        use_tls: emailUseTls,
+        encryption: emailEncryption,
         from_address: emailFromAddress || null,
+        from_name: emailFromName || null,
       };
       if (password !== undefined) {
         emailUpdate["password"] = password;
@@ -401,6 +408,26 @@ export function Configuration() {
       await loadAll();
     } finally {
       setEmailBusy(false);
+    }
+  }
+
+  async function handleTestEmail() {
+    setEmailTestBusy(true);
+    setEmailTestResult(null);
+    try {
+      const { data, error } = await client.POST("/api/settings/email/test");
+      if (error || !data) {
+        // Network-level failure (no diagnostic payload). Store the raw reason in
+        // `detail`; the render wraps it once with t("email.testFailed", ...).
+        setEmailTestResult({ ok: false, detail: t("email.testUnknownError"), recipient: "" });
+        return;
+      }
+      if (data.ok) {
+        notifySuccess(t("email.testSuccess", { email: data.recipient }));
+      }
+      setEmailTestResult(data);
+    } finally {
+      setEmailTestBusy(false);
     }
   }
 
@@ -698,11 +725,16 @@ export function Configuration() {
               }}
               testIdPrefix="email-password"
             />
-            <Checkbox
-              label={t("email.useTlsLabel")}
-              checked={emailUseTls}
-              onChange={(e) => setEmailUseTls(e.currentTarget.checked)}
-              data-testid="email-use-tls-checkbox"
+            <Select
+              label={t("email.encryptionLabel")}
+              value={emailEncryption}
+              onChange={(v) => setEmailEncryption(v ?? "none")}
+              data={[
+                { value: "none", label: t("email.encryptionNone") },
+                { value: "starttls", label: t("email.encryptionStarttls") },
+                { value: "ssl", label: t("email.encryptionSsl") },
+              ]}
+              data-testid="email-encryption-select"
             />
             <TextInput
               label={t("email.fromAddressLabel")}
@@ -710,11 +742,35 @@ export function Configuration() {
               onChange={(e) => setEmailFromAddress(e.currentTarget.value)}
               data-testid="email-from-address-input"
             />
+            <TextInput
+              label={t("email.fromNameLabel")}
+              value={emailFromName}
+              onChange={(e) => setEmailFromName(e.currentTarget.value)}
+              data-testid="email-from-name-input"
+            />
             <Text size="xs" c="dimmed">
               {t("email.recipientsNote")}
             </Text>
 
+            {emailTestResult && !emailTestResult.ok && (
+              <Alert icon={<AlertCircle size={16} />} color="red" variant="light" data-testid="email-test-result">
+                {t("email.testFailed", { detail: emailTestResult.detail ?? "" })}
+              </Alert>
+            )}
+
+            <Text size="xs" c="dimmed">
+              {t("email.testHint")}
+            </Text>
+
             <Group justify="flex-end">
+              <Button
+                variant="outline"
+                onClick={() => void handleTestEmail()}
+                loading={emailTestBusy}
+                data-testid="test-email-btn"
+              >
+                {t("email.testButton")}
+              </Button>
               <Button
                 onClick={() => void handleSaveEmail()}
                 loading={emailBusy}
