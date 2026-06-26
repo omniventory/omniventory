@@ -82,6 +82,7 @@ def test_client(
     import app.models.item_kind as ikind_mod
     import app.models.location as loc_mod
     import app.models.media_file as media_file_mod
+    import app.models.note as note_mod
     import app.models.notification as notif_mod
     import app.models.session as sess_mod
     import app.models.setting as setting_mod
@@ -107,6 +108,7 @@ def test_client(
     importlib.reload(media_file_mod)
     importlib.reload(attachment_mod)
     importlib.reload(tag_mod)
+    importlib.reload(note_mod)
 
     from app.config import get_settings
     from app.db.base import Base, get_engine

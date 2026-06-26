@@ -2658,6 +2658,101 @@
         "title": "MqttTestResult",
         "type": "object"
       },
+      "NoteCreate": {
+        "description": "Body for POST /notes.",
+        "properties": {
+          "body": {
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "integer"
+          },
+          "model_type": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Model Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "model_type",
+          "model_id",
+          "body"
+        ],
+        "title": "NoteCreate",
+        "type": "object"
+      },
+      "NoteResponse": {
+        "description": "Public representation of a Note.",
+        "properties": {
+          "body": {
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "integer"
+          },
+          "model_type": {
+            "title": "Model Type",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "model_type",
+          "model_id",
+          "body",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "NoteResponse",
+        "type": "object"
+      },
+      "NoteUpdate": {
+        "description": "Body for PATCH /notes/{id} \u2014 only body is patchable.",
+        "properties": {
+          "body": {
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
+        ],
+        "title": "NoteUpdate",
+        "type": "object"
+      },
       "NotificationResponse": {
         "description": "Public shape of a single in-app notification row.\n\nFields\n------\nid              Surrogate PK.\nsource          ``best_before`` / ``warranty`` / ``low_stock``.\nsubject_type    ``instance`` / ``definition``.\nsubject_id      PK of the referenced lot or definition.\nmessage_code    i18n code \u2014 frontend localises with ``t(message_code, params)``.\nparams          Deserialized render params (dict) or ``None``.\n                The backend stores params as a JSON text blob; this schema\n                surfaces the parsed dict so the frontend does not need to\n                JSON-parse again.\noffset_days     Low-stock only: which repeat offset this row represents.\n                ``None`` for date sources.\ncreated_at      Row-creation timestamp (UTC).\nread_at         When the notification was first marked read; ``None`` if\n                still unread.",
         "properties": {
@@ -6602,6 +6697,273 @@
         "summary": "Reverse",
         "tags": [
           "movements"
+        ]
+      }
+    },
+    "/api/notes": {
+      "get": {
+        "description": "List all notes attached to a given owner (model_type + model_id).\n\nReturns notes in chronological order (oldest first).\nDoes not validate the owner's existence \u2014 an unknown owner returns an\nempty list (consistent with the lenient list semantics used for tags).",
+        "operationId": "list_notes_api_notes_get",
+        "parameters": [
+          {
+            "description": "Owner type.",
+            "in": "query",
+            "name": "model_type",
+            "required": true,
+            "schema": {
+              "description": "Owner type.",
+              "title": "Model Type",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Owner PK.",
+            "in": "query",
+            "name": "model_id",
+            "required": true,
+            "schema": {
+              "description": "Owner PK.",
+              "title": "Model Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/NoteResponse"
+                  },
+                  "title": "Response List Notes Api Notes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Notes",
+        "tags": [
+          "notes"
+        ]
+      },
+      "post": {
+        "description": "Create a new note on an owner.\n\nReturns 422 if model_type is invalid, 404 if the owner does not exist.",
+        "operationId": "create_note_api_notes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Create Note",
+        "tags": [
+          "notes"
+        ]
+      }
+    },
+    "/api/notes/{note_id}": {
+      "delete": {
+        "description": "Delete a note.\n\nReturns 404 if the note does not exist.",
+        "operationId": "delete_note_api_notes__note_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "title": "Note Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Delete Note",
+        "tags": [
+          "notes"
+        ]
+      },
+      "patch": {
+        "description": "Update the body of an existing note.\n\nReturns 404 if the note does not exist.",
+        "operationId": "update_note_api_notes__note_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "note_id",
+            "required": true,
+            "schema": {
+              "title": "Note Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Update Note",
+        "tags": [
+          "notes"
         ]
       }
     },

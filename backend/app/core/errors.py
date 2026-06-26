@@ -113,6 +113,9 @@ class ErrorCode:
     TAG_NOT_FOUND = "tag.not_found"
     TAG_DUPLICATE_NAME = "tag.duplicate_name"
 
+    # --- Notes (M5 Step 3) ---
+    NOTE_NOT_FOUND = "note.not_found"
+
     # --- Internal / catch-all ---
     INTERNAL_ERROR = "internal.error"
 
@@ -159,6 +162,7 @@ _DEFAULT_MESSAGES: dict[str, str] = {
     ErrorCode.ATTACHMENT_UNSUPPORTED_TYPE: "File type is not supported.",
     ErrorCode.TAG_NOT_FOUND: "Tag not found.",
     ErrorCode.TAG_DUPLICATE_NAME: "A tag with that name already exists.",
+    ErrorCode.NOTE_NOT_FOUND: "Note not found.",
     ErrorCode.INTERNAL_ERROR: "An internal error occurred.",
 }
 

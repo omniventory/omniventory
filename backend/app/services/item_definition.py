@@ -273,8 +273,8 @@ class ItemDefinitionService:
         "Tree delete semantics").  An instance must always have a definition;
         orphaning one is forbidden.
 
-        Cascades attachments (M5 Step 1) and tag links (M5 Step 2) before
-        removing the row.
+        Cascades attachments (M5 Step 1), tag links (M5 Step 2), and notes
+        (M5 Step 3) before removing the row.
 
         Returns
         -------
@@ -282,6 +282,7 @@ class ItemDefinitionService:
         """
         from app.config import get_settings
         from app.services.attachment import AttachmentService
+        from app.services.note import NoteService
         from app.services.tag import TagService
 
         defn = self._get_or_404(definition_id)
@@ -302,5 +303,6 @@ class ItemDefinitionService:
             "item_definition", definition_id
         )
         TagService(self._db).detach_all_for_owner("item_definition", definition_id)
+        NoteService(self._db).delete_for_owner("item_definition", definition_id)
         self._repo.delete(defn)
         return paths

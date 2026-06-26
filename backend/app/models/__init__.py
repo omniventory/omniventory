@@ -12,6 +12,7 @@ from app.models.item_definition import ItemDefinition
 from app.models.item_kind import ItemKind
 from app.models.location import Location
 from app.models.media_file import MediaFile
+from app.models.note import Note
 from app.models.notification import Notification
 from app.models.notification_delivery import NotificationDelivery
 from app.models.session import Session
@@ -30,6 +31,7 @@ __all__ = [
     "ItemKind",
     "Location",
     "MediaFile",
+    "Note",
     "Notification",
     "NotificationDelivery",
     "Session",
