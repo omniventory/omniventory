@@ -6,6 +6,7 @@ package) discovers every table when generating / running migrations.
 
 from app.models.app_config import AppConfig
 from app.models.attachment import Attachment
+from app.models.barcode import Barcode
 from app.models.category import Category
 from app.models.household import Household
 from app.models.item_definition import ItemDefinition
@@ -25,6 +26,7 @@ from app.models.user import User
 __all__ = [
     "AppConfig",
     "Attachment",
+    "Barcode",
     "Category",
     "Household",
     "ItemDefinition",

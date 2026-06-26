@@ -214,6 +214,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/barcodes/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lookup Barcode
+         * @description Run the product-lookup provider chain for a scanned code.
+         *
+         *     Always returns HTTP 200.  ``found=false`` (with null ``source`` / ``definition``
+         *     / ``draft``) signals an unknown code — the client should offer the
+         *     "create item" flow rather than treating this as an error.
+         *
+         *     M5 ships the ``InternalProvider`` only: a hit means the code is already
+         *     bound to a known definition in the ``barcodes`` table.
+         */
+        get: operations["lookup_barcode_api_barcodes_lookup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/barcodes/{barcode_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unbind Barcode
+         * @description Remove a barcode binding.
+         *
+         *     Returns 404 (barcode.not_found) if the barcode does not exist.
+         */
+        delete: operations["unbind_barcode_api_barcodes__barcode_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/categories": {
         parameters: {
             query?: never;
@@ -351,6 +400,38 @@ export interface paths {
          *     Returns 422 if ``kind_id`` is provided but does not exist.
          */
         patch: operations["update_definition_api_definitions__definition_id__patch"];
+        trace?: never;
+    };
+    "/api/definitions/{definition_id}/barcodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Barcodes
+         * @description List all barcodes bound to a definition.
+         *
+         *     Returns an empty list if the definition has no bound codes (or does not
+         *     exist — the list is lenient, consistent with tag/note list semantics).
+         *     Barcodes are ordered by id (bind order).
+         */
+        get: operations["list_barcodes_api_definitions__definition_id__barcodes_get"];
+        put?: never;
+        /**
+         * Bind Barcode
+         * @description Bind a barcode code to a definition.
+         *
+         *     Returns 404 if the definition does not exist.
+         *     Returns 409 (barcode.duplicate) if the code is already bound to any
+         *     definition (same or different — one code → one definition).
+         */
+        post: operations["bind_barcode_api_definitions__definition_id__barcodes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/definitions/{definition_id}/consume": {
@@ -1252,6 +1333,83 @@ export interface components {
             /** Title */
             title?: string | null;
         };
+        /**
+         * BarcodeCreate
+         * @description Body for POST /definitions/{id}/barcodes.
+         */
+        BarcodeCreate: {
+            /**
+             * Code
+             * @description The raw barcode value.
+             */
+            code: string;
+            /**
+             * Label
+             * @description Optional human-readable label (e.g. 'single' vs 'case of 24').
+             */
+            label?: string | null;
+            /**
+             * Symbology
+             * @description Barcode type, e.g. ``ean13``, ``upca``, ``qr``, ``code128``, ``internal``, ``unknown``.  App-validated; no DB CHECK.
+             * @default unknown
+             */
+            symbology: string;
+        };
+        /**
+         * BarcodeLookupResponse
+         * @description Response for GET /barcodes/lookup?code=.
+         *
+         *     Always returns HTTP 200 — ``found=False`` signals an unknown code (not a
+         *     404) so the client can offer the "create item" flow without treating the
+         *     response as an error.
+         *
+         *     Fields
+         *     ------
+         *     found (bool)
+         *         True when a provider matched the code.
+         *     source (str | None)
+         *         Machine-readable provider identifier (``"internal"`` for the built-in
+         *         barcode-table provider).  None when ``found=False``.
+         *     definition (DefinitionSummaryResponse | None)
+         *         Lightweight definition summary when the code is already bound in the
+         *         ``barcodes`` table.  None for an unknown code or for future providers
+         *         that return only ``draft`` data.
+         *     draft (dict | None)
+         *         Reserved for future external / LLM providers (M9) that return product
+         *         hints (name/brand/category) for the fast-create flow.  Always None in M5.
+         */
+        BarcodeLookupResponse: {
+            definition?: components["schemas"]["DefinitionSummaryResponse"] | null;
+            /** Draft */
+            draft?: {
+                [key: string]: unknown;
+            } | null;
+            /** Found */
+            found: boolean;
+            /** Source */
+            source?: string | null;
+        };
+        /**
+         * BarcodeResponse
+         * @description Public representation of a Barcode.
+         */
+        BarcodeResponse: {
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Definition Id */
+            definition_id: number;
+            /** Id */
+            id: number;
+            /** Label */
+            label: string | null;
+            /** Symbology */
+            symbology: string;
+        };
         /** Body_upload_attachment_api_attachments_post */
         Body_upload_attachment_api_attachments_post: {
             /**
@@ -1457,6 +1615,19 @@ export interface components {
             stock_tracking_mode: string;
             /** Unit */
             unit: string;
+        };
+        /**
+         * DefinitionSummaryResponse
+         * @description Lightweight summary of an item definition in a lookup response.
+         *
+         *     Returned inside ``BarcodeLookupResponse.definition`` when the scanned code
+         *     is bound to a known definition in the ``barcodes`` table.
+         */
+        DefinitionSummaryResponse: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
         };
         /**
          * DefinitionUpdate
@@ -3121,6 +3292,121 @@ export interface operations {
             };
         };
     };
+    lookup_barcode_api_barcodes_lookup_get: {
+        parameters: {
+            query: {
+                /** @description The raw scanned/entered barcode value. */
+                code: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BarcodeLookupResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unbind_barcode_api_barcodes__barcode_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                barcode_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_categories_api_categories_get: {
         parameters: {
             query?: {
@@ -3767,6 +4053,126 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_barcodes_api_definitions__definition_id__barcodes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                definition_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BarcodeResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bind_barcode_api_definitions__definition_id__barcodes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                definition_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BarcodeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BarcodeResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

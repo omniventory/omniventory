@@ -116,6 +116,10 @@ class ErrorCode:
     # --- Notes (M5 Step 3) ---
     NOTE_NOT_FOUND = "note.not_found"
 
+    # --- Barcodes (M5 Step 5) ---
+    BARCODE_NOT_FOUND = "barcode.not_found"
+    BARCODE_DUPLICATE = "barcode.duplicate"
+
     # --- Internal / catch-all ---
     INTERNAL_ERROR = "internal.error"
 
@@ -163,6 +167,8 @@ _DEFAULT_MESSAGES: dict[str, str] = {
     ErrorCode.TAG_NOT_FOUND: "Tag not found.",
     ErrorCode.TAG_DUPLICATE_NAME: "A tag with that name already exists.",
     ErrorCode.NOTE_NOT_FOUND: "Note not found.",
+    ErrorCode.BARCODE_NOT_FOUND: "Barcode not found.",
+    ErrorCode.BARCODE_DUPLICATE: "A barcode with that code is already bound to a definition.",
     ErrorCode.INTERNAL_ERROR: "An internal error occurred.",
 }
 

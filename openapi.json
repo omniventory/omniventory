@@ -150,6 +150,137 @@
         "title": "AttachmentUpdate",
         "type": "object"
       },
+      "BarcodeCreate": {
+        "description": "Body for POST /definitions/{id}/barcodes.",
+        "properties": {
+          "code": {
+            "description": "The raw barcode value.",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional human-readable label (e.g. 'single' vs 'case of 24').",
+            "title": "Label"
+          },
+          "symbology": {
+            "default": "unknown",
+            "description": "Barcode type, e.g. ``ean13``, ``upca``, ``qr``, ``code128``, ``internal``, ``unknown``.  App-validated; no DB CHECK.",
+            "maxLength": 16,
+            "title": "Symbology",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "BarcodeCreate",
+        "type": "object"
+      },
+      "BarcodeLookupResponse": {
+        "description": "Response for GET /barcodes/lookup?code=.\n\nAlways returns HTTP 200 \u2014 ``found=False`` signals an unknown code (not a\n404) so the client can offer the \"create item\" flow without treating the\nresponse as an error.\n\nFields\n------\nfound (bool)\n    True when a provider matched the code.\nsource (str | None)\n    Machine-readable provider identifier (``\"internal\"`` for the built-in\n    barcode-table provider).  None when ``found=False``.\ndefinition (DefinitionSummaryResponse | None)\n    Lightweight definition summary when the code is already bound in the\n    ``barcodes`` table.  None for an unknown code or for future providers\n    that return only ``draft`` data.\ndraft (dict | None)\n    Reserved for future external / LLM providers (M9) that return product\n    hints (name/brand/category) for the fast-create flow.  Always None in M5.",
+        "properties": {
+          "definition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefinitionSummaryResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft"
+          },
+          "found": {
+            "title": "Found",
+            "type": "boolean"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "found"
+        ],
+        "title": "BarcodeLookupResponse",
+        "type": "object"
+      },
+      "BarcodeResponse": {
+        "description": "Public representation of a Barcode.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "definition_id": {
+            "title": "Definition Id",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "symbology": {
+            "title": "Symbology",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "definition_id",
+          "code",
+          "symbology",
+          "label",
+          "created_at"
+        ],
+        "title": "BarcodeResponse",
+        "type": "object"
+      },
       "Body_upload_attachment_api_attachments_post": {
         "properties": {
           "file": {
@@ -760,6 +891,25 @@
           "created_at"
         ],
         "title": "DefinitionResponse",
+        "type": "object"
+      },
+      "DefinitionSummaryResponse": {
+        "description": "Lightweight summary of an item definition in a lookup response.\n\nReturned inside ``BarcodeLookupResponse.definition`` when the scanned code\nis bound to a known definition in the ``barcodes`` table.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DefinitionSummaryResponse",
         "type": "object"
       },
       "DefinitionUpdate": {
@@ -4332,6 +4482,147 @@
         ]
       }
     },
+    "/api/barcodes/lookup": {
+      "get": {
+        "description": "Run the product-lookup provider chain for a scanned code.\n\nAlways returns HTTP 200.  ``found=false`` (with null ``source`` / ``definition``\n/ ``draft``) signals an unknown code \u2014 the client should offer the\n\"create item\" flow rather than treating this as an error.\n\nM5 ships the ``InternalProvider`` only: a hit means the code is already\nbound to a known definition in the ``barcodes`` table.",
+        "operationId": "lookup_barcode_api_barcodes_lookup_get",
+        "parameters": [
+          {
+            "description": "The raw scanned/entered barcode value.",
+            "in": "query",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "description": "The raw scanned/entered barcode value.",
+              "title": "Code",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BarcodeLookupResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Lookup Barcode",
+        "tags": [
+          "barcodes"
+        ]
+      }
+    },
+    "/api/barcodes/{barcode_id}": {
+      "delete": {
+        "description": "Remove a barcode binding.\n\nReturns 404 (barcode.not_found) if the barcode does not exist.",
+        "operationId": "unbind_barcode_api_barcodes__barcode_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "barcode_id",
+            "required": true,
+            "schema": {
+              "title": "Barcode Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Unbind Barcode",
+        "tags": [
+          "barcodes"
+        ]
+      }
+    },
     "/api/categories": {
       "get": {
         "description": "Return a flat list of categories, optionally filtered.\n\n- ``q``: case-insensitive substring match on the name.\n- ``parent_id``: when provided, return only categories with that parent.",
@@ -5179,6 +5470,164 @@
         "summary": "Update Definition",
         "tags": [
           "definitions"
+        ]
+      }
+    },
+    "/api/definitions/{definition_id}/barcodes": {
+      "get": {
+        "description": "List all barcodes bound to a definition.\n\nReturns an empty list if the definition has no bound codes (or does not\nexist \u2014 the list is lenient, consistent with tag/note list semantics).\nBarcodes are ordered by id (bind order).",
+        "operationId": "list_barcodes_api_definitions__definition_id__barcodes_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "definition_id",
+            "required": true,
+            "schema": {
+              "title": "Definition Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BarcodeResponse"
+                  },
+                  "title": "Response List Barcodes Api Definitions  Definition Id  Barcodes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Barcodes",
+        "tags": [
+          "barcodes"
+        ]
+      },
+      "post": {
+        "description": "Bind a barcode code to a definition.\n\nReturns 404 if the definition does not exist.\nReturns 409 (barcode.duplicate) if the code is already bound to any\ndefinition (same or different \u2014 one code \u2192 one definition).",
+        "operationId": "bind_barcode_api_definitions__definition_id__barcodes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "definition_id",
+            "required": true,
+            "schema": {
+              "title": "Definition Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BarcodeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BarcodeResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bind Barcode",
+        "tags": [
+          "barcodes"
         ]
       }
     },

@@ -312,6 +312,7 @@ def create_app() -> FastAPI:
     # ------------------------------------------------------------------ #
     from app.api.routes import auth, health
     from app.api.routes.attachments import router as attachments_router
+    from app.api.routes.barcodes import router as barcodes_router
     from app.api.routes.categories import router as categories_router
     from app.api.routes.definitions import router as definitions_router
     from app.api.routes.expiry import router as expiry_router
@@ -345,6 +346,7 @@ def create_app() -> FastAPI:
     root_router.include_router(attachments_router)
     root_router.include_router(tags_router)
     root_router.include_router(notes_router)
+    root_router.include_router(barcodes_router)
 
     app.include_router(root_router, prefix=settings.api_prefix)
 
