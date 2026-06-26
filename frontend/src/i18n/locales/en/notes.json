@@ -1,0 +1,20 @@
+{
+  "sectionTitle": "Notes",
+  "emptyState": "No notes yet.",
+  "addBtn": "Add note",
+  "bodyPlaceholder": "Write a note...",
+  "editBtn": "Edit",
+  "deleteBtn": "Delete",
+  "saveBtn": "Save",
+  "cancelBtn": "Cancel",
+  "deleteConfirm": {
+    "title": "Delete note",
+    "text": "Are you sure you want to delete this note?",
+    "confirmBtn": "Delete"
+  },
+  "success": {
+    "created": "Note added.",
+    "updated": "Note updated.",
+    "deleted": "Note deleted."
+  }
+}

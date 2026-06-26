@@ -1,0 +1,20 @@
+{
+  "sectionTitle": "备注",
+  "emptyState": "暂无备注。",
+  "addBtn": "添加备注",
+  "bodyPlaceholder": "写下备注…",
+  "editBtn": "编辑",
+  "deleteBtn": "删除",
+  "saveBtn": "保存",
+  "cancelBtn": "取消",
+  "deleteConfirm": {
+    "title": "删除备注",
+    "text": "确定要删除此备注吗？",
+    "confirmBtn": "删除"
+  },
+  "success": {
+    "created": "备注已添加。",
+    "updated": "备注已更新。",
+    "deleted": "备注已删除。"
+  }
+}

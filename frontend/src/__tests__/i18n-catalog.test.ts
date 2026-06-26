@@ -28,6 +28,8 @@ import enExpiry from "../i18n/locales/en/expiry.json";
 import enNotifications from "../i18n/locales/en/notifications.json";
 import enConfiguration from "../i18n/locales/en/configuration.json";
 import enAttachments from "../i18n/locales/en/attachments.json";
+import enTags from "../i18n/locales/en/tags.json";
+import enNotes from "../i18n/locales/en/notes.json";
 
 import zhCommon from "../i18n/locales/zh/common.json";
 import zhAuth from "../i18n/locales/zh/auth.json";
@@ -43,6 +45,8 @@ import zhExpiry from "../i18n/locales/zh/expiry.json";
 import zhNotifications from "../i18n/locales/zh/notifications.json";
 import zhConfiguration from "../i18n/locales/zh/configuration.json";
 import zhAttachments from "../i18n/locales/zh/attachments.json";
+import zhTags from "../i18n/locales/zh/tags.json";
+import zhNotes from "../i18n/locales/zh/notes.json";
 
 // ── Deep key extraction ───────────────────────────────────────────────────────
 
@@ -81,6 +85,8 @@ const namespacePairs: [string, unknown, unknown][] = [
   ["notifications", enNotifications, zhNotifications],
   ["configuration", enConfiguration, zhConfiguration],
   ["attachments", enAttachments, zhAttachments],
+  ["tags", enTags, zhTags],
+  ["notes", enNotes, zhNotes],
 ];
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

@@ -50,6 +50,8 @@ import { LoadingState } from "./LoadingState";
 import { ErrorState } from "./ErrorState";
 import { EmptyState } from "./EmptyState";
 import { AttachmentPanel } from "./AttachmentPanel";
+import { TagPanel } from "./TagPanel";
+import { NotePanel } from "./NotePanel";
 import { formatQuantity } from "../i18n/format";
 
 // ── Resource-specific types ──────────────────────────────────────────────────
@@ -940,6 +942,22 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
             <>
               <Divider my="xs" />
               <AttachmentPanel modelType="location" modelId={selectedId} />
+            </>
+          )}
+
+          {/* Tags (locations only) */}
+          {isLocation && selectedId !== null && (
+            <>
+              <Divider my="xs" />
+              <TagPanel modelType="location" modelId={selectedId} />
+            </>
+          )}
+
+          {/* Notes (locations only) */}
+          {isLocation && selectedId !== null && (
+            <>
+              <Divider my="xs" />
+              <NotePanel modelType="location" modelId={selectedId} />
             </>
           )}
 

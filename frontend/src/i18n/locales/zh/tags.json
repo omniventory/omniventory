@@ -1,0 +1,16 @@
+{
+  "sectionTitle": "标签",
+  "emptyState": "暂无标签。",
+  "addTagPlaceholder": "搜索或创建标签…",
+  "createTagLabel": "创建 \"{{name}}\"",
+  "removeAria": "移除标签 {{name}}",
+  "filter": {
+    "label": "标签",
+    "placeholder": "按标签筛选"
+  },
+  "success": {
+    "attached": "标签已附加。",
+    "detached": "标签已移除。",
+    "created": "标签已创建。"
+  }
+}

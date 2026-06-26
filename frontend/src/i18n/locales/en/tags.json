@@ -1,0 +1,16 @@
+{
+  "sectionTitle": "Tags",
+  "emptyState": "No tags yet.",
+  "addTagPlaceholder": "Search or create a tag...",
+  "createTagLabel": "Create \"{{name}}\"",
+  "removeAria": "Remove tag {{name}}",
+  "filter": {
+    "label": "Tag",
+    "placeholder": "Filter by tag"
+  },
+  "success": {
+    "attached": "Tag attached.",
+    "detached": "Tag removed.",
+    "created": "Tag created."
+  }
+}

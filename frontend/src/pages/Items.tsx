@@ -17,7 +17,7 @@
  * low-stock badge (client-side derived from loaded lots vs min_stock), and mode-aware
  * quantity/level rendering in the instances table.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import {
   Stack,
@@ -56,6 +56,8 @@ import {
 } from "../components/InstanceFormModal";
 import { ExpiryBadge } from "../components/ExpiryBadge";
 import { AttachmentPanel } from "../components/AttachmentPanel";
+import { TagPanel } from "../components/TagPanel";
+import { NotePanel } from "../components/NotePanel";
 import { formatDate, formatQuantity } from "../i18n/format";
 
 // ── Schema types ─────────────────────────────────────────────────────────────
@@ -65,6 +67,7 @@ type InstanceResponse = components["schemas"]["InstanceResponse"];
 type KindResponse = components["schemas"]["KindResponse"];
 type CategoryResponse = components["schemas"]["CategoryResponse"];
 type LocationResponse = components["schemas"]["LocationResponse"];
+type TagResponse = components["schemas"]["TagResponse"];
 
 // ── Definition form state ────────────────────────────────────────────────────
 
@@ -298,15 +301,20 @@ function DefinitionFormModal({
 
 export function Items() {
   const { t } = useTranslation("items");
+  const { t: tTags } = useTranslation("tags");
   const [definitions, setDefinitions] = useState<DefinitionResponse[]>([]);
   const [kinds, setKinds] = useState<KindResponse[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
   const [locations, setLocations] = useState<LocationResponse[]>([]);
+  const [tags, setTags] = useState<TagResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [q, setQ] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
+  const [tagFilter, setTagFilter] = useState<string>("");
+  // Cache: definitionId → tagIds[] — populated lazily when tagFilter is active.
+  const [tagLinkCache, setTagLinkCache] = useState<Map<number, number[]>>(new Map());
 
   const [defModal, setDefModal] = useState<DefModalState>({ kind: "none" });
   const [defForm, setDefForm] = useState<DefinitionFormState>(emptyDefForm());
@@ -318,11 +326,12 @@ export function Items() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [defsRes, kindsRes, catsRes, locsRes] = await Promise.all([
+      const [defsRes, kindsRes, catsRes, locsRes, tagsRes] = await Promise.all([
         client.GET("/api/definitions", { params: { query: {} } }),
         client.GET("/api/kinds"),
         client.GET("/api/categories", { params: { query: {} } }),
         client.GET("/api/locations", { params: { query: {} } }),
+        client.GET("/api/tags"),
       ]);
       if (defsRes.error) {
         setLoadError(t("loadError"));
@@ -332,6 +341,7 @@ export function Items() {
       setKinds(kindsRes.data ?? []);
       setCategories(catsRes.data ?? []);
       setLocations(locsRes.data ?? []);
+      setTags(tagsRes.data ?? []);
     } finally {
       setLoading(false);
     }
@@ -359,6 +369,47 @@ export function Items() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q, categoryFilter]);
+
+  // When tagFilter is active, populate the cache for any uncached definitions.
+  // Running when tagLinkCache updates is safe: the second run finds no uncached
+  // IDs (already fetched) and exits immediately — no infinite loop.
+  useEffect(() => {
+    if (!tagFilter) return;
+
+    const uncachedIds = definitions
+      .filter((d) => !tagLinkCache.has(d.id))
+      .map((d) => d.id);
+
+    if (uncachedIds.length === 0) return;
+
+    void Promise.all(
+      uncachedIds.map((id) =>
+        client.GET("/api/tags/links", {
+          params: { query: { model_type: "item_definition", model_id: id } },
+        }),
+      ),
+    ).then((results) => {
+      setTagLinkCache((prev) => {
+        const next = new Map(prev);
+        results.forEach((res, idx) => {
+          const tagIds = (res.data ?? []).map((link) => link.tag_id);
+          next.set(uncachedIds[idx], tagIds);
+        });
+        return next;
+      });
+    });
+  }, [tagFilter, definitions, tagLinkCache]);
+
+  // Client-side tag filter applied on top of the backend-filtered definitions.
+  const displayDefinitions = useMemo(() => {
+    if (!tagFilter) return definitions;
+    const tagId = Number(tagFilter);
+    return definitions.filter((d) => {
+      const cached = tagLinkCache.get(d.id);
+      if (cached === undefined) return false; // not yet loaded
+      return cached.includes(tagId);
+    });
+  }, [definitions, tagFilter, tagLinkCache]);
 
   // ── Definition CRUD ──────────────────────────────────────────────────────────
 
@@ -520,10 +571,15 @@ export function Items() {
     ...categories.map((c) => ({ value: String(c.id), label: c.name })),
   ];
 
+  const tagFilterOptions = tags.map((tag) => ({
+    value: String(tag.id),
+    label: tag.name,
+  }));
+
   return (
     <PageShell title={t("page.title")} subtitle={t("page.subtitle")}>
       <Stack gap="md">
-        {/* Search + category filter + create button */}
+        {/* Search + category filter + tag filter + create button */}
         <Group wrap="nowrap" align="flex-end">
           <TextInput
             placeholder={t("search.placeholder")}
@@ -541,6 +597,17 @@ export function Items() {
             style={{ minWidth: 160 }}
             data-testid="def-category-filter"
           />
+          <Select
+            data={tagFilterOptions}
+            value={tagFilter || null}
+            onChange={(v) => {
+              setTagFilter(v ?? "");
+            }}
+            placeholder={tTags("filter.placeholder")}
+            style={{ minWidth: 140 }}
+            clearable
+            data-testid="tag-filter-select"
+          />
           <Button
             leftSection={<Plus size={14} />}
             onClick={openCreateDef}
@@ -551,7 +618,7 @@ export function Items() {
         </Group>
 
         {/* Definition list */}
-        {definitions.length === 0 ? (
+        {displayDefinitions.length === 0 ? (
           <EmptyState message={t("list.empty")} />
         ) : (
           <Table.ScrollContainer minWidth={480}>
@@ -566,7 +633,7 @@ export function Items() {
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {definitions.map((def) => (
+                {displayDefinitions.map((def) => (
                   <Table.Tr key={def.id} data-testid={`def-row-${def.id}`}>
                     <Table.Td>
                       <Anchor component={Link} to={`/items/${def.id}`} size="sm" fw={500}>
@@ -1345,6 +1412,16 @@ export function ItemDetail() {
 
       {/* Attachments */}
       <AttachmentPanel modelType="item_definition" modelId={defId} />
+
+      <Divider />
+
+      {/* Tags */}
+      <TagPanel modelType="item_definition" modelId={defId} />
+
+      <Divider />
+
+      {/* Notes */}
+      <NotePanel modelType="item_definition" modelId={defId} />
 
       <Divider />
 

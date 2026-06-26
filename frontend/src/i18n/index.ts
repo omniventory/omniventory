@@ -37,6 +37,8 @@ import enExpiry from "./locales/en/expiry.json";
 import enNotifications from "./locales/en/notifications.json";
 import enConfiguration from "./locales/en/configuration.json";
 import enAttachments from "./locales/en/attachments.json";
+import enTags from "./locales/en/tags.json";
+import enNotes from "./locales/en/notes.json";
 
 // Locale bundles — zh
 import zhCommon from "./locales/zh/common.json";
@@ -53,6 +55,8 @@ import zhExpiry from "./locales/zh/expiry.json";
 import zhNotifications from "./locales/zh/notifications.json";
 import zhConfiguration from "./locales/zh/configuration.json";
 import zhAttachments from "./locales/zh/attachments.json";
+import zhTags from "./locales/zh/tags.json";
+import zhNotes from "./locales/zh/notes.json";
 
 const NAMESPACES = [
   "common",
@@ -69,6 +73,8 @@ const NAMESPACES = [
   "notifications",
   "configuration",
   "attachments",
+  "tags",
+  "notes",
 ] as const;
 
 i18next
@@ -96,6 +102,8 @@ i18next
         notifications: enNotifications,
         configuration: enConfiguration,
         attachments: enAttachments,
+        tags: enTags,
+        notes: enNotes,
       },
       zh: {
         common: zhCommon,
@@ -112,6 +120,8 @@ i18next
         notifications: zhNotifications,
         configuration: zhConfiguration,
         attachments: zhAttachments,
+        tags: zhTags,
+        notes: zhNotes,
       },
     },
     detection: {
