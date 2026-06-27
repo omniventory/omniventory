@@ -21,9 +21,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_edit
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.note import NoteCreate, NoteResponse, NoteUpdate
 from app.services.note import NoteService
 
@@ -62,6 +64,7 @@ def list_notes(
 def create_note(
     body: NoteCreate,
     ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[NoteService, Depends(_get_service)],
     db: Annotated[Session, Depends(get_db)],
 ) -> NoteResponse:
@@ -86,6 +89,7 @@ def update_note(
     note_id: int,
     body: NoteUpdate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[NoteService, Depends(_get_service)],
     db: Annotated[Session, Depends(get_db)],
 ) -> NoteResponse:
@@ -103,6 +107,7 @@ def update_note(
 def delete_note(
     note_id: int,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[NoteService, Depends(_get_service)],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:

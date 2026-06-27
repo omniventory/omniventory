@@ -22,9 +22,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_edit
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.models.user import User
 from app.notifications.dispatcher import build_dispatcher, publish_mqtt_state
 from app.schemas.item_definition import DefinitionCreate, DefinitionResponse, DefinitionUpdate
 from app.schemas.stock_instance import InstanceResponse
@@ -81,6 +83,7 @@ def list_definitions(
 def create_definition(
     body: DefinitionCreate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[ItemDefinitionService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> DefinitionResponse:
@@ -111,6 +114,7 @@ def update_definition(
     definition_id: int,
     body: DefinitionUpdate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[ItemDefinitionService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> DefinitionResponse:
@@ -128,6 +132,7 @@ def update_definition(
 def delete_definition(
     definition_id: int,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[ItemDefinitionService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> None:
@@ -147,6 +152,7 @@ def consume(
     definition_id: int,
     body: ConsumeRequest,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     def_service: Annotated[ItemDefinitionService, Depends(_get_service)],
     movement_svc: Annotated[StockMovementService, Depends(_get_movement_service)],
     db: Session = Depends(get_db),

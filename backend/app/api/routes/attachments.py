@@ -24,10 +24,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_edit
 from app.config import get_settings
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.attachment import AttachmentResponse, AttachmentUpdate
 from app.services.attachment import AttachmentService, unlink_post_commit
 
@@ -52,6 +54,7 @@ def _get_service(db: Session = Depends(get_db)) -> AttachmentService:
 @router.post("", response_model=AttachmentResponse, status_code=status.HTTP_201_CREATED)
 def upload_attachment(
     ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _perm: Annotated[User, Depends(require_edit)],
     service: Annotated[AttachmentService, Depends(_get_service)],
     db: Session = Depends(get_db),
     model_type: str = Form(
@@ -98,6 +101,7 @@ def update_attachment(
     attachment_id: int,
     body: AttachmentUpdate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _perm: Annotated[User, Depends(require_edit)],
     service: Annotated[AttachmentService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> AttachmentResponse:
@@ -119,6 +123,7 @@ def update_attachment(
 def delete_attachment(
     attachment_id: int,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[AttachmentService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> None:

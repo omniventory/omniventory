@@ -24,10 +24,12 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_edit
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
 from app.models.tag import TagLink
+from app.models.user import User
 from app.schemas.tag import TagCreate, TagLinkResponse, TagResponse, TagSetRequest, TagUpdate
 from app.services.tag import TagService
 
@@ -81,6 +83,7 @@ def list_tags(
 def create_tag(
     body: TagCreate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[TagService, Depends(_get_service)],
     db: Annotated[Session, Depends(get_db)],
 ) -> TagResponse:
@@ -99,6 +102,7 @@ def update_tag(
     tag_id: int,
     body: TagUpdate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[TagService, Depends(_get_service)],
     db: Annotated[Session, Depends(get_db)],
 ) -> TagResponse:
@@ -123,6 +127,7 @@ def update_tag(
 def delete_tag(
     tag_id: int,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[TagService, Depends(_get_service)],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
@@ -166,6 +171,7 @@ def list_tag_links(
 def set_tag_links(
     body: TagSetRequest,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[TagService, Depends(_get_service)],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[TagResponse]:

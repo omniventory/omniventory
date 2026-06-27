@@ -21,9 +21,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_edit
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.location import (
     LocationCreate,
     LocationResponse,
@@ -86,6 +88,7 @@ def list_locations(
 def create_location(
     body: LocationCreate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[LocationService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> LocationResponse:
@@ -111,6 +114,7 @@ def update_location(
     location_id: int,
     body: LocationUpdate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[LocationService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> LocationResponse:
@@ -127,6 +131,7 @@ def update_location(
 def delete_location(
     location_id: int,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[LocationService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> None:

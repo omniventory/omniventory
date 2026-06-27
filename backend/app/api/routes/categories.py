@@ -21,9 +21,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_edit
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.category import (
     CategoryCreate,
     CategoryResponse,
@@ -80,6 +82,7 @@ def list_categories(
 def create_category(
     body: CategoryCreate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[CategoryService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> CategoryResponse:
@@ -106,6 +109,7 @@ def update_category(
     category_id: int,
     body: CategoryUpdate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[CategoryService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> CategoryResponse:
@@ -123,6 +127,7 @@ def update_category(
 def delete_category(
     category_id: int,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[CategoryService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> None:

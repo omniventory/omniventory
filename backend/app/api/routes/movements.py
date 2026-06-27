@@ -16,9 +16,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_edit
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.stock_instance import InstanceResponse
 from app.schemas.stock_movement_ops import ReverseRequest
 from app.services.stock_movement import StockMovementService
@@ -46,6 +48,7 @@ def reverse(
     movement_id: int,
     body: ReverseRequest,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     movement_svc: Annotated[StockMovementService, Depends(_get_movement_service)],
     db: Session = Depends(get_db),
 ) -> InstanceResponse:

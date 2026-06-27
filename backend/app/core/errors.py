@@ -52,6 +52,7 @@ class ErrorCode:
     INVALID_CREDENTIALS = "auth.invalid_credentials"
     ACCOUNT_DISABLED = "auth.account_disabled"
     SETUP_ALREADY_COMPLETE = "auth.setup_already_complete"
+    FORBIDDEN = "auth.forbidden"  # M6: insufficient role/permission
 
     # --- Validation ---
     INVALID_INPUT = "validation.invalid_input"
@@ -132,6 +133,7 @@ _DEFAULT_MESSAGES: dict[str, str] = {
     ErrorCode.INVALID_CREDENTIALS: "Invalid credentials.",
     ErrorCode.ACCOUNT_DISABLED: "Account is disabled.",
     ErrorCode.SETUP_ALREADY_COMPLETE: "Setup already complete.",
+    ErrorCode.FORBIDDEN: "You do not have permission to perform this action.",
     ErrorCode.INVALID_INPUT: "Request validation failed.",
     ErrorCode.UNSUPPORTED_LANGUAGE: "Unsupported language code.",
     ErrorCode.UNSUPPORTED_TRACKING_MODE: "Unsupported stock tracking mode.",

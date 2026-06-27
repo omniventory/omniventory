@@ -26,9 +26,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_edit
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.barcode import (
     BarcodeCreate,
     BarcodeLookupResponse,
@@ -81,6 +83,7 @@ def bind_barcode(
     definition_id: int,
     body: BarcodeCreate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[BarcodeService, Depends(_get_service)],
     db: Annotated[Session, Depends(get_db)],
 ) -> BarcodeResponse:
@@ -146,6 +149,7 @@ def lookup_barcode(
 def unbind_barcode(
     barcode_id: int,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[BarcodeService, Depends(_get_service)],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:

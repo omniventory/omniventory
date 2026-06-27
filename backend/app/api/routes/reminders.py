@@ -26,9 +26,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_manage_settings
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.models.user import User
 from app.notifications.dispatcher import build_dispatcher, publish_mqtt_state
 from app.schemas.reminders import ReminderRunSummary
 from app.services.reminder_engine import ReminderEngine
@@ -43,6 +45,7 @@ router = APIRouter(tags=["reminders"], responses=_ERROR_RESPONSES)
 @router.post("/reminders/run", response_model=ReminderRunSummary)
 def run_reminders(
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_manage_settings)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ReminderRunSummary:
     """Trigger the reminder engine scan on demand.

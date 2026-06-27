@@ -33,9 +33,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_edit
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.models.user import User
 from app.notifications.dispatcher import build_dispatcher, publish_mqtt_state
 from app.schemas.stock_instance import InstanceCreate, InstanceResponse, InstanceUpdate
 from app.schemas.stock_movement import MovementResponse
@@ -97,6 +99,7 @@ def list_instances(
 def create_instance(
     body: InstanceCreate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[StockInstanceService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> InstanceResponse:
@@ -127,6 +130,7 @@ def update_instance(
     instance_id: int,
     body: InstanceUpdate,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[StockInstanceService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> InstanceResponse:
@@ -144,6 +148,7 @@ def update_instance(
 def delete_instance(
     instance_id: int,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     service: Annotated[StockInstanceService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> None:
@@ -185,6 +190,7 @@ def intake(
     instance_id: int,
     body: IntakeRequest,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     instance_svc: Annotated[StockInstanceService, Depends(_get_service)],
     movement_svc: Annotated[StockMovementService, Depends(_get_movement_service)],
     db: Session = Depends(get_db),
@@ -208,6 +214,7 @@ def discard(
     instance_id: int,
     body: DiscardRequest,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     instance_svc: Annotated[StockInstanceService, Depends(_get_service)],
     movement_svc: Annotated[StockMovementService, Depends(_get_movement_service)],
     db: Session = Depends(get_db),
@@ -244,6 +251,7 @@ def adjust(
     instance_id: int,
     body: AdjustRequest,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     instance_svc: Annotated[StockInstanceService, Depends(_get_service)],
     movement_svc: Annotated[StockMovementService, Depends(_get_movement_service)],
     db: Session = Depends(get_db),
@@ -280,6 +288,7 @@ def move(
     instance_id: int,
     body: MoveRequest,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_edit)],
     instance_svc: Annotated[StockInstanceService, Depends(_get_service)],
     movement_svc: Annotated[StockMovementService, Depends(_get_movement_service)],
     db: Session = Depends(get_db),

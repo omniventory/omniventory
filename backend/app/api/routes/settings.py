@@ -25,9 +25,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
+from app.api.deps import require_manage_settings
 from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
+from app.models.user import User
 from app.schemas.settings import EmailTestResult, MqttTestResult, SettingsResponse, SettingsUpdate
 from app.services.settings import SettingsService
 
@@ -80,6 +82,7 @@ def patch_settings(
     payload: SettingsUpdate,
     request: Request,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_manage_settings)],
     service: Annotated[SettingsService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> SettingsResponse:
@@ -127,6 +130,7 @@ def patch_settings(
 @router.post("/settings/email/test", response_model=EmailTestResult)
 def test_email(
     ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_manage_settings)],
     service: Annotated[SettingsService, Depends(_get_service)],
     db: Session = Depends(get_db),
 ) -> EmailTestResult:
@@ -175,6 +179,7 @@ def test_email(
 @router.post("/settings/mqtt/test", response_model=MqttTestResult)
 def test_mqtt(
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_manage_settings)],
     service: Annotated[SettingsService, Depends(_get_service)],
 ) -> MqttTestResult:
     """Publish a test message to the MQTT broker using currently-saved settings.
