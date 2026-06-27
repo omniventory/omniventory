@@ -28,6 +28,7 @@ import { AlertCircle } from "react-feather";
 import { useTranslation } from "react-i18next";
 import type { components } from "../api/schema";
 import { formatDate } from "../i18n/format";
+import { CustomFieldsEditor } from "./CustomFieldsEditor";
 
 /**
  * Compute today + N days as an ISO YYYY-MM-DD string (UTC).
@@ -61,6 +62,8 @@ export interface InstanceFormState {
   purchase_price: string;
   purchase_date: string;
   purchase_source: string;
+  /** M5: arbitrary JSON key/value map; null when empty. */
+  custom_fields: Record<string, string | number | boolean | null> | null;
 }
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -320,6 +323,11 @@ export function InstanceFormModal({
             const value = e.currentTarget.value;
             setForm((f) => ({ ...f, purchase_source: value }));
           }}
+        />
+        <CustomFieldsEditor
+          value={form.custom_fields}
+          onChange={(v) => setForm((f) => ({ ...f, custom_fields: v }))}
+          disabled={busy}
         />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose} disabled={busy}>

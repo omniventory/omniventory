@@ -58,6 +58,7 @@ import { ExpiryBadge } from "../components/ExpiryBadge";
 import { AttachmentPanel } from "../components/AttachmentPanel";
 import { TagPanel } from "../components/TagPanel";
 import { NotePanel } from "../components/NotePanel";
+import { CustomFieldsEditor } from "../components/CustomFieldsEditor";
 import { formatDate, formatQuantity } from "../i18n/format";
 
 // ── Schema types ─────────────────────────────────────────────────────────────
@@ -82,6 +83,8 @@ interface DefinitionFormState {
   min_stock: string; // numeric string or "" when not set
   default_best_before_days: string; // integer string or "" when not set
   reminder_lead_days: string; // integer string or "" when not set (M4 per-item override)
+  /** M5: arbitrary JSON key/value map; null when empty. */
+  custom_fields: Record<string, string | number | boolean | null> | null;
 }
 
 const emptyDefForm = (): DefinitionFormState => ({
@@ -95,6 +98,7 @@ const emptyDefForm = (): DefinitionFormState => ({
   min_stock: "",
   default_best_before_days: "",
   reminder_lead_days: "",
+  custom_fields: null,
 });
 
 const emptyInstanceForm = (definitionId?: number): InstanceFormState => ({
@@ -111,6 +115,7 @@ const emptyInstanceForm = (definitionId?: number): InstanceFormState => ({
   purchase_price: "",
   purchase_date: "",
   purchase_source: "",
+  custom_fields: null,
 });
 
 // ── Modal discriminated unions ────────────────────────────────────────────────
@@ -279,6 +284,11 @@ function DefinitionFormModal({
           suffix=" days"
           data-testid="def-reminder-lead-days-input"
         />
+        <CustomFieldsEditor
+          value={form.custom_fields}
+          onChange={(v) => setForm((f) => ({ ...f, custom_fields: v }))}
+          disabled={busy}
+        />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose} disabled={busy}>
             {t("common:actions.cancel", "Cancel")}
@@ -434,6 +444,7 @@ export function Items() {
         def.default_best_before_days != null ? String(def.default_best_before_days) : "",
       reminder_lead_days:
         def.reminder_lead_days != null ? String(def.reminder_lead_days) : "",
+      custom_fields: def.custom_fields ?? null,
     });
     setDefError(null);
     setDefModal({ kind: "edit", def });
@@ -477,6 +488,7 @@ export function Items() {
             defForm.reminder_lead_days !== ""
               ? Number(defForm.reminder_lead_days)
               : null,
+          custom_fields: defForm.custom_fields ?? null,
         },
       });
       if (error) {
@@ -523,6 +535,7 @@ export function Items() {
               defForm.reminder_lead_days !== ""
                 ? Number(defForm.reminder_lead_days)
                 : null,
+            custom_fields: defForm.custom_fields ?? null,
           },
         },
       );
@@ -788,6 +801,7 @@ export function ItemDetail() {
   const { t } = useTranslation("items");
   const { t: tStock } = useTranslation("stock");
   const { t: tInst } = useTranslation("instances");
+  const { t: tCF } = useTranslation("customFields");
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const defId = Number(id);
@@ -903,6 +917,7 @@ export function ItemDetail() {
         def.default_best_before_days != null ? String(def.default_best_before_days) : "",
       reminder_lead_days:
         def.reminder_lead_days != null ? String(def.reminder_lead_days) : "",
+      custom_fields: def.custom_fields ?? null,
     });
     setDefError(null);
     setDefModal({ kind: "edit", def });
@@ -945,6 +960,7 @@ export function ItemDetail() {
               defForm.reminder_lead_days !== ""
                 ? Number(defForm.reminder_lead_days)
                 : null,
+            custom_fields: defForm.custom_fields ?? null,
           },
         },
       );
@@ -1016,6 +1032,7 @@ export function ItemDetail() {
       purchase_price: inst.purchase_price ?? "",
       purchase_date: inst.purchase_date ?? "",
       purchase_source: inst.purchase_source ?? "",
+      custom_fields: inst.custom_fields ?? null,
     });
     setInstError(null);
     setInstModal({ kind: "edit", inst });
@@ -1056,6 +1073,7 @@ export function ItemDetail() {
           purchase_price: instForm.purchase_price.trim() || null,
           purchase_date: instForm.purchase_date.trim() || null,
           purchase_source: instForm.purchase_source.trim() || null,
+          custom_fields: instForm.custom_fields ?? null,
         },
       });
       if (error) {
@@ -1096,6 +1114,7 @@ export function ItemDetail() {
             purchase_price: instForm.purchase_price.trim() || null,
             purchase_date: instForm.purchase_date.trim() || null,
             purchase_source: instForm.purchase_source.trim() || null,
+            custom_fields: instForm.custom_fields ?? null,
           },
         },
       );
@@ -1405,6 +1424,26 @@ export function ItemDetail() {
               </Stack>
             )}
           </SimpleGrid>
+          {def.custom_fields && Object.keys(def.custom_fields).length > 0 && (
+            <>
+              <Divider my="xs" />
+              <Stack gap="xs">
+                <Text size="xs" c="dimmed" fw={500} tt="uppercase">
+                  {tCF("sectionTitle")}
+                </Text>
+                <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="xs">
+                  {Object.entries(def.custom_fields).map(([key, val]) => (
+                    <Stack key={key} gap={2} data-testid={`def-cf-display-${key}`}>
+                      <Text size="xs" c="dimmed" fw={500}>{key}</Text>
+                      <Text size="sm">
+                        {val === null ? "—" : val === true ? "true" : val === false ? "false" : String(val)}
+                      </Text>
+                    </Stack>
+                  ))}
+                </SimpleGrid>
+              </Stack>
+            </>
+          )}
         </Stack>
       </Card>
 

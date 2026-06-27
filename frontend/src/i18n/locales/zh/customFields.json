@@ -1,0 +1,15 @@
+{
+  "sectionTitle": "自定义字段",
+  "addField": "添加字段",
+  "keyLabel": "键",
+  "valueLabel": "值",
+  "typeLabel": "类型",
+  "removeField": "删除",
+  "emptyState": "暂无自定义字段。",
+  "types": {
+    "string": "文本",
+    "number": "数字",
+    "boolean": "布尔",
+    "null": "空"
+  }
+}

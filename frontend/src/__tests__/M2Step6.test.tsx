@@ -259,6 +259,7 @@ function InstanceFormModalWrapper(props: {
     purchase_price: "",
     purchase_date: "",
     purchase_source: "",
+    custom_fields: null,
     ...props.initialForm,
   });
   return (

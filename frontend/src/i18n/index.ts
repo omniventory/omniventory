@@ -39,6 +39,7 @@ import enConfiguration from "./locales/en/configuration.json";
 import enAttachments from "./locales/en/attachments.json";
 import enTags from "./locales/en/tags.json";
 import enNotes from "./locales/en/notes.json";
+import enCustomFields from "./locales/en/customFields.json";
 
 // Locale bundles — zh
 import zhCommon from "./locales/zh/common.json";
@@ -57,6 +58,7 @@ import zhConfiguration from "./locales/zh/configuration.json";
 import zhAttachments from "./locales/zh/attachments.json";
 import zhTags from "./locales/zh/tags.json";
 import zhNotes from "./locales/zh/notes.json";
+import zhCustomFields from "./locales/zh/customFields.json";
 
 const NAMESPACES = [
   "common",
@@ -75,6 +77,7 @@ const NAMESPACES = [
   "attachments",
   "tags",
   "notes",
+  "customFields",
 ] as const;
 
 i18next
@@ -104,6 +107,7 @@ i18next
         attachments: enAttachments,
         tags: enTags,
         notes: enNotes,
+        customFields: enCustomFields,
       },
       zh: {
         common: zhCommon,
@@ -122,6 +126,7 @@ i18next
         attachments: zhAttachments,
         tags: zhTags,
         notes: zhNotes,
+        customFields: zhCustomFields,
       },
     },
     detection: {

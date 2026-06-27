@@ -76,6 +76,7 @@ function instToForm(inst: InstanceResponse): InstanceFormState {
     purchase_price: inst.purchase_price ?? "",
     purchase_date: inst.purchase_date ?? "",
     purchase_source: inst.purchase_source ?? "",
+    custom_fields: inst.custom_fields ?? null,
   };
 }
 
@@ -93,6 +94,7 @@ const emptyForm: InstanceFormState = {
   purchase_price: "",
   purchase_date: "",
   purchase_source: "",
+  custom_fields: null,
 };
 
 // ── Detail field helper ───────────────────────────────────────────────────────
@@ -129,6 +131,7 @@ interface LedgerActionFormState {
 export function InstanceDetail() {
   const { t } = useTranslation("instances");
   const { t: tStock } = useTranslation("stock");
+  const { t: tCF } = useTranslation("customFields");
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const instId = Number(id);
@@ -242,6 +245,7 @@ export function InstanceDetail() {
           purchase_price: form.purchase_price.trim() || null,
           purchase_date: form.purchase_date.trim() || null,
           purchase_source: form.purchase_source.trim() || null,
+          custom_fields: form.custom_fields ?? null,
         },
       });
       if (error) {
@@ -517,6 +521,26 @@ export function InstanceDetail() {
             value={formatDate(inst.created_at)}
           />
         </SimpleGrid>
+        {inst.custom_fields && Object.keys(inst.custom_fields).length > 0 && (
+          <>
+            <Divider my="xs" />
+            <Stack gap="xs">
+              <Text size="xs" c="dimmed" fw={500} tt="uppercase">
+                {tCF("sectionTitle")}
+              </Text>
+              <SimpleGrid cols={{ base: 2, sm: 3 }} spacing="xs">
+                {Object.entries(inst.custom_fields).map(([key, val]) => (
+                  <Stack key={key} gap={2} data-testid={`inst-cf-display-${key}`}>
+                    <Text size="xs" c="dimmed" fw={500}>{key}</Text>
+                    <Text size="sm">
+                      {val === null ? "—" : val === true ? "true" : val === false ? "false" : String(val)}
+                    </Text>
+                  </Stack>
+                ))}
+              </SimpleGrid>
+            </Stack>
+          </>
+        )}
       </Card>
 
       {/* Per-lot action buttons (exact mode only) */}

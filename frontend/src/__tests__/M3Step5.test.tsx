@@ -303,6 +303,7 @@ function InstanceFormWrapper(props: {
     purchase_price: "",
     purchase_date: "",
     purchase_source: "",
+    custom_fields: null,
     ...props.initialForm,
   });
 
@@ -660,6 +661,7 @@ function SubmittingFormWrapper(props: {
     purchase_price: "",
     purchase_date: "",
     purchase_source: "",
+    custom_fields: null,
     ...props.initialForm,
   });
   // Expose current form for assertions

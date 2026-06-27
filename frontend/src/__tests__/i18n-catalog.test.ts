@@ -30,6 +30,7 @@ import enConfiguration from "../i18n/locales/en/configuration.json";
 import enAttachments from "../i18n/locales/en/attachments.json";
 import enTags from "../i18n/locales/en/tags.json";
 import enNotes from "../i18n/locales/en/notes.json";
+import enCustomFields from "../i18n/locales/en/customFields.json";
 
 import zhCommon from "../i18n/locales/zh/common.json";
 import zhAuth from "../i18n/locales/zh/auth.json";
@@ -47,6 +48,7 @@ import zhConfiguration from "../i18n/locales/zh/configuration.json";
 import zhAttachments from "../i18n/locales/zh/attachments.json";
 import zhTags from "../i18n/locales/zh/tags.json";
 import zhNotes from "../i18n/locales/zh/notes.json";
+import zhCustomFields from "../i18n/locales/zh/customFields.json";
 
 // ── Deep key extraction ───────────────────────────────────────────────────────
 
@@ -87,6 +89,7 @@ const namespacePairs: [string, unknown, unknown][] = [
   ["attachments", enAttachments, zhAttachments],
   ["tags", enTags, zhTags],
   ["notes", enNotes, zhNotes],
+  ["customFields", enCustomFields, zhCustomFields],
 ];
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

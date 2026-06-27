@@ -1,0 +1,15 @@
+{
+  "sectionTitle": "Custom Fields",
+  "addField": "Add field",
+  "keyLabel": "Key",
+  "valueLabel": "Value",
+  "typeLabel": "Type",
+  "removeField": "Remove",
+  "emptyState": "No custom fields.",
+  "types": {
+    "string": "Text",
+    "number": "Number",
+    "boolean": "Boolean",
+    "null": "Null"
+  }
+}
