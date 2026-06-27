@@ -84,7 +84,7 @@ Legend: ⬜ planned · 🟡 active · 🟢 done. **Active milestone = the single
 | **M2** | Stock ledger & consumables | ③ (in/out + low-stock) | 🟢 |
 | **M3** | Best-before / expiry & perishables | ① (data + listings) | 🟢 |
 | **M4** | Unified reminder & notification engine | ①②③ proactive alerts | 🟢 |
-| **M5** | Cross-cutting + barcode + data export | all | 🟡 |
+| **M5** | Cross-cutting + barcode + data export | all | 🟢 |
 | **M6** | Multi-user & roles | all | ⬜ |
 | **M7** | Shopping list & maintenance schedules | ③ / ② | ⬜ |
 | **M8** | Multi-unit conversion | ③ | ⬜ |
