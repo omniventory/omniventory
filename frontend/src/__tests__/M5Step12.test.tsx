@@ -340,7 +340,7 @@ describe("Search page — subject navigation links", () => {
     expect(link.getAttribute("href")).toBe("/categories");
   });
 
-  it("tags hit links to /items (closest sensible surface)", async () => {
+  it("tags hit links to /items?tag=<id> to pre-apply the tag filter", async () => {
     renderSearch("/search?q=organic");
 
     await waitFor(() =>
@@ -348,7 +348,7 @@ describe("Search page — subject navigation links", () => {
     );
 
     const link = screen.getByTestId("result-tag-50") as HTMLAnchorElement;
-    expect(link.getAttribute("href")).toBe("/items");
+    expect(link.getAttribute("href")).toBe("/items?tag=50");
   });
 });
 

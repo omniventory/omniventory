@@ -340,7 +340,7 @@ export function Search() {
                   <Anchor
                     key={hit.id}
                     component={Link}
-                    to="/items"
+                    to={`/items?tag=${hit.id}`}
                     size="sm"
                     data-testid={`result-tag-${hit.id}`}
                   >

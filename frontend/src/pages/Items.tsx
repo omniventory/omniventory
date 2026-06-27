@@ -18,7 +18,7 @@
  * quantity/level rendering in the instances table.
  */
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Stack,
   Group,
@@ -315,6 +315,7 @@ function DefinitionFormModal({
 export function Items() {
   const { t } = useTranslation("items");
   const { t: tTags } = useTranslation("tags");
+  const [searchParams, setSearchParams] = useSearchParams();
   const [definitions, setDefinitions] = useState<DefinitionResponse[]>([]);
   const [kinds, setKinds] = useState<KindResponse[]>([]);
   const [categories, setCategories] = useState<CategoryResponse[]>([]);
@@ -325,7 +326,9 @@ export function Items() {
 
   const [q, setQ] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
-  const [tagFilter, setTagFilter] = useState<string>("");
+  // tagFilter is derived from the URL ?tag= param so the filter can be pre-applied
+  // by navigating to /items?tag=<id> (e.g. from the global search results page).
+  const tagFilter = searchParams.get("tag") ?? "";
   // Cache: definitionId → tagIds[] — populated lazily when tagFilter is active.
   const [tagLinkCache, setTagLinkCache] = useState<Map<number, number[]>>(new Map());
 
@@ -640,7 +643,15 @@ export function Items() {
             data={tagFilterOptions}
             value={tagFilter || null}
             onChange={(v) => {
-              setTagFilter(v ?? "");
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                if (v) {
+                  next.set("tag", v);
+                } else {
+                  next.delete("tag");
+                }
+                return next;
+              });
             }}
             placeholder={tTags("filter.placeholder")}
             style={{ minWidth: 140 }}
