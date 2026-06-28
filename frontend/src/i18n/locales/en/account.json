@@ -5,7 +5,8 @@
   },
   "section": {
     "changePassword": "Change password",
-    "yourReminders": "Your reminders"
+    "yourReminders": "Your reminders",
+    "notifications": "Notifications"
   },
   "changePassword": {
     "currentLabel": "Current password",
@@ -24,6 +25,15 @@
     "warrantyLeadDaysDescription": "Blank = inherit global ({{globalValue}} days).",
     "save": "Save your reminders",
     "saved": "Your reminder preferences saved."
+  },
+  "notifications": {
+    "description": "Control which channels deliver your reminders.",
+    "inAppLabel": "In-app inbox",
+    "inAppDescription": "Show reminders in the notification bell.",
+    "emailDigestLabel": "Email digest",
+    "emailDigestDescription": "Receive a periodic email summary of your reminders.",
+    "save": "Save notification preferences",
+    "saved": "Notification preferences saved."
   },
   "acceptInvite": {
     "title": "Create your account",

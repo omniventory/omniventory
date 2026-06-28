@@ -10,9 +10,10 @@
  *     reminder_best_before_lead_days + reminder_warranty_lead_days loaded from
  *     GET /api/auth/me; saved via PATCH /api/auth/me.
  *     Empty string = null (inherit global default); value = integer override.
- *
- * Step 12 will later add notification preference toggles (in-app / email digest)
- * to this page.
+ *  3. Notifications (Step 12) — notify_in_app + notify_email_digest booleans.
+ *     Loaded from GET /api/auth/me; saved via PATCH /api/auth/me.
+ *     After a successful save, calls AuthContext.refresh() so the notification bell
+ *     reflects the new notify_in_app state without a full page reload.
  */
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -24,6 +25,7 @@ import {
   Paper,
   PasswordInput,
   Stack,
+  Switch,
   Text,
   Title,
 } from "@mantine/core";
@@ -32,6 +34,7 @@ import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
 import { notifySuccess } from "../components/notify";
+import { useAuth } from "../auth/AuthContext";
 import { PageShell } from "../components/PageShell";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
@@ -42,6 +45,7 @@ type SettingsResponse = components["schemas"]["SettingsResponse"];
 
 export function Account() {
   const { t } = useTranslation("account");
+  const { refresh } = useAuth();
 
   // ── Loading state ──
   const [loading, setLoading] = useState(true);
@@ -62,6 +66,12 @@ export function Account() {
   const [userWLeadDays, setUserWLeadDays] = useState<string>("");
   const [userRemindersBusy, setUserRemindersBusy] = useState(false);
   const [userRemindersError, setUserRemindersError] = useState<string | null>(null);
+
+  // ── Notification preferences form (Step 12) ──
+  const [notifyInApp, setNotifyInApp] = useState(true);
+  const [notifyEmailDigest, setNotifyEmailDigest] = useState(true);
+  const [notifBusy, setNotifBusy] = useState(false);
+  const [notifError, setNotifError] = useState<string | null>(null);
 
   // ── Load data ─────────────────────────────────────────────────────────────
 
@@ -93,6 +103,9 @@ export function Account() {
           ? String(u.reminder_warranty_lead_days)
           : "",
       );
+      // Reflect notification prefs from the server
+      setNotifyInApp(u.notify_in_app);
+      setNotifyEmailDigest(u.notify_email_digest);
 
       if (!settingsRes.error && settingsRes.data) {
         setSettings(settingsRes.data);
@@ -156,6 +169,29 @@ export function Account() {
       await loadAll();
     } finally {
       setUserRemindersBusy(false);
+    }
+  }
+
+  async function handleSaveNotifications() {
+    setNotifBusy(true);
+    setNotifError(null);
+    try {
+      const { error } = await client.PATCH("/api/auth/me", {
+        body: {
+          notify_in_app: notifyInApp,
+          notify_email_digest: notifyEmailDigest,
+        },
+      });
+      if (error) {
+        setNotifError(mapApiError(error));
+        return;
+      }
+      notifySuccess(t("notifications.saved"));
+      // Update AuthContext so the notification bell reflects the new pref
+      await refresh();
+      await loadAll();
+    } finally {
+      setNotifBusy(false);
     }
   }
 
@@ -292,6 +328,53 @@ export function Account() {
                 data-testid="save-user-reminders-btn"
               >
                 {t("yourReminders.save")}
+              </Button>
+            </Group>
+          </Stack>
+        </Paper>
+
+        {/* ── Notification preferences (Step 12) ───────────────────────── */}
+        <Paper withBorder p="md">
+          <Stack gap="sm">
+            <Title order={4}>{t("section.notifications")}</Title>
+            <Divider />
+            <Text size="sm" c="dimmed">
+              {t("notifications.description")}
+            </Text>
+
+            {notifError && (
+              <Alert
+                icon={<AlertCircle size={16} />}
+                color="red"
+                variant="light"
+                data-testid="notif-error"
+              >
+                {notifError}
+              </Alert>
+            )}
+
+            <Switch
+              label={t("notifications.inAppLabel")}
+              description={t("notifications.inAppDescription")}
+              checked={notifyInApp}
+              onChange={(e) => setNotifyInApp(e.currentTarget.checked)}
+              data-testid="notify-in-app-toggle"
+            />
+            <Switch
+              label={t("notifications.emailDigestLabel")}
+              description={t("notifications.emailDigestDescription")}
+              checked={notifyEmailDigest}
+              onChange={(e) => setNotifyEmailDigest(e.currentTarget.checked)}
+              data-testid="notify-email-digest-toggle"
+            />
+
+            <Group justify="flex-end">
+              <Button
+                onClick={() => void handleSaveNotifications()}
+                loading={notifBusy}
+                data-testid="save-notif-btn"
+              >
+                {t("notifications.save")}
               </Button>
             </Group>
           </Stack>

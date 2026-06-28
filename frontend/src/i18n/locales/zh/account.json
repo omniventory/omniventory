@@ -5,7 +5,8 @@
   },
   "section": {
     "changePassword": "修改密码",
-    "yourReminders": "我的提醒"
+    "yourReminders": "我的提醒",
+    "notifications": "通知设置"
   },
   "changePassword": {
     "currentLabel": "当前密码",
@@ -24,6 +25,15 @@
     "warrantyLeadDaysDescription": "留空 = 继承全局（{{globalValue}} 天）。",
     "save": "保存我的提醒",
     "saved": "您的提醒偏好已保存。"
+  },
+  "notifications": {
+    "description": "控制提醒消息的推送渠道。",
+    "inAppLabel": "应用内收件箱",
+    "inAppDescription": "在通知铃铛中显示提醒消息。",
+    "emailDigestLabel": "邮件摘要",
+    "emailDigestDescription": "定期接收提醒消息的邮件摘要。",
+    "save": "保存通知偏好",
+    "saved": "通知偏好已保存。"
   },
   "acceptInvite": {
     "title": "创建您的账户",
