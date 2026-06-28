@@ -1,0 +1,55 @@
+{
+  "page": {
+    "title": "审计日志",
+    "subtitle": "安全与管理事件。"
+  },
+  "columns": {
+    "time": "时间",
+    "event": "事件",
+    "actor": "操作者",
+    "target": "目标",
+    "detail": "详情",
+    "ip": "IP"
+  },
+  "filters": {
+    "eventType": "事件类型",
+    "actorId": "操作者ID",
+    "from": "起始时间",
+    "to": "结束时间",
+    "all": "全部事件",
+    "actorIdPlaceholder": "任意操作者"
+  },
+  "pagination": {
+    "prev": "上一页",
+    "next": "下一页",
+    "showing": "显示 {{from}}–{{to}} / 共 {{total}} 条"
+  },
+  "empty": "未找到审计事件。",
+  "nullActor": "系统 / 未知",
+  "events": {
+    "auth": {
+      "login_succeeded": "登录成功",
+      "login_failed": "登录失败",
+      "logout": "退出登录"
+    },
+    "user": {
+      "created": "用户创建",
+      "role_changed": "角色变更",
+      "deactivated": "用户停用",
+      "reactivated": "用户启用",
+      "deleted": "用户删除"
+    },
+    "password": {
+      "changed": "密码修改",
+      "reset": "密码重置"
+    },
+    "invitation": {
+      "issued": "邀请发送",
+      "accepted": "邀请接受",
+      "revoked": "邀请撤销"
+    },
+    "settings": {
+      "changed": "设置变更"
+    }
+  }
+}

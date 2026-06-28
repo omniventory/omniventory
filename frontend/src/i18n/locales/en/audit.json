@@ -1,0 +1,55 @@
+{
+  "page": {
+    "title": "Audit Log",
+    "subtitle": "Security and admin events."
+  },
+  "columns": {
+    "time": "Time",
+    "event": "Event",
+    "actor": "Actor",
+    "target": "Target",
+    "detail": "Detail",
+    "ip": "IP"
+  },
+  "filters": {
+    "eventType": "Event type",
+    "actorId": "Actor ID",
+    "from": "From",
+    "to": "To",
+    "all": "All events",
+    "actorIdPlaceholder": "Any actor"
+  },
+  "pagination": {
+    "prev": "Previous",
+    "next": "Next",
+    "showing": "Showing {{from}}–{{to}} of {{total}}"
+  },
+  "empty": "No audit events found.",
+  "nullActor": "System / Unknown",
+  "events": {
+    "auth": {
+      "login_succeeded": "Login succeeded",
+      "login_failed": "Login failed",
+      "logout": "Logout"
+    },
+    "user": {
+      "created": "User created",
+      "role_changed": "Role changed",
+      "deactivated": "User deactivated",
+      "reactivated": "User reactivated",
+      "deleted": "User deleted"
+    },
+    "password": {
+      "changed": "Password changed",
+      "reset": "Password reset"
+    },
+    "invitation": {
+      "issued": "Invitation issued",
+      "accepted": "Invitation accepted",
+      "revoked": "Invitation revoked"
+    },
+    "settings": {
+      "changed": "Settings changed"
+    }
+  }
+}

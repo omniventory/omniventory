@@ -60,6 +60,7 @@ import {
   Settings,
   Search as SearchIcon,
   Users,
+  FileText,
 } from "react-feather";
 import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
@@ -237,6 +238,15 @@ function NavContent({ onClose }: { onClose?: () => void }) {
           to="/users"
           label={t("users")}
           icon={<Users size={16} />}
+          onClick={onClose}
+        />
+      )}
+      {/* Admin-only: Audit log (VIEW_AUDIT required) */}
+      {can("VIEW_AUDIT") && (
+        <NavItem
+          to="/audit"
+          label={t("audit")}
+          icon={<FileText size={16} />}
           onClick={onClose}
         />
       )}

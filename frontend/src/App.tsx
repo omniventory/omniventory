@@ -45,6 +45,7 @@ import { RequirePermission } from "./auth/RequirePermission";
 import { AcceptInvite } from "./pages/AcceptInvite";
 import { ResetPassword } from "./pages/ResetPassword";
 import { Account } from "./pages/Account";
+import { Audit } from "./pages/Audit";
 
 type AuthState = "loading" | "setup" | "authed" | "anon";
 type UserData = components["schemas"]["UserResponse"];
@@ -156,6 +157,11 @@ function App() {
             <Route path="/configuration" element={
               <RequirePermission permission="MANAGE_SETTINGS">
                 <Configuration />
+              </RequirePermission>
+            } />
+            <Route path="/audit" element={
+              <RequirePermission permission="VIEW_AUDIT">
+                <Audit />
               </RequirePermission>
             } />
             {/* /account is self-service — no permission gate, available to all roles */}

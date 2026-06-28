@@ -39,6 +39,7 @@ import enUsers from "../i18n/locales/en/users.json";
 import enInvitations from "../i18n/locales/en/invitations.json";
 import enAccount from "../i18n/locales/en/account.json";
 import enResponsible from "../i18n/locales/en/responsible.json";
+import enAudit from "../i18n/locales/en/audit.json";
 
 import zhCommon from "../i18n/locales/zh/common.json";
 import zhAuth from "../i18n/locales/zh/auth.json";
@@ -65,6 +66,7 @@ import zhUsers from "../i18n/locales/zh/users.json";
 import zhInvitations from "../i18n/locales/zh/invitations.json";
 import zhAccount from "../i18n/locales/zh/account.json";
 import zhResponsible from "../i18n/locales/zh/responsible.json";
+import zhAudit from "../i18n/locales/zh/audit.json";
 
 // ── Deep key extraction ───────────────────────────────────────────────────────
 
@@ -114,6 +116,7 @@ const namespacePairs: [string, unknown, unknown][] = [
   ["invitations", enInvitations, zhInvitations],
   ["account", enAccount, zhAccount],
   ["responsible", enResponsible, zhResponsible],
+  ["audit", enAudit, zhAudit],
 ];
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
