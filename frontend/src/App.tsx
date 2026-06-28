@@ -39,6 +39,8 @@ import { NotFound } from "./pages/NotFound";
 import { client } from "./api/client";
 import i18n from "./i18n";
 import type { components } from "./api/schema";
+import { AuthProvider } from "./auth/AuthContext";
+import { RequirePermission } from "./auth/RequirePermission";
 
 type AuthState = "loading" | "setup" | "authed" | "anon";
 type UserData = components["schemas"]["UserResponse"];
@@ -106,25 +108,37 @@ function App() {
   }
 
   // Authenticated: mount BrowserRouter INSIDE the auth gate (§2 locked decision).
+  // AuthProvider is seeded with the user from the me call; refresh/logout are
+  // wired back to the App-level state so the outer gate stays consistent.
   return (
-    <BrowserRouter>
-      <AppShell onLogout={() => { setUser(null); setAuthState("anon"); }} user={user}>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/locations" element={<Locations />} />
-          <Route path="/categories" element={<Categories />} />
-          <Route path="/items" element={<Items />} />
-          <Route path="/items/:id" element={<ItemDetail />} />
-          <Route path="/instances/:id" element={<InstanceDetail />} />
-          <Route path="/low-stock" element={<LowStock />} />
-          <Route path="/expiring" element={<Expiring />} />
-          <Route path="/notifications" element={<Notifications />} />
-          <Route path="/configuration" element={<Configuration />} />
-          <Route path="/search" element={<Search />} />
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </AppShell>
-    </BrowserRouter>
+    <AuthProvider
+      user={user}
+      onRefresh={(u) => { void applyAuthedUser(u); }}
+      onLogout={() => { setUser(null); setAuthState("anon"); }}
+    >
+      <BrowserRouter>
+        <AppShell onLogout={() => { setUser(null); setAuthState("anon"); }} user={user}>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/locations" element={<Locations />} />
+            <Route path="/categories" element={<Categories />} />
+            <Route path="/items" element={<Items />} />
+            <Route path="/items/:id" element={<ItemDetail />} />
+            <Route path="/instances/:id" element={<InstanceDetail />} />
+            <Route path="/low-stock" element={<LowStock />} />
+            <Route path="/expiring" element={<Expiring />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/configuration" element={
+              <RequirePermission permission="MANAGE_SETTINGS">
+                <Configuration />
+              </RequirePermission>
+            } />
+            <Route path="/search" element={<Search />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </AppShell>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

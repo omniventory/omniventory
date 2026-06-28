@@ -40,6 +40,7 @@ import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
 import { notifySuccess } from "./notify";
+import { useAuth } from "../auth/AuthContext";
 import type { components } from "../api/schema";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -60,6 +61,7 @@ export interface AttachmentPanelProps {
 
 export function AttachmentPanel({ modelType, modelId }: AttachmentPanelProps) {
   const { t } = useTranslation("attachments");
+  const { can } = useAuth();
 
   // ── Attachment list state ─────────────────────────────────────────────────
   const [attachments, setAttachments] = useState<AttachmentResponse[]>([]);
@@ -194,26 +196,28 @@ export function AttachmentPanel({ modelType, modelId }: AttachmentPanelProps) {
 
   return (
     <Stack gap="sm" data-testid="attachment-panel">
-      {/* Header: title + upload button */}
+      {/* Header: title + upload button (write-gated) */}
       <Group justify="space-between" align="center">
         <Title order={5}>{t("sectionTitle")}</Title>
-        <FileButton
-          resetRef={resetRef}
-          onChange={handleUpload}
-          accept="image/*,application/pdf,text/*,application/zip,application/octet-stream,.pdf,.doc,.docx,.xls,.xlsx"
-        >
-          {(props) => (
-            <Button
-              {...props}
-              size="xs"
-              variant="light"
-              loading={uploading}
-              data-testid="attachment-upload-btn"
-            >
-              {t("uploadBtn")}
-            </Button>
-          )}
-        </FileButton>
+        {can("EDIT") && (
+          <FileButton
+            resetRef={resetRef}
+            onChange={handleUpload}
+            accept="image/*,application/pdf,text/*,application/zip,application/octet-stream,.pdf,.doc,.docx,.xls,.xlsx"
+          >
+            {(props) => (
+              <Button
+                {...props}
+                size="xs"
+                variant="light"
+                loading={uploading}
+                data-testid="attachment-upload-btn"
+              >
+                {t("uploadBtn")}
+              </Button>
+            )}
+          </FileButton>
+        )}
       </Group>
 
       {/* Upload error */}
@@ -297,8 +301,8 @@ export function AttachmentPanel({ modelType, modelId }: AttachmentPanelProps) {
                     </Group>
                   )}
 
-                  {/* Caption — inline edit */}
-                  {captionEditing ? (
+                  {/* Caption — inline edit (write-gated) */}
+                  {captionEditing && can("EDIT") ? (
                     <Group gap={4} align="flex-start">
                       <TextInput
                         size="xs"
@@ -329,12 +333,15 @@ export function AttachmentPanel({ modelType, modelId }: AttachmentPanelProps) {
                     <Text
                       size="xs"
                       c="dimmed"
-                      style={{ cursor: "pointer" }}
-                      onClick={() =>
-                        setEditCaption({
-                          id: att.id,
-                          value: att.title ?? "",
-                        })
+                      style={can("EDIT") ? { cursor: "pointer" } : undefined}
+                      onClick={
+                        can("EDIT")
+                          ? () =>
+                              setEditCaption({
+                                id: att.id,
+                                value: att.title ?? "",
+                              })
+                          : undefined
                       }
                       data-testid={`caption-text-${att.id}`}
                     >
@@ -342,20 +349,22 @@ export function AttachmentPanel({ modelType, modelId }: AttachmentPanelProps) {
                     </Text>
                   )}
 
-                  {/* Delete button */}
-                  <ActionIcon
-                    size="xs"
-                    variant="subtle"
-                    color="red"
-                    onClick={() => {
-                      setDeleteError(null);
-                      setDeleteTarget(att);
-                    }}
-                    data-testid={`attachment-delete-btn-${att.id}`}
-                    aria-label={t("deleteConfirm.title")}
-                  >
-                    <Trash2 size={12} />
-                  </ActionIcon>
+                  {/* Delete button (write-gated) */}
+                  {can("EDIT") && (
+                    <ActionIcon
+                      size="xs"
+                      variant="subtle"
+                      color="red"
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeleteTarget(att);
+                      }}
+                      data-testid={`attachment-delete-btn-${att.id}`}
+                      aria-label={t("deleteConfirm.title")}
+                    >
+                      <Trash2 size={12} />
+                    </ActionIcon>
+                  )}
                 </Stack>
               </Card>
             );

@@ -24,6 +24,7 @@ import { Sun, Moon, LogOut } from "react-feather";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { emailToInitial } from "./emailToInitial";
+import { useAuth } from "../auth/AuthContext";
 
 interface UserButtonProps {
   email: string;
@@ -32,8 +33,11 @@ interface UserButtonProps {
 
 export function UserButton({ email, onLogout }: UserButtonProps) {
   const { t } = useTranslation("nav");
+  const { t: tRoles } = useTranslation("roles");
   const { setColorScheme } = useMantineColorScheme();
   const computed = useComputedColorScheme("dark");
+  // Role from AuthContext; null when no provider is present (tests — see AUTH_FALLBACK).
+  const { role } = useAuth();
 
   function toggleColorScheme() {
     setColorScheme(computed === "dark" ? "light" : "dark");
@@ -57,14 +61,16 @@ export function UserButton({ email, onLogout }: UserButtonProps) {
             <Avatar color="teal" radius="xl" size="sm">
               {initial}
             </Avatar>
-            <Text
-              size="sm"
-              fw={500}
-              truncate="end"
-              style={{ flex: 1, minWidth: 0 }}
-            >
-              {email}
-            </Text>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Text size="sm" fw={500} truncate="end">
+                {email}
+              </Text>
+              {role && (
+                <Text size="xs" c="dimmed" truncate="end" data-testid="user-role-label">
+                  {tRoles(role, { defaultValue: role })}
+                </Text>
+              )}
+            </div>
           </Group>
         </UnstyledButton>
       </Menu.Target>

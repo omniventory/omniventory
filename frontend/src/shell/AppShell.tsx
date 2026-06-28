@@ -65,6 +65,7 @@ import { client } from "../api/client";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { UserButton } from "../components/UserButton";
 import { NotificationBell } from "../components/NotificationBell";
+import { useAuth } from "../auth/AuthContext";
 import type { components } from "../api/schema";
 
 type UserData = components["schemas"]["UserResponse"];
@@ -182,6 +183,9 @@ function NavBrand() {
 /** Sidebar / nav content — real links to all M1 top-level routes. */
 function NavContent({ onClose }: { onClose?: () => void }) {
   const { t } = useTranslation("nav");
+  // Admin-only nav items gated by the client-side permission matrix.
+  // Steps 9 (Users) and 13 (Audit) will add their own items the same way.
+  const { can } = useAuth();
   return (
     <Stack gap={2} p="xs">
       <NavItem
@@ -226,12 +230,15 @@ function NavContent({ onClose }: { onClose?: () => void }) {
         icon={<SearchIcon size={16} />}
         onClick={onClose}
       />
-      <NavItem
-        to="/configuration"
-        label={t("configuration")}
-        icon={<Settings size={16} />}
-        onClick={onClose}
-      />
+      {/* Admin-only: Configuration (MANAGE_SETTINGS required) */}
+      {can("MANAGE_SETTINGS") && (
+        <NavItem
+          to="/configuration"
+          label={t("configuration")}
+          icon={<Settings size={16} />}
+          onClick={onClose}
+        />
+      )}
     </Stack>
   );
 }
@@ -379,3 +386,11 @@ export function AppShell({ children, onLogout, user }: AppShellProps) {
     </>
   );
 }
+
+/**
+ * NavContent_testable — exported alias for M6Step8 nav-gating tests.
+ * Renders the nav links (including the role-gated Configuration item) with
+ * the current AuthContext. Requires a Router context.
+ * @internal — not part of the public API; do not use in production code.
+ */
+export { NavContent as NavContent_testable };

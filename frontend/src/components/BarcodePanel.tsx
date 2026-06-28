@@ -31,6 +31,7 @@ import { useTranslation } from "react-i18next";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
 import { notifySuccess } from "./notify";
+import { useAuth } from "../auth/AuthContext";
 import type { components } from "../api/schema";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ export interface BarcodePanelProps {
 
 export function BarcodePanel({ definitionId }: BarcodePanelProps) {
   const { t } = useTranslation("barcode");
+  const { can } = useAuth();
 
   // ── List state ────────────────────────────────────────────────────────────
   const [barcodes, setBarcodes] = useState<BarcodeResponse[]>([]);
@@ -184,59 +186,63 @@ export function BarcodePanel({ definitionId }: BarcodePanelProps) {
                 </Text>
               )}
             </Stack>
-            <ActionIcon
-              size="sm"
-              variant="subtle"
-              color="red"
-              aria-label={t("removeBtn")}
-              onClick={() => setDeleteTarget(bc)}
-              data-testid={`remove-barcode-${bc.id}`}
-            >
-              <Trash2 size={14} />
-            </ActionIcon>
+            {can("EDIT") && (
+              <ActionIcon
+                size="sm"
+                variant="subtle"
+                color="red"
+                aria-label={t("removeBtn")}
+                onClick={() => setDeleteTarget(bc)}
+                data-testid={`remove-barcode-${bc.id}`}
+              >
+                <Trash2 size={14} />
+              </ActionIcon>
+            )}
           </Group>
         ))}
 
-      {/* Add barcode ─────────────────────────────────────────────────────── */}
-      <Stack gap="xs">
-        {addError && (
-          <Alert
-            icon={<AlertCircle size={16} />}
-            color="red"
-            variant="light"
-            data-testid="add-barcode-error"
-          >
-            {addError}
-          </Alert>
-        )}
-        <Group gap="xs" wrap="nowrap">
-          <TextInput
-            placeholder={t("codePlaceholder")}
-            value={newCode}
-            onChange={(e) => setNewCode(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void handleAdd();
-            }}
-            style={{ flex: 1 }}
-            data-testid="barcode-code-input"
-          />
-          <TextInput
-            placeholder={t("labelPlaceholder")}
-            value={newLabel}
-            onChange={(e) => setNewLabel(e.currentTarget.value)}
-            style={{ minWidth: 120 }}
-            data-testid="barcode-label-input"
-          />
-          <Button
-            onClick={() => void handleAdd()}
-            loading={addBusy}
-            disabled={!newCode.trim()}
-            data-testid="add-barcode-btn"
-          >
-            {t("addBtn")}
-          </Button>
-        </Group>
-      </Stack>
+      {/* Add barcode (write-gated) ──────────────────────────────────────── */}
+      {can("EDIT") && (
+        <Stack gap="xs">
+          {addError && (
+            <Alert
+              icon={<AlertCircle size={16} />}
+              color="red"
+              variant="light"
+              data-testid="add-barcode-error"
+            >
+              {addError}
+            </Alert>
+          )}
+          <Group gap="xs" wrap="nowrap">
+            <TextInput
+              placeholder={t("codePlaceholder")}
+              value={newCode}
+              onChange={(e) => setNewCode(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void handleAdd();
+              }}
+              style={{ flex: 1 }}
+              data-testid="barcode-code-input"
+            />
+            <TextInput
+              placeholder={t("labelPlaceholder")}
+              value={newLabel}
+              onChange={(e) => setNewLabel(e.currentTarget.value)}
+              style={{ minWidth: 120 }}
+              data-testid="barcode-label-input"
+            />
+            <Button
+              onClick={() => void handleAdd()}
+              loading={addBusy}
+              disabled={!newCode.trim()}
+              data-testid="add-barcode-btn"
+            >
+              {t("addBtn")}
+            </Button>
+          </Group>
+        </Stack>
+      )}
 
       {/* Remove confirm modal ────────────────────────────────────────────── */}
       <Modal

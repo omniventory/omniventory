@@ -41,6 +41,7 @@ import { useTranslation, Trans } from "react-i18next";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
 import { notifySuccess } from "../components/notify";
+import { useAuth } from "../auth/AuthContext";
 import type { components } from "../api/schema";
 import { LoadingState } from "../components/LoadingState";
 import { ErrorState } from "../components/ErrorState";
@@ -132,6 +133,7 @@ export function InstanceDetail() {
   const { t } = useTranslation("instances");
   const { t: tStock } = useTranslation("stock");
   const { t: tCF } = useTranslation("customFields");
+  const { can } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const instId = Number(id);
@@ -442,30 +444,32 @@ export function InstanceDetail() {
             </Group>
           )}
         </Stack>
-        <Group gap={8}>
-          <Button
-            size="xs"
-            variant="light"
-            leftSection={<Edit2 size={12} />}
-            onClick={openEdit}
-            data-testid="edit-inst-btn"
-          >
-            {t("detail.editBtn")}
-          </Button>
-          <Button
-            size="xs"
-            variant="light"
-            color="red"
-            leftSection={<Trash2 size={12} />}
-            onClick={() => {
-              setActionError(null);
-              setDeleteOpen(true);
-            }}
-            data-testid="delete-inst-btn"
-          >
-            {t("detail.deleteBtn")}
-          </Button>
-        </Group>
+        {can("EDIT") && (
+          <Group gap={8}>
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<Edit2 size={12} />}
+              onClick={openEdit}
+              data-testid="edit-inst-btn"
+            >
+              {t("detail.editBtn")}
+            </Button>
+            <Button
+              size="xs"
+              variant="light"
+              color="red"
+              leftSection={<Trash2 size={12} />}
+              onClick={() => {
+                setActionError(null);
+                setDeleteOpen(true);
+              }}
+              data-testid="delete-inst-btn"
+            >
+              {t("detail.deleteBtn")}
+            </Button>
+          </Group>
+        )}
       </Group>
 
       <Divider />
@@ -543,8 +547,8 @@ export function InstanceDetail() {
         )}
       </Card>
 
-      {/* Per-lot action buttons (exact mode only) */}
-      {mode === "exact" && (
+      {/* Per-lot action buttons (exact mode only, EDIT permission required) */}
+      {mode === "exact" && can("EDIT") && (
         <Stack gap="xs">
           <Text size="sm" fw={500}>{t("detail.actionsTitle")}</Text>
           <Group gap={8}>
@@ -659,7 +663,7 @@ export function InstanceDetail() {
                             )}
                           </Table.Td>
                           <Table.Td>
-                            {isReversible(mov) && (
+                            {isReversible(mov) && can("EDIT") && (
                               <Button
                                 size="xs"
                                 variant="subtle"

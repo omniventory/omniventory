@@ -45,6 +45,7 @@ import { useTranslation, Trans } from "react-i18next";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
 import { notifySuccess } from "./notify";
+import { useAuth } from "../auth/AuthContext";
 import type { components } from "../api/schema";
 import { LoadingState } from "./LoadingState";
 import { ErrorState } from "./ErrorState";
@@ -112,6 +113,7 @@ interface TreeBrowserProps {
 export function TreeBrowser({ resource }: TreeBrowserProps) {
   const ns = resource; // "locations" or "categories"
   const { t } = useTranslation(ns);
+  const { can } = useAuth();
 
   const [treeData, setTreeData] = useState<AnyTreeNode[]>([]);
   const [flatMap, setFlatMap] = useState<Map<number, AnyTreeNode>>(new Map());
@@ -726,17 +728,19 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
 
   return (
     <Stack gap="md">
-      {/* Top toolbar */}
-      <Group justify="flex-end">
-        <Button
-          size="xs"
-          leftSection={<Plus size={14} />}
-          onClick={() => openCreate(selectedId)}
-          data-testid="create-root-btn"
-        >
-          {addBtnLabel}
-        </Button>
-      </Group>
+      {/* Top toolbar — create button is admin/member only (EDIT permission) */}
+      {can("EDIT") && (
+        <Group justify="flex-end">
+          <Button
+            size="xs"
+            leftSection={<Plus size={14} />}
+            onClick={() => openCreate(selectedId)}
+            data-testid="create-root-btn"
+          >
+            {addBtnLabel}
+          </Button>
+        </Group>
+      )}
 
       {/* Tree — clicking blank space (not a node row or its buttons) clears selection */}
       {treeData.length === 0 ? (
@@ -828,43 +832,45 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
                       ?? `Asset #${(nodeData as LocationTreeNode).item_instance_id}`}
                   </Badge>
                 )}
-                {/* Action icons (show on hover or selection) */}
-                <Group gap={4} wrap="nowrap">
-                  <ActionIcon
-                    size="sm"
-                    variant="subtle"
-                    aria-label={t("tree.addChildUnder", { name: node.label as string })}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openCreate(nodeId);
-                    }}
-                  >
-                    <Plus size={16} />
-                  </ActionIcon>
-                  <ActionIcon
-                    size="sm"
-                    variant="subtle"
-                    aria-label={t("tree.rename", { name: node.label as string })}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openRename(nodeId, node.label as string);
-                    }}
-                  >
-                    <Edit2 size={16} />
-                  </ActionIcon>
-                  <ActionIcon
-                    size="sm"
-                    variant="subtle"
-                    color="red"
-                    aria-label={t("tree.delete", { name: node.label as string })}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openDelete(nodeId, node.label as string);
-                    }}
-                  >
-                    <Trash2 size={16} />
-                  </ActionIcon>
-                </Group>
+                {/* Action icons (EDIT permission required) */}
+                {can("EDIT") && (
+                  <Group gap={4} wrap="nowrap">
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      aria-label={t("tree.addChildUnder", { name: node.label as string })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openCreate(nodeId);
+                      }}
+                    >
+                      <Plus size={16} />
+                    </ActionIcon>
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      aria-label={t("tree.rename", { name: node.label as string })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openRename(nodeId, node.label as string);
+                      }}
+                    >
+                      <Edit2 size={16} />
+                    </ActionIcon>
+                    <ActionIcon
+                      size="sm"
+                      variant="subtle"
+                      color="red"
+                      aria-label={t("tree.delete", { name: node.label as string })}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openDelete(nodeId, node.label as string);
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </ActionIcon>
+                  </Group>
+                )}
               </Group>
             );
           }}
@@ -880,32 +886,34 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
             <Text fw={600} size="md">
               {selectedNode.name}
             </Text>
-            <Group gap={4}>
-              <Button
-                size="xs"
-                variant="light"
-                onClick={() =>
-                  openReparent(selectedNode.id, selectedNode.parent_id)
-                }
-              >
-                {t("detail.reparentBtn")}
-              </Button>
-              <Button
-                size="xs"
-                variant="light"
-                color="red"
-                onClick={() => openDelete(selectedNode.id, selectedNode.name)}
-              >
-                {t("detail.deleteBtn")}
-              </Button>
-            </Group>
+            {can("EDIT") && (
+              <Group gap={4}>
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={() =>
+                    openReparent(selectedNode.id, selectedNode.parent_id)
+                  }
+                >
+                  {t("detail.reparentBtn")}
+                </Button>
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="red"
+                  onClick={() => openDelete(selectedNode.id, selectedNode.name)}
+                >
+                  {t("detail.deleteBtn")}
+                </Button>
+              </Group>
+            )}
           </Group>
           {selectedNode.description && (
             <Text size="sm" c="dimmed">
               {selectedNode.description}
             </Text>
           )}
-          {/* Container-asset link/unlink controls (locations only) */}
+          {/* Container-asset link/unlink controls (locations only, EDIT required) */}
           {isLocation && (
             selectedIsContainerAsItem ? (
               <Group gap="xs" align="center" data-testid="container-asset-linked">
@@ -915,17 +923,19 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
                     ? instanceLabel(linkedInstance)
                     : `Instance #${(selectedNode as LocationTreeNode).item_instance_id}`}
                 </Badge>
-                <Button
-                  size="xs"
-                  variant="subtle"
-                  color="red"
-                  onClick={() => openUnlinkContainerAsset(selectedNode.id)}
-                  data-testid="unlink-container-btn"
-                >
-                  {t("tree.unlinkContainerBtn")}
-                </Button>
+                {can("EDIT") && (
+                  <Button
+                    size="xs"
+                    variant="subtle"
+                    color="red"
+                    onClick={() => openUnlinkContainerAsset(selectedNode.id)}
+                    data-testid="unlink-container-btn"
+                  >
+                    {t("tree.unlinkContainerBtn")}
+                  </Button>
+                )}
               </Group>
-            ) : (
+            ) : can("EDIT") ? (
               <Button
                 size="xs"
                 variant="light"
@@ -935,7 +945,7 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
               >
                 {t("tree.linkContainerBtn")}
               </Button>
-            )
+            ) : null
           )}
           {/* Attachments (locations only) */}
           {isLocation && selectedId !== null && (
@@ -1013,27 +1023,29 @@ export function TreeBrowser({ resource }: TreeBrowserProps) {
                           <Text size="xs">{formatQuantity(inst.quantity)}</Text>
                         </Table.Td>
                         <Table.Td>
-                          <Group gap={2} wrap="nowrap" justify="flex-end">
-                            <ActionIcon
-                              size="xs"
-                              variant="subtle"
-                              aria-label={t("tree.moveInstance", { id: inst.id })}
-                              onClick={() => openMoveInstance(inst)}
-                              data-testid={`move-instance-${inst.id}`}
-                            >
-                              <Move size={12} />
-                            </ActionIcon>
-                            <ActionIcon
-                              size="xs"
-                              variant="subtle"
-                              color="red"
-                              aria-label={t("tree.deleteInstance", { id: inst.id })}
-                              onClick={() => openDeleteInstance(inst)}
-                              data-testid={`delete-instance-${inst.id}`}
-                            >
-                              <Trash2 size={12} />
-                            </ActionIcon>
-                          </Group>
+                          {can("EDIT") && (
+                            <Group gap={2} wrap="nowrap" justify="flex-end">
+                              <ActionIcon
+                                size="xs"
+                                variant="subtle"
+                                aria-label={t("tree.moveInstance", { id: inst.id })}
+                                onClick={() => openMoveInstance(inst)}
+                                data-testid={`move-instance-${inst.id}`}
+                              >
+                                <Move size={12} />
+                              </ActionIcon>
+                              <ActionIcon
+                                size="xs"
+                                variant="subtle"
+                                color="red"
+                                aria-label={t("tree.deleteInstance", { id: inst.id })}
+                                onClick={() => openDeleteInstance(inst)}
+                                data-testid={`delete-instance-${inst.id}`}
+                              >
+                                <Trash2 size={12} />
+                              </ActionIcon>
+                            </Group>
+                          )}
                         </Table.Td>
                       </Table.Tr>
                     ))}

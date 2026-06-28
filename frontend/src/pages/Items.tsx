@@ -45,6 +45,7 @@ import { useTranslation, Trans } from "react-i18next";
 import { client } from "../api/client";
 import { mapApiError } from "../i18n/errors";
 import { notifySuccess } from "../components/notify";
+import { useAuth } from "../auth/AuthContext";
 import type { components } from "../api/schema";
 import { PageShell } from "../components/PageShell";
 import { LoadingState } from "../components/LoadingState";
@@ -315,6 +316,7 @@ function DefinitionFormModal({
 export function Items() {
   const { t } = useTranslation("items");
   const { t: tTags } = useTranslation("tags");
+  const { can } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const [definitions, setDefinitions] = useState<DefinitionResponse[]>([]);
   const [kinds, setKinds] = useState<KindResponse[]>([]);
@@ -658,21 +660,25 @@ export function Items() {
             clearable
             data-testid="tag-filter-select"
           />
-          <Button
-            leftSection={<Zap size={14} />}
-            onClick={() => setScanOpen(true)}
-            variant="light"
-            data-testid="scan-barcode-btn"
-          >
-            {t("barcode:scanBtn")}
-          </Button>
-          <Button
-            leftSection={<Plus size={14} />}
-            onClick={openCreateDef}
-            data-testid="create-def-btn"
-          >
-            {t("list.newItemBtn")}
-          </Button>
+          {can("EDIT") && (
+            <Button
+              leftSection={<Zap size={14} />}
+              onClick={() => setScanOpen(true)}
+              variant="light"
+              data-testid="scan-barcode-btn"
+            >
+              {t("barcode:scanBtn")}
+            </Button>
+          )}
+          {can("EDIT") && (
+            <Button
+              leftSection={<Plus size={14} />}
+              onClick={openCreateDef}
+              data-testid="create-def-btn"
+            >
+              {t("list.newItemBtn")}
+            </Button>
+          )}
         </Group>
 
         {/* Export — item definitions and stock instances (all) */}
@@ -720,27 +726,29 @@ export function Items() {
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Group gap={4} justify="flex-end" wrap="nowrap">
-                        <ActionIcon
-                          size="sm"
-                          variant="subtle"
-                          aria-label={t("list.editAriaLabel", { name: def.name })}
-                          onClick={() => openEditDef(def)}
-                          data-testid={`edit-def-${def.id}`}
-                        >
-                          <Edit2 size={14} />
-                        </ActionIcon>
-                        <ActionIcon
-                          size="sm"
-                          variant="subtle"
-                          color="red"
-                          aria-label={t("list.deleteAriaLabel", { name: def.name })}
-                          onClick={() => openDeleteDef(def)}
-                          data-testid={`delete-def-${def.id}`}
-                        >
-                          <Trash2 size={14} />
-                        </ActionIcon>
-                      </Group>
+                      {can("EDIT") && (
+                        <Group gap={4} justify="flex-end" wrap="nowrap">
+                          <ActionIcon
+                            size="sm"
+                            variant="subtle"
+                            aria-label={t("list.editAriaLabel", { name: def.name })}
+                            onClick={() => openEditDef(def)}
+                            data-testid={`edit-def-${def.id}`}
+                          >
+                            <Edit2 size={14} />
+                          </ActionIcon>
+                          <ActionIcon
+                            size="sm"
+                            variant="subtle"
+                            color="red"
+                            aria-label={t("list.deleteAriaLabel", { name: def.name })}
+                            onClick={() => openDeleteDef(def)}
+                            data-testid={`delete-def-${def.id}`}
+                          >
+                            <Trash2 size={14} />
+                          </ActionIcon>
+                        </Group>
+                      )}
                     </Table.Td>
                   </Table.Tr>
                 ))}
@@ -860,6 +868,7 @@ export function ItemDetail() {
   const { t: tStock } = useTranslation("stock");
   const { t: tInst } = useTranslation("instances");
   const { t: tCF } = useTranslation("customFields");
+  const { can } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const defId = Number(id);
@@ -1377,30 +1386,32 @@ export function ItemDetail() {
       {/* Definition header + actions */}
       <Group justify="space-between" wrap="nowrap">
         <Title order={2}>{def.name}</Title>
-        <Group gap={8}>
-          <Button
-            size="xs"
-            variant="light"
-            leftSection={<Edit2 size={12} />}
-            onClick={openEditDef}
-            data-testid="edit-def-btn"
-          >
-            {t("detail.editBtn")}
-          </Button>
-          <Button
-            size="xs"
-            variant="light"
-            color="red"
-            leftSection={<Trash2 size={12} />}
-            onClick={() => {
-              setDefError(null);
-              setDefModal({ kind: "delete", def });
-            }}
-            data-testid="delete-def-btn"
-          >
-            {t("detail.deleteBtn")}
-          </Button>
-        </Group>
+        {can("EDIT") && (
+          <Group gap={8}>
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<Edit2 size={12} />}
+              onClick={openEditDef}
+              data-testid="edit-def-btn"
+            >
+              {t("detail.editBtn")}
+            </Button>
+            <Button
+              size="xs"
+              variant="light"
+              color="red"
+              leftSection={<Trash2 size={12} />}
+              onClick={() => {
+                setDefError(null);
+                setDefModal({ kind: "delete", def });
+              }}
+              data-testid="delete-def-btn"
+            >
+              {t("detail.deleteBtn")}
+            </Button>
+          </Group>
+        )}
       </Group>
 
       {/* Definition metadata card */}
@@ -1541,36 +1552,38 @@ export function ItemDetail() {
               </Badge>
             )}
           </Group>
-          <Group gap={8}>
-            {def.stock_tracking_mode === "exact" && (
+          {can("EDIT") && (
+            <Group gap={8}>
+              {def.stock_tracking_mode === "exact" && (
+                <Button
+                  size="xs"
+                  variant="light"
+                  color="orange"
+                  onClick={openConsume}
+                  data-testid="consume-btn"
+                >
+                  {tStock("actions.consume")}
+                </Button>
+              )}
               <Button
                 size="xs"
+                leftSection={<Zap size={12} />}
                 variant="light"
-                color="orange"
-                onClick={openConsume}
-                data-testid="consume-btn"
+                onClick={() => setDetailScanOpen(true)}
+                data-testid="detail-scan-btn"
               >
-                {tStock("actions.consume")}
+                {t("barcode:scanBtn")}
               </Button>
-            )}
-            <Button
-              size="xs"
-              leftSection={<Zap size={12} />}
-              variant="light"
-              onClick={() => setDetailScanOpen(true)}
-              data-testid="detail-scan-btn"
-            >
-              {t("barcode:scanBtn")}
-            </Button>
-            <Button
-              size="xs"
-              leftSection={<Plus size={12} />}
-              onClick={openCreateInst}
-              data-testid="register-instance-btn"
-            >
-              {t("detail.registerInstanceBtn")}
-            </Button>
-          </Group>
+              <Button
+                size="xs"
+                leftSection={<Plus size={12} />}
+                onClick={openCreateInst}
+                data-testid="register-instance-btn"
+              >
+                {t("detail.registerInstanceBtn")}
+              </Button>
+            </Group>
+          )}
         </Group>
 
         {/* Instance search */}
@@ -1674,69 +1687,71 @@ export function ItemDetail() {
                         </Table.Td>
                       )}
                       <Table.Td onClick={(e) => e.stopPropagation()}>
-                        <Group gap={4} justify="flex-end" wrap="nowrap">
-                          <ActionIcon
-                            size="sm"
-                            variant="subtle"
-                            aria-label={t("detail.editInstanceAriaLabel", { id: inst.id })}
-                            onClick={(e) => { e.stopPropagation(); openEditInst(inst); }}
-                            data-testid={`edit-inst-${inst.id}`}
-                          >
-                            <Edit2 size={14} />
-                          </ActionIcon>
-                          {/* Per-lot ledger action menu (exact mode only) */}
-                          {def.stock_tracking_mode === "exact" && (
-                            <Menu shadow="md" position="bottom-end" withinPortal>
-                              <Menu.Target>
-                                <ActionIcon
-                                  size="sm"
-                                  variant="subtle"
-                                  aria-label={tInst("detail.actionsTitle")}
-                                  data-testid={`lot-actions-${inst.id}`}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <MoreVertical size={14} />
-                                </ActionIcon>
-                              </Menu.Target>
-                              <Menu.Dropdown>
-                                <Menu.Item
-                                  onClick={(e) => { e.stopPropagation(); openLedgerAction("intake", inst.id); }}
-                                  data-testid={`lot-intake-${inst.id}`}
-                                >
-                                  {tStock("actions.intake")}
-                                </Menu.Item>
-                                <Menu.Item
-                                  onClick={(e) => { e.stopPropagation(); openLedgerAction("adjust", inst.id); }}
-                                  data-testid={`lot-adjust-${inst.id}`}
-                                >
-                                  {tStock("actions.adjust")}
-                                </Menu.Item>
-                                <Menu.Item
-                                  onClick={(e) => { e.stopPropagation(); openLedgerAction("discard", inst.id); }}
-                                  data-testid={`lot-discard-${inst.id}`}
-                                >
-                                  {tStock("actions.discard")}
-                                </Menu.Item>
-                                <Menu.Item
-                                  onClick={(e) => { e.stopPropagation(); openLedgerAction("move", inst.id); }}
-                                  data-testid={`lot-move-${inst.id}`}
-                                >
-                                  {tStock("actions.move")}
-                                </Menu.Item>
-                              </Menu.Dropdown>
-                            </Menu>
-                          )}
-                          <ActionIcon
-                            size="sm"
-                            variant="subtle"
-                            color="red"
-                            aria-label={t("detail.deleteInstanceAriaLabel", { id: inst.id })}
-                            onClick={(e) => { e.stopPropagation(); openDeleteInst(inst); }}
-                            data-testid={`delete-inst-${inst.id}`}
-                          >
-                            <Trash2 size={14} />
-                          </ActionIcon>
-                        </Group>
+                        {can("EDIT") && (
+                          <Group gap={4} justify="flex-end" wrap="nowrap">
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              aria-label={t("detail.editInstanceAriaLabel", { id: inst.id })}
+                              onClick={(e) => { e.stopPropagation(); openEditInst(inst); }}
+                              data-testid={`edit-inst-${inst.id}`}
+                            >
+                              <Edit2 size={14} />
+                            </ActionIcon>
+                            {/* Per-lot ledger action menu (exact mode only) */}
+                            {def.stock_tracking_mode === "exact" && (
+                              <Menu shadow="md" position="bottom-end" withinPortal>
+                                <Menu.Target>
+                                  <ActionIcon
+                                    size="sm"
+                                    variant="subtle"
+                                    aria-label={tInst("detail.actionsTitle")}
+                                    data-testid={`lot-actions-${inst.id}`}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <MoreVertical size={14} />
+                                  </ActionIcon>
+                                </Menu.Target>
+                                <Menu.Dropdown>
+                                  <Menu.Item
+                                    onClick={(e) => { e.stopPropagation(); openLedgerAction("intake", inst.id); }}
+                                    data-testid={`lot-intake-${inst.id}`}
+                                  >
+                                    {tStock("actions.intake")}
+                                  </Menu.Item>
+                                  <Menu.Item
+                                    onClick={(e) => { e.stopPropagation(); openLedgerAction("adjust", inst.id); }}
+                                    data-testid={`lot-adjust-${inst.id}`}
+                                  >
+                                    {tStock("actions.adjust")}
+                                  </Menu.Item>
+                                  <Menu.Item
+                                    onClick={(e) => { e.stopPropagation(); openLedgerAction("discard", inst.id); }}
+                                    data-testid={`lot-discard-${inst.id}`}
+                                  >
+                                    {tStock("actions.discard")}
+                                  </Menu.Item>
+                                  <Menu.Item
+                                    onClick={(e) => { e.stopPropagation(); openLedgerAction("move", inst.id); }}
+                                    data-testid={`lot-move-${inst.id}`}
+                                  >
+                                    {tStock("actions.move")}
+                                  </Menu.Item>
+                                </Menu.Dropdown>
+                              </Menu>
+                            )}
+                            <ActionIcon
+                              size="sm"
+                              variant="subtle"
+                              color="red"
+                              aria-label={t("detail.deleteInstanceAriaLabel", { id: inst.id })}
+                              onClick={(e) => { e.stopPropagation(); openDeleteInst(inst); }}
+                              data-testid={`delete-inst-${inst.id}`}
+                            >
+                              <Trash2 size={14} />
+                            </ActionIcon>
+                          </Group>
+                        )}
                       </Table.Td>
                     </Table.Tr>
                   );
