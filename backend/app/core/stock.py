@@ -26,6 +26,12 @@ STOCK_LEVELS: tuple[str, ...] = ("high", "medium", "low")
 # A lot with stock_level == LOW_STOCK_TRIGGER_LEVEL is considered "low".
 LOW_STOCK_TRIGGER_LEVEL: str = "low"
 
+# Shopping-list row sources (M7 §3.1 / §4.1).
+# Validated app-layer; no DB CHECK (roadmap §2.11).
+#   auto   — materialised from the low-stock signal by reconcile_auto_items().
+#   manual — user-entered (free-text or definition-linked).
+SHOPPING_LIST_SOURCES: tuple[str, ...] = ("auto", "manual")
+
 # The six movement types for the append-only stock ledger (M2 §3.3 / §4.3).
 # Validated app-layer (no DB CHECK — the set may grow; roadmap §2.11).
 #   intake     — stock received / added.

@@ -1476,6 +1476,136 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/shopping-list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Shopping List
+         * @description Return the shopping list (open items first; optionally include purchased).
+         *
+         *     Name and unit are resolved live: definition-linked rows show the
+         *     definition's current name/unit; free-text rows show the row's own values.
+         */
+        get: operations["list_shopping_list_api_shopping_list_get"];
+        put?: never;
+        /**
+         * Add Shopping List Item
+         * @description Add a manual shopping-list item.
+         *
+         *     At least one of ``definition_id`` / ``name`` must be provided.
+         *     Returns 404 if the referenced definition does not exist.
+         *     Returns 422 if neither definition_id nor name is provided.
+         */
+        post: operations["add_shopping_list_item_api_shopping_list_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shopping-list/clear-purchased": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear Purchased
+         * @description Delete all purchased (checked-off) items.
+         *
+         *     Returns the count of deleted rows.
+         */
+        post: operations["clear_purchased_api_shopping_list_clear_purchased_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shopping-list/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Shopping List Item
+         * @description Remove (hard-delete) a shopping-list item.
+         *
+         *     Returns 404 if the item does not exist.
+         */
+        delete: operations["remove_shopping_list_item_api_shopping_list__item_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Edit Shopping List Item
+         * @description Edit an existing shopping-list item (desired_quantity / name / note).
+         *
+         *     Only fields present in the request body are applied (PATCH semantics).
+         *     Returns 404 if the item does not exist.
+         */
+        patch: operations["edit_shopping_list_item_api_shopping_list__item_id__patch"];
+        trace?: never;
+    };
+    "/api/shopping-list/{item_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Off Item
+         * @description Mark a shopping-list item as purchased (check-off).
+         *
+         *     Step 1: stamps ``purchased_at = now`` only (no intake body or stock creation).
+         *     Check-off with intake is added in Step 3.
+         *     Returns 404 if the item does not exist.
+         */
+        post: operations["check_off_item_api_shopping_list__item_id__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/shopping-list/{item_id}/uncheck": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Uncheck Item
+         * @description Revert a shopping-list item to the open/unchecked state.
+         *
+         *     Clears ``purchased_at``.  Does not reverse any intake that occurred at
+         *     check-off time (that is a separate stock action).
+         *     Returns 404 if the item does not exist.
+         */
+        post: operations["uncheck_item_api_shopping_list__item_id__uncheck_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tags": {
         parameters: {
             query?: never;
@@ -1957,6 +2087,14 @@ export interface components {
             email?: components["schemas"]["EmailChannelUpdate"] | null;
             http?: components["schemas"]["HttpChannelUpdate"] | null;
             mqtt?: components["schemas"]["MqttChannelUpdate"] | null;
+        };
+        /**
+         * ClearPurchasedResponse
+         * @description Response for POST /shopping-list/clear-purchased.
+         */
+        ClearPurchasedResponse: {
+            /** Deleted Count */
+            deleted_count: number;
         };
         /**
          * ConsumeRequest
@@ -3204,6 +3342,81 @@ export interface components {
         SetupStatusResponse: {
             /** Setup Required */
             setup_required: boolean;
+        };
+        /**
+         * ShoppingListItemCreate
+         * @description Body for POST /shopping-list (add a manual item).
+         *
+         *     At least one of ``definition_id`` / ``name`` must be provided.  This is
+         *     enforced by the service layer (not Pydantic) so the client receives the
+         *     stable ``validation.invalid_input`` error code.
+         */
+        ShoppingListItemCreate: {
+            /** Definition Id */
+            definition_id?: number | null;
+            /** Desired Quantity */
+            desired_quantity?: number | string | null;
+            /** Name */
+            name?: string | null;
+            /** Note */
+            note?: string | null;
+            /** Unit */
+            unit?: string | null;
+        };
+        /**
+         * ShoppingListItemResponse
+         * @description Public representation of one shopping-list row.
+         *
+         *     ``name`` and ``unit`` are resolved from the linked definition when
+         *     ``definition_id`` is set; otherwise they carry the row's own free-text
+         *     values.  Use ``ShoppingListItemResponse.from_item(item)`` to build this
+         *     from an ORM object with its definition relationship already loaded.
+         */
+        ShoppingListItemResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: number | null;
+            /** Definition Id */
+            definition_id: number | null;
+            /** Desired Quantity */
+            desired_quantity: string | null;
+            /** Id */
+            id: number;
+            /** Name */
+            name: string | null;
+            /** Note */
+            note: string | null;
+            /** Purchased At */
+            purchased_at: string | null;
+            /** Source */
+            source: string;
+            /** Unit */
+            unit: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ShoppingListItemUpdate
+         * @description Body for PATCH /shopping-list/{id}.
+         *
+         *     PATCH semantics: only fields present in the request body are applied
+         *     (checked via ``model_fields_set`` in the service layer).  Fields absent
+         *     from the body leave the row unchanged.
+         */
+        ShoppingListItemUpdate: {
+            /** Desired Quantity */
+            desired_quantity?: number | string | null;
+            /** Name */
+            name?: string | null;
+            /** Note */
+            note?: string | null;
         };
         /**
          * TagCreate
@@ -7516,6 +7729,415 @@ export interface operations {
             };
             /** @description Unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_shopping_list_api_shopping_list_get: {
+        parameters: {
+            query?: {
+                /** @description Include checked/purchased items (default: false = open only). */
+                include_purchased?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListItemResponse"][];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_shopping_list_item_api_shopping_list_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShoppingListItemCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListItemResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    clear_purchased_api_shopping_list_clear_purchased_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClearPurchasedResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_shopping_list_item_api_shopping_list__item_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    edit_shopping_list_item_api_shopping_list__item_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShoppingListItemUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListItemResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    check_off_item_api_shopping_list__item_id__check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListItemResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    uncheck_item_api_shopping_list__item_id__uncheck_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShoppingListItemResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

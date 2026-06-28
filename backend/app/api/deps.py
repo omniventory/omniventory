@@ -210,6 +210,7 @@ def require_permission(perm: str) -> Callable[..., User]:
 
 
 # Thin named shortcuts — usable as ``Depends(require_edit)`` etc.
+require_view: Callable[..., User] = require_permission(Permission.VIEW)
 require_edit: Callable[..., User] = require_permission(Permission.EDIT)
 require_manage_users: Callable[..., User] = require_permission(Permission.MANAGE_USERS)
 require_manage_settings: Callable[..., User] = require_permission(Permission.MANAGE_SETTINGS)

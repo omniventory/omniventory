@@ -371,6 +371,7 @@ def create_app() -> FastAPI:
     from app.api.routes.reminders import router as reminders_router
     from app.api.routes.search import router as search_router
     from app.api.routes.settings import router as settings_router
+    from app.api.routes.shopping_list import router as shopping_list_router
     from app.api.routes.tags import router as tags_router
     from app.api.routes.users import router as users_router
 
@@ -398,6 +399,7 @@ def create_app() -> FastAPI:
     root_router.include_router(users_router)
     root_router.include_router(invitations_router)
     root_router.include_router(audit_router)
+    root_router.include_router(shopping_list_router)
 
     app.include_router(root_router, prefix=settings.api_prefix)
 

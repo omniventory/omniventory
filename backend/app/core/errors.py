@@ -134,6 +134,9 @@ class ErrorCode:
     # --- Rate limiting (M6 Step 7) ---
     AUTH_RATE_LIMITED = "auth.rate_limited"  # 429 — too many failed attempts
 
+    # --- Shopping list (M7 Step 1) ---
+    SHOPPING_LIST_NOT_FOUND = "shopping_list.not_found"  # 404 — operate on a missing list item
+
     # --- Internal / catch-all ---
     INTERNAL_ERROR = "internal.error"
 
@@ -191,6 +194,7 @@ _DEFAULT_MESSAGES: dict[str, str] = {
     ErrorCode.USER_EMAIL_EXISTS: "A user with that email address already exists.",
     ErrorCode.INVITATION_NOT_FOUND: "Invitation not found.",
     ErrorCode.AUTH_RATE_LIMITED: "Too many failed attempts. Please try again later.",
+    ErrorCode.SHOPPING_LIST_NOT_FOUND: "Shopping list item not found.",
     ErrorCode.INTERNAL_ERROR: "An internal error occurred.",
 }
 

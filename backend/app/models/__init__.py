@@ -19,6 +19,7 @@ from app.models.notification import Notification
 from app.models.notification_delivery import NotificationDelivery
 from app.models.session import Session
 from app.models.setting import Setting
+from app.models.shopping_list_item import ShoppingListItem
 from app.models.stock_instance import StockInstance
 from app.models.stock_movement import StockMovement
 from app.models.tag import Tag, TagLink
@@ -41,6 +42,7 @@ __all__ = [
     "NotificationDelivery",
     "Session",
     "Setting",
+    "ShoppingListItem",
     "StockInstance",
     "StockMovement",
     "Tag",
