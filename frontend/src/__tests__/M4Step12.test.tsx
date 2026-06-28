@@ -136,32 +136,6 @@ const settingsWithSecrets: AnyResult = {
   },
 };
 
-const meNoOverrides: AnyResult = {
-  user: {
-    id: 1,
-    email: "admin@example.com",
-    is_active: true,
-    role: "admin",
-    preferred_language: "en",
-    reminder_best_before_lead_days: null,
-    reminder_warranty_lead_days: null,
-    created_at: "2026-01-01T00:00:00Z",
-  },
-};
-
-const meWithOverrides: AnyResult = {
-  user: {
-    id: 1,
-    email: "admin@example.com",
-    is_active: true,
-    role: "admin",
-    preferred_language: "en",
-    reminder_best_before_lead_days: 5,
-    reminder_warranty_lead_days: 14,
-    created_at: "2026-01-01T00:00:00Z",
-  },
-};
-
 const kindDurable = { id: 1, code: "durable", name: "Durable", is_system: true, created_at: "2026-01-01T00:00:00Z" };
 
 const defWithLeadDays: AnyResult = {
@@ -206,13 +180,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function mockSettingsAndMe(settings = baseSettings, me = meNoOverrides) {
+// Note: Configuration no longer calls /api/auth/me (per-user reminders moved to Account page).
+function mockSettingsAndMe(settings = baseSettings) {
   vi.mocked(client.GET).mockImplementation(async (path: AnyResult) => {
     if (path === "/api/settings") {
       return { data: settings, response: new Response(null, { status: 200 }) };
-    }
-    if (path === "/api/auth/me") {
-      return { data: me, response: new Response(null, { status: 200 }) };
     }
     return { data: null, error: {}, response: new Response(null, { status: 404 }) };
   });
@@ -247,42 +219,6 @@ describe("Configuration page — load and render", () => {
     // Inputs should show values from settings
     const bbInput = screen.getByTestId("reminders-bb-lead-input");
     expect(bbInput.querySelector("input")?.value ?? (bbInput as HTMLInputElement).value).toBeTruthy();
-  });
-
-  it("renders per-user lead fields empty when me has no overrides", async () => {
-    mockSettingsAndMe(baseSettings, meNoOverrides);
-
-    await act(async () => {
-      renderConfiguration();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("user-bb-lead-input")).toBeDefined();
-    });
-
-    // No override → input should be empty
-    const userBbInput = screen.getByTestId("user-bb-lead-input");
-    const inputEl = userBbInput.querySelector("input") as HTMLInputElement | null;
-    // Empty string or empty value
-    expect(inputEl?.value ?? "").toBe("");
-  });
-
-  it("renders per-user lead fields when overrides are set (page loads successfully)", async () => {
-    mockSettingsAndMe(baseSettings, meWithOverrides);
-
-    await act(async () => {
-      renderConfiguration();
-    });
-
-    // When meWithOverrides is set (values 5 and 14), the form should render
-    // without errors and both per-user fields should be present.
-    await waitFor(() => {
-      expect(screen.getByTestId("user-bb-lead-input")).toBeDefined();
-      expect(screen.getByTestId("user-warranty-lead-input")).toBeDefined();
-    });
-
-    // The page title should be visible (proves full render succeeded)
-    expect(screen.getByTestId("save-user-reminders-btn")).toBeDefined();
   });
 
   it("renders Run scan now button", async () => {
@@ -512,77 +448,6 @@ describe("Configuration page — integration token", () => {
     });
 
     expect(patchBody?.channels?.http?.integration_token).toBe(generatedToken);
-  });
-});
-
-// ── Tests: per-user reminders ─────────────────────────────────────────────────
-
-describe("Configuration page — per-user reminders", () => {
-  it("saving (when fields already have values from me) → PATCH /auth/me with correct path", async () => {
-    // meWithOverrides: reminder_best_before_lead_days=5, reminder_warranty_lead_days=14
-    mockSettingsAndMe(baseSettings, meWithOverrides);
-
-    let patchPath: AnyResult = null;
-    let patchBody: AnyResult = null;
-    vi.mocked(client.PATCH).mockImplementation(async (path: AnyResult, opts: AnyResult) => {
-      patchPath = path;
-      patchBody = opts?.body;
-      return { data: meWithOverrides, response: new Response(null, { status: 200 }) };
-    });
-
-    await act(async () => {
-      renderConfiguration();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("save-user-reminders-btn")).toBeDefined();
-    });
-
-    // Click save without changing — with pre-loaded values, sends those integers
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("save-user-reminders-btn"));
-    });
-
-    await waitFor(() => {
-      expect(patchPath).toBe("/api/auth/me");
-    });
-
-    // Values were loaded from meWithOverrides (5 and 14) → sent as integers
-    expect(typeof patchBody?.reminder_best_before_lead_days).not.toBe("string");
-    expect(patchBody?.reminder_best_before_lead_days).toBe(5);
-    expect(patchBody?.reminder_warranty_lead_days).toBe(14);
-  });
-
-  it("saving with no overrides (fields stay blank) → PATCH /auth/me with null values (inherit)", async () => {
-    // meNoOverrides: both lead days are null → form starts with "" → saving sends null
-    mockSettingsAndMe(baseSettings, meNoOverrides);
-
-    let patchBody: AnyResult = null;
-    vi.mocked(client.PATCH).mockImplementation(async (_path: AnyResult, opts: AnyResult) => {
-      patchBody = opts?.body;
-      return { data: meNoOverrides, response: new Response(null, { status: 200 }) };
-    });
-
-    await act(async () => {
-      renderConfiguration();
-    });
-
-    await waitFor(() => {
-      expect(screen.getByTestId("save-user-reminders-btn")).toBeDefined();
-    });
-
-    // Click save — fields are blank (from null in me response), so null should be sent
-    await act(async () => {
-      fireEvent.click(screen.getByTestId("save-user-reminders-btn"));
-    });
-
-    await waitFor(() => {
-      expect(patchBody).not.toBeNull();
-    });
-
-    // Null semantics: blank field = send null to clear/inherit
-    expect(patchBody?.reminder_best_before_lead_days).toBeNull();
-    expect(patchBody?.reminder_warranty_lead_days).toBeNull();
   });
 });
 

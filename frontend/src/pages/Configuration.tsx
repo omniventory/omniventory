@@ -4,14 +4,12 @@
  * Sections:
  *  1. Reminders (global defaults): best_before_lead_days, warranty_lead_days,
  *     low_stock_repeat_days, scan_time — via PATCH /api/settings.
- *  2. Your reminders (per-user): reminder_best_before_lead_days,
- *     reminder_warranty_lead_days — via PATCH /api/auth/me.
- *  3. Channels:
+ *  2. Channels:
  *     a. Email / SMTP — enabled, host, port, username, password (write-only),
  *        encryption (none/starttls/ssl), from_address, from_name; test-connection button.
  *     b. HTTP — enabled, webhook_url, auth_header (write-only),
  *        integration_token (write-only, with regenerate + copy + state-URL hint).
- *     c. MQTT — enabled, host, port, username, password (write-only),
+ *     b. MQTT — enabled, host, port, username, password (write-only),
  *        topic_prefix, use_tls, discovery_enabled, commands_enabled.
  *  4. Run scan now — POST /api/reminders/run, shows per-source counts.
  *
@@ -63,7 +61,6 @@ import type { components } from "../api/schema";
 // ── Schema types ──────────────────────────────────────────────────────────────
 
 type SettingsResponse = components["schemas"]["SettingsResponse"];
-type UserResponse = components["schemas"]["UserResponse"];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -173,7 +170,6 @@ export function Configuration() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [settings, setSettings] = useState<SettingsResponse | null>(null);
-  const [me, setMe] = useState<UserResponse | null>(null);
 
   // ── Reminders (global) form ──
   const [bbLeadDays, setBbLeadDays] = useState<string>("");
@@ -182,12 +178,6 @@ export function Configuration() {
   const [scanTime, setScanTime] = useState<string>("");
   const [remindersBusy, setRemindersBusy] = useState(false);
   const [remindersError, setRemindersError] = useState<string | null>(null);
-
-  // ── Per-user reminders form ──
-  const [userBbLeadDays, setUserBbLeadDays] = useState<string>("");
-  const [userWLeadDays, setUserWLeadDays] = useState<string>("");
-  const [userRemindersBusy, setUserRemindersBusy] = useState(false);
-  const [userRemindersError, setUserRemindersError] = useState<string | null>(null);
 
   // ── Email channel form ──
   const [emailEnabled, setEmailEnabled] = useState(false);
@@ -244,35 +234,21 @@ export function Configuration() {
     setLoading(true);
     setLoadError(null);
     try {
-      const [settingsRes, meRes] = await Promise.all([
-        client.GET("/api/settings"),
-        client.GET("/api/auth/me"),
-      ]);
+      const settingsRes = await client.GET("/api/settings");
 
       if (settingsRes.error || !settingsRes.data) {
         setLoadError(t("loadError"));
         return;
       }
-      if (meRes.error || !meRes.data) {
-        setLoadError(t("loadError"));
-        return;
-      }
 
       const s = settingsRes.data;
-      const u = meRes.data.user;
-
       setSettings(s);
-      setMe(u);
 
       // Populate reminders (global) form
       setBbLeadDays(String(s.reminders.best_before_lead_days));
       setWLeadDays(String(s.reminders.warranty_lead_days));
       setRepeatDaysRaw(s.reminders.low_stock_repeat_days.join(","));
       setScanTime(s.reminders.scan_time);
-
-      // Populate per-user form (empty string = inherit)
-      setUserBbLeadDays(u.reminder_best_before_lead_days != null ? String(u.reminder_best_before_lead_days) : "");
-      setUserWLeadDays(u.reminder_warranty_lead_days != null ? String(u.reminder_warranty_lead_days) : "");
 
       // Populate email form
       const em = s.channels.email;
@@ -354,32 +330,6 @@ export function Configuration() {
       await loadAll();
     } finally {
       setRemindersBusy(false);
-    }
-  }
-
-  async function handleSaveUserReminders() {
-    setUserRemindersBusy(true);
-    setUserRemindersError(null);
-    try {
-      // Empty string = send null (clear override / inherit)
-      // Value = send integer
-      const bbVal = userBbLeadDays.trim() === "" ? null : Number(userBbLeadDays);
-      const wVal = userWLeadDays.trim() === "" ? null : Number(userWLeadDays);
-
-      const { error } = await client.PATCH("/api/auth/me", {
-        body: {
-          reminder_best_before_lead_days: bbVal,
-          reminder_warranty_lead_days: wVal,
-        },
-      });
-      if (error) {
-        setUserRemindersError(mapApiError(error));
-        return;
-      }
-      notifySuccess(t("yourReminders.saved"));
-      await loadAll();
-    } finally {
-      setUserRemindersBusy(false);
     }
   }
 
@@ -582,7 +532,7 @@ export function Configuration() {
 
   if (loading) return <LoadingState />;
   if (loadError) return <ErrorState message={loadError} />;
-  if (!settings || !me) return <ErrorState message={t("loadError")} />;
+  if (!settings) return <ErrorState message={t("loadError")} />;
 
   const stateEndpointUrl = `${window.location.origin}/api/integrations/state`;
 
@@ -646,60 +596,6 @@ export function Configuration() {
                 data-testid="save-reminders-btn"
               >
                 {t("reminders.saveReminders")}
-              </Button>
-            </Group>
-          </Stack>
-        </Paper>
-
-        {/* ── Your reminders (per-user) ─────────────────────────────────── */}
-        <Paper withBorder p="md">
-          <Stack gap="sm">
-            <Title order={4}>{t("section.yourReminders")}</Title>
-            <Divider />
-            <Text size="sm" c="dimmed">
-              {t("yourReminders.description")}
-            </Text>
-
-            {userRemindersError && (
-              <Alert icon={<AlertCircle size={16} />} color="red" variant="light" data-testid="user-reminders-error">
-                {userRemindersError}
-              </Alert>
-            )}
-
-            <NumberInput
-              label={t("yourReminders.bestBeforeLeadDaysLabel")}
-              description={t("yourReminders.bestBeforeLeadDaysDescription", {
-                globalValue: settings.reminders.best_before_lead_days,
-              })}
-              value={userBbLeadDays === "" ? "" : Number(userBbLeadDays)}
-              onChange={(v) => setUserBbLeadDays(v === "" ? "" : String(Math.round(Number(v))))}
-              min={0}
-              allowDecimal={false}
-              suffix=" days"
-              placeholder={String(settings.reminders.best_before_lead_days)}
-              data-testid="user-bb-lead-input"
-            />
-            <NumberInput
-              label={t("yourReminders.warrantyLeadDaysLabel")}
-              description={t("yourReminders.warrantyLeadDaysDescription", {
-                globalValue: settings.reminders.warranty_lead_days,
-              })}
-              value={userWLeadDays === "" ? "" : Number(userWLeadDays)}
-              onChange={(v) => setUserWLeadDays(v === "" ? "" : String(Math.round(Number(v))))}
-              min={0}
-              allowDecimal={false}
-              suffix=" days"
-              placeholder={String(settings.reminders.warranty_lead_days)}
-              data-testid="user-warranty-lead-input"
-            />
-
-            <Group justify="flex-end">
-              <Button
-                onClick={() => void handleSaveUserReminders()}
-                loading={userRemindersBusy}
-                data-testid="save-user-reminders-btn"
-              >
-                {t("yourReminders.save")}
               </Button>
             </Group>
           </Stack>

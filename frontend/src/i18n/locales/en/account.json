@@ -1,0 +1,56 @@
+{
+  "page": {
+    "title": "My Account",
+    "subtitle": "Manage your account settings"
+  },
+  "section": {
+    "changePassword": "Change password",
+    "yourReminders": "Your reminders"
+  },
+  "changePassword": {
+    "currentLabel": "Current password",
+    "newLabel": "New password",
+    "confirmLabel": "Confirm new password",
+    "mismatchError": "Passwords do not match.",
+    "submit": "Change password",
+    "success": "Password changed. All other sessions have been signed out.",
+    "otherSessionsNote": "Changing your password will sign out all your other active sessions."
+  },
+  "yourReminders": {
+    "description": "Override the global lead times for your account. Leave blank to inherit the global default.",
+    "bestBeforeLeadDaysLabel": "Your best-before lead (days)",
+    "bestBeforeLeadDaysDescription": "Blank = inherit global ({{globalValue}} days).",
+    "warrantyLeadDaysLabel": "Your warranty lead (days)",
+    "warrantyLeadDaysDescription": "Blank = inherit global ({{globalValue}} days).",
+    "save": "Save your reminders",
+    "saved": "Your reminder preferences saved."
+  },
+  "acceptInvite": {
+    "title": "Create your account",
+    "subtitle": "You've been invited to Omniventory",
+    "invalidTitle": "Invite link invalid",
+    "invalidMessage": "This invite link is invalid, expired, or has already been used.",
+    "emailLabel": "Invited email",
+    "roleLabel": "Role",
+    "passwordLabel": "Set password",
+    "confirmLabel": "Confirm password",
+    "mismatchError": "Passwords do not match.",
+    "submit": "Create account",
+    "success": "Account created! Please sign in.",
+    "goToLogin": "Go to Login"
+  },
+  "resetPassword": {
+    "title": "Reset your password",
+    "subtitle": "Set a new password for your account",
+    "invalidTitle": "Reset link invalid",
+    "invalidMessage": "This reset link is invalid, expired, or has already been used.",
+    "forEmail": "Resetting password for: {{email_masked}}",
+    "passwordLabel": "New password",
+    "confirmLabel": "Confirm new password",
+    "mismatchError": "Passwords do not match.",
+    "submit": "Set new password",
+    "success": "Password reset. Please sign in with your new password.",
+    "goToLogin": "Go to Login"
+  },
+  "loadError": "Failed to load account information."
+}

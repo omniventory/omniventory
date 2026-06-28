@@ -42,6 +42,9 @@ import i18n from "./i18n";
 import type { components } from "./api/schema";
 import { AuthProvider } from "./auth/AuthContext";
 import { RequirePermission } from "./auth/RequirePermission";
+import { AcceptInvite } from "./pages/AcceptInvite";
+import { ResetPassword } from "./pages/ResetPassword";
+import { Account } from "./pages/Account";
 
 type AuthState = "loading" | "setup" | "authed" | "anon";
 type UserData = components["schemas"]["UserResponse"];
@@ -63,6 +66,14 @@ function App() {
     setUser(u);
     setAuthState("authed");
   }
+
+  // §7.3 pre-auth public pages — route BEFORE the auth check so these pages
+  // render without any session. These are checked via window.location.pathname
+  // so they work even during the initial "loading" auth state.
+  // After the user accepts the invite or resets their password, they are
+  // redirected to "/" via window.location.assign (which shows Login since they
+  // are not yet authenticated).
+  const currentPathname = window.location.pathname;
 
   useEffect(() => {
     async function checkState() {
@@ -90,6 +101,14 @@ function App() {
 
     checkState().catch(() => setAuthState("anon"));
   }, []);
+
+  // Public token pages: serve regardless of auth state (§7.3 — pre-auth gate).
+  if (currentPathname === "/invite/accept") {
+    return <AcceptInvite />;
+  }
+  if (currentPathname === "/password-reset/accept") {
+    return <ResetPassword />;
+  }
 
   if (authState === "loading") {
     return (
@@ -139,6 +158,8 @@ function App() {
                 <Configuration />
               </RequirePermission>
             } />
+            {/* /account is self-service — no permission gate, available to all roles */}
+            <Route path="/account" element={<Account />} />
             <Route path="/search" element={<Search />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

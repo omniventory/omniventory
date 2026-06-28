@@ -5,7 +5,6 @@
   },
   "section": {
     "reminders": "Reminders (global defaults)",
-    "yourReminders": "Your reminders",
     "channels": "Channels",
     "email": "Email / SMTP",
     "http": "HTTP",
@@ -25,15 +24,6 @@
     "scanTimePlaceholder": "e.g. 08:00",
     "saveReminders": "Save reminder settings",
     "savedReminders": "Reminder settings saved."
-  },
-  "yourReminders": {
-    "description": "Override the global lead times for your account. Leave blank to inherit the global default.",
-    "bestBeforeLeadDaysLabel": "Your best-before lead (days)",
-    "bestBeforeLeadDaysDescription": "Blank = inherit global ({{globalValue}} days).",
-    "warrantyLeadDaysLabel": "Your warranty lead (days)",
-    "warrantyLeadDaysDescription": "Blank = inherit global ({{globalValue}} days).",
-    "save": "Save your reminders",
-    "saved": "Your reminder preferences saved."
   },
   "email": {
     "enabledLabel": "Enable email (SMTP)",

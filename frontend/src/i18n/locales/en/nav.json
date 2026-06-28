@@ -18,6 +18,7 @@
   "languageZh": "中文",
   "userMenu": "User menu",
   "language": "Language",
+  "account": "My Account",
   "success": {
     "languageSaved": "Language preference saved."
   }

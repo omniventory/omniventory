@@ -586,11 +586,13 @@ describe("UserButton — role label (Step 8)", () => {
 
   it("renders localized role label 'Admin' for admin", async () => {
     render(
-      <MantineProvider>
-        {withAuth("admin", (
-          <UserButton email="admin@example.com" onLogout={vi.fn()} />
-        ))}
-      </MantineProvider>,
+      <MemoryRouter>
+        <MantineProvider>
+          {withAuth("admin", (
+            <UserButton email="admin@example.com" onLogout={vi.fn()} />
+          ))}
+        </MantineProvider>
+      </MemoryRouter>,
     );
     await waitFor(() => {
       expect(screen.getByTestId("user-role-label")).toBeDefined();
@@ -600,11 +602,13 @@ describe("UserButton — role label (Step 8)", () => {
 
   it("renders localized role label 'Viewer' for viewer", async () => {
     render(
-      <MantineProvider>
-        {withAuth("viewer", (
-          <UserButton email="viewer@example.com" onLogout={vi.fn()} />
-        ))}
-      </MantineProvider>,
+      <MemoryRouter>
+        <MantineProvider>
+          {withAuth("viewer", (
+            <UserButton email="viewer@example.com" onLogout={vi.fn()} />
+          ))}
+        </MantineProvider>
+      </MemoryRouter>,
     );
     await waitFor(() => {
       expect(screen.getByTestId("user-role-label")).toBeDefined();
@@ -614,11 +618,13 @@ describe("UserButton — role label (Step 8)", () => {
 
   it("renders localized role label 'Member' for member", async () => {
     render(
-      <MantineProvider>
-        {withAuth("member", (
-          <UserButton email="member@example.com" onLogout={vi.fn()} />
-        ))}
-      </MantineProvider>,
+      <MemoryRouter>
+        <MantineProvider>
+          {withAuth("member", (
+            <UserButton email="member@example.com" onLogout={vi.fn()} />
+          ))}
+        </MantineProvider>
+      </MemoryRouter>,
     );
     await waitFor(() => {
       expect(screen.getByTestId("user-role-label")).toBeDefined();

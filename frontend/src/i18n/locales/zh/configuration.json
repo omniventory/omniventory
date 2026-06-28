@@ -5,7 +5,6 @@
   },
   "section": {
     "reminders": "提醒（全局默认）",
-    "yourReminders": "我的提醒",
     "channels": "通知渠道",
     "email": "邮件 / SMTP",
     "http": "HTTP",
@@ -25,15 +24,6 @@
     "scanTimePlaceholder": "例如 08:00",
     "saveReminders": "保存提醒设置",
     "savedReminders": "提醒设置已保存。"
-  },
-  "yourReminders": {
-    "description": "为您的账户覆盖全局提前量。留空则继承全局默认值。",
-    "bestBeforeLeadDaysLabel": "您的最佳食用期提前量（天）",
-    "bestBeforeLeadDaysDescription": "留空 = 继承全局（{{globalValue}} 天）。",
-    "warrantyLeadDaysLabel": "您的保修提前量（天）",
-    "warrantyLeadDaysDescription": "留空 = 继承全局（{{globalValue}} 天）。",
-    "save": "保存我的提醒",
-    "saved": "您的提醒偏好已保存。"
   },
   "email": {
     "enabledLabel": "启用邮件（SMTP）",

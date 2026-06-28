@@ -20,8 +20,9 @@ import {
   useMantineColorScheme,
   useComputedColorScheme,
 } from "@mantine/core";
-import { Sun, Moon, LogOut } from "react-feather";
+import { Sun, Moon, LogOut, User } from "react-feather";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { emailToInitial } from "./emailToInitial";
 import { useAuth } from "../auth/AuthContext";
@@ -38,6 +39,7 @@ export function UserButton({ email, onLogout }: UserButtonProps) {
   const computed = useComputedColorScheme("dark");
   // Role from AuthContext; null when no provider is present (tests — see AUTH_FALLBACK).
   const { role } = useAuth();
+  const navigate = useNavigate();
 
   function toggleColorScheme() {
     setColorScheme(computed === "dark" ? "light" : "dark");
@@ -76,6 +78,18 @@ export function UserButton({ email, onLogout }: UserButtonProps) {
       </Menu.Target>
 
       <Menu.Dropdown>
+        {/* Account — self-service for all roles */}
+        <Menu.Item
+          leftSection={<User size={14} />}
+          onClick={() => navigate("/account")}
+          aria-label={t("account")}
+          data-testid="account-menu-item"
+        >
+          {t("account")}
+        </Menu.Item>
+
+        <Divider />
+
         {/* Language switcher row */}
         <Menu.Label>{t("language")}</Menu.Label>
         <Menu.Item

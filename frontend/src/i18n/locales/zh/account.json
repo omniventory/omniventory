@@ -1,0 +1,56 @@
+{
+  "page": {
+    "title": "我的账户",
+    "subtitle": "管理您的账户设置"
+  },
+  "section": {
+    "changePassword": "修改密码",
+    "yourReminders": "我的提醒"
+  },
+  "changePassword": {
+    "currentLabel": "当前密码",
+    "newLabel": "新密码",
+    "confirmLabel": "确认新密码",
+    "mismatchError": "两次输入的密码不一致。",
+    "submit": "修改密码",
+    "success": "密码已修改，其他会话已退出登录。",
+    "otherSessionsNote": "修改密码后，您的其他所有活跃会话将被退出登录。"
+  },
+  "yourReminders": {
+    "description": "为您的账户覆盖全局提前量。留空则继承全局默认值。",
+    "bestBeforeLeadDaysLabel": "您的最佳食用期提前量（天）",
+    "bestBeforeLeadDaysDescription": "留空 = 继承全局（{{globalValue}} 天）。",
+    "warrantyLeadDaysLabel": "您的保修提前量（天）",
+    "warrantyLeadDaysDescription": "留空 = 继承全局（{{globalValue}} 天）。",
+    "save": "保存我的提醒",
+    "saved": "您的提醒偏好已保存。"
+  },
+  "acceptInvite": {
+    "title": "创建您的账户",
+    "subtitle": "您已被邀请加入 Omniventory",
+    "invalidTitle": "邀请链接无效",
+    "invalidMessage": "此邀请链接无效、已过期或已被使用。",
+    "emailLabel": "受邀邮箱",
+    "roleLabel": "角色",
+    "passwordLabel": "设置密码",
+    "confirmLabel": "确认密码",
+    "mismatchError": "两次输入的密码不一致。",
+    "submit": "创建账户",
+    "success": "账户已创建！请登录。",
+    "goToLogin": "前往登录"
+  },
+  "resetPassword": {
+    "title": "重置密码",
+    "subtitle": "为您的账户设置新密码",
+    "invalidTitle": "重置链接无效",
+    "invalidMessage": "此重置链接无效、已过期或已被使用。",
+    "forEmail": "正在重置账户密码：{{email_masked}}",
+    "passwordLabel": "新密码",
+    "confirmLabel": "确认新密码",
+    "mismatchError": "两次输入的密码不一致。",
+    "submit": "设置新密码",
+    "success": "密码已重置，请使用新密码登录。",
+    "goToLogin": "前往登录"
+  },
+  "loadError": "加载账户信息失败。"
+}

@@ -7,7 +7,10 @@
     "invalid_credentials": "邮箱或密码不正确。",
     "account_disabled": "该账户已被禁用。",
     "setup_already_complete": "初始化已完成，管理员账户已存在。",
-    "forbidden": "您没有执行此操作的权限。"
+    "forbidden": "您没有执行此操作的权限。",
+    "invalid_token": "此链接无效、已过期或已被使用。",
+    "password_incorrect": "当前密码不正确。",
+    "rate_limited": "尝试次数过多，请在 {{retry_after_seconds}} 秒后再试。"
   },
   "user": {
     "not_found": "用户不存在。",

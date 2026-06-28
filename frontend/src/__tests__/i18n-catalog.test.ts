@@ -37,6 +37,7 @@ import enExport from "../i18n/locales/en/export.json";
 import enRoles from "../i18n/locales/en/roles.json";
 import enUsers from "../i18n/locales/en/users.json";
 import enInvitations from "../i18n/locales/en/invitations.json";
+import enAccount from "../i18n/locales/en/account.json";
 
 import zhCommon from "../i18n/locales/zh/common.json";
 import zhAuth from "../i18n/locales/zh/auth.json";
@@ -61,6 +62,7 @@ import zhExport from "../i18n/locales/zh/export.json";
 import zhRoles from "../i18n/locales/zh/roles.json";
 import zhUsers from "../i18n/locales/zh/users.json";
 import zhInvitations from "../i18n/locales/zh/invitations.json";
+import zhAccount from "../i18n/locales/zh/account.json";
 
 // ── Deep key extraction ───────────────────────────────────────────────────────
 
@@ -108,6 +110,7 @@ const namespacePairs: [string, unknown, unknown][] = [
   ["roles", enRoles, zhRoles],
   ["users", enUsers, zhUsers],
   ["invitations", enInvitations, zhInvitations],
+  ["account", enAccount, zhAccount],
 ];
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
