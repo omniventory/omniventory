@@ -223,6 +223,23 @@ class MqttBridge:
             if config.commands_enabled:
                 client.on_message = on_message
 
+            # SSRF guard — validate the broker host before connecting.
+            # Guards against operator misconfiguration pointing at loopback /
+            # link-local / cloud-metadata targets.  Private LAN (192.168.x etc.)
+            # is ALLOWED (typical Home Assistant setup).
+            from app.core.net_guard import UnsafeUrlError, validate_broker_host
+
+            try:
+                validate_broker_host(config.host)
+            except UnsafeUrlError:
+                logger.warning(
+                    "MqttBridge: SSRF guard rejected broker host %r — MQTT disabled.",
+                    config.host,
+                )
+                self._client = None
+                self._connected = False
+                return
+
             try:
                 client.connect_async(config.host, config.port)
                 client.loop_start()

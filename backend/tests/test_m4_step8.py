@@ -610,6 +610,24 @@ class TestHttpChannelIsEnabled:
 class TestHttpChannelDeliver:
     """HttpChannel.deliver() posts payloads and records deliveries."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_external_dns(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Patch socket.getaddrinfo so the SSRF guard allows test webhook URLs.
+
+        The M6 Step 7 SSRF guard resolves hostnames before the httpx POST.
+        In the test environment these hostnames don't resolve, so we patch
+        getaddrinfo to return a public IP (1.2.3.4) for every host.
+        Tests that need to assert on the guard itself use TestSsrfGuardUnit.
+        """
+        import socket as _socket
+
+        def _fake_getaddrinfo(
+            host: str, port: object, *args: object, **kwargs: object
+        ) -> list[object]:
+            return [(_socket.AF_INET, _socket.SOCK_STREAM, 0, "", ("1.2.3.4", 0))]
+
+        monkeypatch.setattr(_socket, "getaddrinfo", _fake_getaddrinfo)
+
     def test_posts_code_params_message(self, db_session: Session) -> None:
         """Each notification is POSTed as {code, params, message}."""
         from app.auth.passwords import hash_password

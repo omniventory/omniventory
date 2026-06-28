@@ -4943,7 +4943,7 @@
     },
     "/api/auth/change-password": {
       "post": {
-        "description": "Change the current user's password (any authenticated user).\n\nVerifies ``current_password`` against the stored hash.  On mismatch\nreturns 400 ``auth.password_incorrect``.  On success, sets the new\npassword hash and revokes all OTHER sessions for this user (the current\nsession remains active, so the caller stays logged in).\n\nEmits ``password.changed`` on success (committed by ``get_db``).\n\nError codes:\n- 400 ``auth.password_incorrect`` \u2014 wrong current password.",
+        "description": "Change the current user's password (any authenticated user).\n\nVerifies ``current_password`` against the stored hash.  On mismatch\nreturns 400 ``auth.password_incorrect``.  On success, sets the new\npassword hash and revokes all OTHER sessions for this user (the current\nsession remains active, so the caller stays logged in).\n\nEmits ``password.changed`` on success (committed by ``get_db``).\n\nRate limiting: keyed by ``(client_ip, user_id)`` \u2014 each user's counter\nis independent.  After ``N`` wrong-password attempts the endpoint returns\n429 ``auth.rate_limited`` with ``Retry-After``.\n\nError codes:\n- 400 ``auth.password_incorrect`` \u2014 wrong current password.\n- 429 ``auth.rate_limited`` \u2014 too many failed attempts.",
         "operationId": "change_password_api_auth_change_password_post",
         "requestBody": {
           "content": {
@@ -5015,7 +5015,7 @@
     },
     "/api/auth/login": {
       "post": {
-        "description": "Authenticate with email + password and return a session cookie.\n\nOn success: creates a server-side session row and sets the ``HttpOnly``\nsession cookie.  Returns the public user object.  Emits\n``auth.login_succeeded`` to the audit log.\n\nOn failure: returns 401 (email not found or wrong password).  The same\nerror is returned for both cases to prevent user-enumeration attacks.\nEmits ``auth.login_failed`` (actor_user_id=NULL, actor_email=attempted\nemail) and COMMITS that row BEFORE raising the 401 so it survives the\n``get_db`` rollback triggered by the AppError exception.",
+        "description": "Authenticate with email + password and return a session cookie.\n\nOn success: creates a server-side session row and sets the ``HttpOnly``\nsession cookie.  Returns the public user object.  Emits\n``auth.login_succeeded`` to the audit log.  Clears the rate-limit counter.\n\nOn failure: returns 401 (email not found or wrong password).  The same\nerror is returned for both cases to prevent user-enumeration attacks.\nEmits ``auth.login_failed`` (actor_user_id=NULL, actor_email=attempted\nemail) and COMMITS that row BEFORE raising the 401 so it survives the\n``get_db`` rollback triggered by the AppError exception.  Registers a\nrate-limit failure before the raise.\n\nRate limiting: after ``N`` failures from the same IP the endpoint returns\n429 ``auth.rate_limited`` with a ``Retry-After`` header.",
         "operationId": "login_api_auth_login_post",
         "requestBody": {
           "content": {
@@ -7964,7 +7964,7 @@
         ]
       },
       "post": {
-        "description": "Accept an invite and create the new user account (public, no auth).\n\nDoes NOT auto-login \u2014 the frontend redirects to the login page after success.\n\nEmits ``invitation.accepted`` (actor_user_id may be NULL \u2014 the accept is\npublic/anonymous; we use the created user's id as the actor since they are\nthe agent performing the accept).\n\nError codes:\n- 400 ``auth.invalid_token`` \u2014 token invalid, expired, consumed, or email\n  race (email was registered between invite creation and accept).",
+        "description": "Accept an invite and create the new user account (public, no auth).\n\nDoes NOT auto-login \u2014 the frontend redirects to the login page after success.\n\nEmits ``invitation.accepted`` (actor_user_id may be NULL \u2014 the accept is\npublic/anonymous; we use the created user's id as the actor since they are\nthe agent performing the accept).\n\nRate limiting: keyed by client IP.  After ``N`` bad-token attempts the\nendpoint returns 429 ``auth.rate_limited`` with ``Retry-After``.\n\nError codes:\n- 400 ``auth.invalid_token`` \u2014 token invalid, expired, consumed, or email\n  race (email was registered between invite creation and accept).\n- 429 ``auth.rate_limited`` \u2014 too many failed attempts.",
         "operationId": "post_invitation_accept_api_invitations_accept_post",
         "requestBody": {
           "content": {
@@ -9374,7 +9374,7 @@
         ]
       },
       "post": {
-        "description": "Accept a password-reset token and set the new password (public, no auth).\n\nOn success: the user's password is updated; all their existing sessions\nare revoked (they must re-authenticate with the new password).\n\nEmits ``password.reset`` with ``{\"phase\": \"completed\"}``; actor is the\nuser whose password was reset (they accepted the link).\n\nError codes:\n- 400 ``auth.invalid_token`` \u2014 token invalid, expired, consumed, or user missing.",
+        "description": "Accept a password-reset token and set the new password (public, no auth).\n\nOn success: the user's password is updated; all their existing sessions\nare revoked (they must re-authenticate with the new password).\n\nEmits ``password.reset`` with ``{\"phase\": \"completed\"}``; actor is the\nuser whose password was reset (they accepted the link).\n\nRate limiting: keyed by client IP.  After ``N`` bad-token attempts the\nendpoint returns 429 ``auth.rate_limited`` with ``Retry-After``.\n\nError codes:\n- 400 ``auth.invalid_token`` \u2014 token invalid, expired, consumed, or user missing.\n- 429 ``auth.rate_limited`` \u2014 too many failed attempts.",
         "operationId": "post_password_reset_accept_api_password_reset_accept_post",
         "requestBody": {
           "content": {

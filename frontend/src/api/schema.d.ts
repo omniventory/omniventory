@@ -105,8 +105,13 @@ export interface paths {
          *
          *     Emits ``password.changed`` on success (committed by ``get_db``).
          *
+         *     Rate limiting: keyed by ``(client_ip, user_id)`` — each user's counter
+         *     is independent.  After ``N`` wrong-password attempts the endpoint returns
+         *     429 ``auth.rate_limited`` with ``Retry-After``.
+         *
          *     Error codes:
          *     - 400 ``auth.password_incorrect`` — wrong current password.
+         *     - 429 ``auth.rate_limited`` — too many failed attempts.
          */
         post: operations["change_password_api_auth_change_password_post"];
         delete?: never;
@@ -130,13 +135,17 @@ export interface paths {
          *
          *     On success: creates a server-side session row and sets the ``HttpOnly``
          *     session cookie.  Returns the public user object.  Emits
-         *     ``auth.login_succeeded`` to the audit log.
+         *     ``auth.login_succeeded`` to the audit log.  Clears the rate-limit counter.
          *
          *     On failure: returns 401 (email not found or wrong password).  The same
          *     error is returned for both cases to prevent user-enumeration attacks.
          *     Emits ``auth.login_failed`` (actor_user_id=NULL, actor_email=attempted
          *     email) and COMMITS that row BEFORE raising the 401 so it survives the
-         *     ``get_db`` rollback triggered by the AppError exception.
+         *     ``get_db`` rollback triggered by the AppError exception.  Registers a
+         *     rate-limit failure before the raise.
+         *
+         *     Rate limiting: after ``N`` failures from the same IP the endpoint returns
+         *     429 ``auth.rate_limited`` with a ``Retry-After`` header.
          */
         post: operations["login_api_auth_login_post"];
         delete?: never;
@@ -887,9 +896,13 @@ export interface paths {
          *     public/anonymous; we use the created user's id as the actor since they are
          *     the agent performing the accept).
          *
+         *     Rate limiting: keyed by client IP.  After ``N`` bad-token attempts the
+         *     endpoint returns 429 ``auth.rate_limited`` with ``Retry-After``.
+         *
          *     Error codes:
          *     - 400 ``auth.invalid_token`` — token invalid, expired, consumed, or email
          *       race (email was registered between invite creation and accept).
+         *     - 429 ``auth.rate_limited`` — too many failed attempts.
          */
         post: operations["post_invitation_accept_api_invitations_accept_post"];
         delete?: never;
@@ -1275,8 +1288,12 @@ export interface paths {
          *     Emits ``password.reset`` with ``{"phase": "completed"}``; actor is the
          *     user whose password was reset (they accepted the link).
          *
+         *     Rate limiting: keyed by client IP.  After ``N`` bad-token attempts the
+         *     endpoint returns 429 ``auth.rate_limited`` with ``Retry-After``.
+         *
          *     Error codes:
          *     - 400 ``auth.invalid_token`` — token invalid, expired, consumed, or user missing.
+         *     - 429 ``auth.rate_limited`` — too many failed attempts.
          */
         post: operations["post_password_reset_accept_api_password_reset_accept_post"];
         delete?: never;

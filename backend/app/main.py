@@ -293,10 +293,15 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(AppError)
     async def _app_error_handler(request: Request, exc: AppError) -> JSONResponse:
-        """Convert AppError to the flat ErrorResponse envelope."""
+        """Convert AppError to the flat ErrorResponse envelope.
+
+        When ``exc.headers`` is set (e.g. ``Retry-After`` for 429 responses),
+        those headers are forwarded to the ``JSONResponse``.
+        """
         return JSONResponse(
             status_code=exc.status_code,
             content=exc.to_response().model_dump(),
+            headers=exc.headers,
         )
 
     @app.exception_handler(StarletteHTTPException)
@@ -418,7 +423,9 @@ def create_app() -> FastAPI:
     from fastapi import Depends
     from sqlalchemy.orm import Session as _Session
 
+    from app.api.deps import get_current_user as _get_current_user
     from app.db.session import get_db as _get_db
+    from app.models.user import User as _UserModel
     from app.repositories.media_file import MediaFileRepository as _MFRepo
 
     @app.get("/media/{shard}/{digest}", include_in_schema=False)
@@ -426,6 +433,7 @@ def create_app() -> FastAPI:
         shard: str,
         digest: str,
         db: Annotated[_Session, Depends(_get_db)],
+        _current_user: Annotated[_UserModel, Depends(_get_current_user)],
     ) -> FileResponse:
         """Serve a media file by its content-addressed sha256 path.
 

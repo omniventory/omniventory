@@ -38,7 +38,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_manage_users
+from app.api.deps import RateLimitHandle, auth_rate_limit, require_manage_users
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
 from app.models.user import User
@@ -204,6 +204,7 @@ def post_invitation_accept(
     request: Request,
     service: Annotated[InvitationService, Depends(_get_service)],
     db: Session = Depends(get_db),
+    rl: RateLimitHandle = Depends(auth_rate_limit("invite_accept")),
 ) -> UserResponse:
     """Accept an invite and create the new user account (public, no auth).
 
@@ -213,11 +214,21 @@ def post_invitation_accept(
     public/anonymous; we use the created user's id as the actor since they are
     the agent performing the accept).
 
+    Rate limiting: keyed by client IP.  After ``N`` bad-token attempts the
+    endpoint returns 429 ``auth.rate_limited`` with ``Retry-After``.
+
     Error codes:
     - 400 ``auth.invalid_token`` — token invalid, expired, consumed, or email
       race (email was registered between invite creation and accept).
+    - 429 ``auth.rate_limited`` — too many failed attempts.
     """
-    user = service.accept_invite(body.token, body.password)
+    from app.core.errors import AppError as _AppError
+
+    try:
+        user = service.accept_invite(body.token, body.password)
+    except _AppError:
+        rl.register_failure()
+        raise
 
     ip = request.client.host if request.client else None
     AuditService(db).record(
@@ -230,6 +241,7 @@ def post_invitation_accept(
         ip_address=ip,
     )
 
+    rl.clear()
     return UserResponse.model_validate(user)
 
 
@@ -301,6 +313,7 @@ def post_password_reset_accept(
     request: Request,
     service: Annotated[InvitationService, Depends(_get_service)],
     db: Session = Depends(get_db),
+    rl: RateLimitHandle = Depends(auth_rate_limit("reset_accept")),
 ) -> MessageResponse:
     """Accept a password-reset token and set the new password (public, no auth).
 
@@ -310,10 +323,20 @@ def post_password_reset_accept(
     Emits ``password.reset`` with ``{"phase": "completed"}``; actor is the
     user whose password was reset (they accepted the link).
 
+    Rate limiting: keyed by client IP.  After ``N`` bad-token attempts the
+    endpoint returns 429 ``auth.rate_limited`` with ``Retry-After``.
+
     Error codes:
     - 400 ``auth.invalid_token`` — token invalid, expired, consumed, or user missing.
+    - 429 ``auth.rate_limited`` — too many failed attempts.
     """
-    user = service.accept_reset(body.token, body.password)
+    from app.core.errors import AppError as _AppError
+
+    try:
+        user = service.accept_reset(body.token, body.password)
+    except _AppError:
+        rl.register_failure()
+        raise
 
     ip = request.client.host if request.client else None
     AuditService(db).record(
@@ -326,4 +349,5 @@ def post_password_reset_accept(
         ip_address=ip,
     )
 
+    rl.clear()
     return MessageResponse(message="Password reset successfully.")

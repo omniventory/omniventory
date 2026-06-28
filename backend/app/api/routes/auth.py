@@ -31,7 +31,7 @@ from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import RateLimitHandle, auth_rate_limit, get_current_user
 from app.auth import sessions as session_auth
 from app.auth.passwords import dummy_verify, hash_password, verify_password
 from app.config import get_settings
@@ -103,18 +103,23 @@ def login(
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
+    rl: RateLimitHandle = Depends(auth_rate_limit("login")),
 ) -> UserResponse:
     """Authenticate with email + password and return a session cookie.
 
     On success: creates a server-side session row and sets the ``HttpOnly``
     session cookie.  Returns the public user object.  Emits
-    ``auth.login_succeeded`` to the audit log.
+    ``auth.login_succeeded`` to the audit log.  Clears the rate-limit counter.
 
     On failure: returns 401 (email not found or wrong password).  The same
     error is returned for both cases to prevent user-enumeration attacks.
     Emits ``auth.login_failed`` (actor_user_id=NULL, actor_email=attempted
     email) and COMMITS that row BEFORE raising the 401 so it survives the
-    ``get_db`` rollback triggered by the AppError exception.
+    ``get_db`` rollback triggered by the AppError exception.  Registers a
+    rate-limit failure before the raise.
+
+    Rate limiting: after ``N`` failures from the same IP the endpoint returns
+    429 ``auth.rate_limited`` with a ``Retry-After`` header.
     """
     from app.services.audit import AuditService
 
@@ -138,6 +143,7 @@ def login(
             ip_address=ip,
         )
         db.commit()
+        rl.register_failure()
         raise AppError(
             ErrorCode.INVALID_CREDENTIALS,
             status_code=401,
@@ -152,6 +158,7 @@ def login(
             ip_address=ip,
         )
         db.commit()
+        rl.register_failure()
         raise AppError(
             ErrorCode.INVALID_CREDENTIALS,
             status_code=401,
@@ -177,6 +184,9 @@ def login(
         target_id=user.id,
         ip_address=ip,
     )
+
+    # Clear the rate-limit counter on success.
+    rl.clear()
 
     return UserResponse.model_validate(user)
 
@@ -305,6 +315,7 @@ def change_password(
     request: Request,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    rl: RateLimitHandle = Depends(auth_rate_limit("change_password")),
 ) -> MessageResponse:
     """Change the current user's password (any authenticated user).
 
@@ -315,9 +326,15 @@ def change_password(
 
     Emits ``password.changed`` on success (committed by ``get_db``).
 
+    Rate limiting: keyed by ``(client_ip, user_id)`` — each user's counter
+    is independent.  After ``N`` wrong-password attempts the endpoint returns
+    429 ``auth.rate_limited`` with ``Retry-After``.
+
     Error codes:
     - 400 ``auth.password_incorrect`` — wrong current password.
+    - 429 ``auth.rate_limited`` — too many failed attempts.
     """
+    from app.core.errors import AppError as _AppError
     from app.services.audit import AuditService
     from app.services.invitation import InvitationService
 
@@ -328,7 +345,11 @@ def change_password(
         raise AppError(ErrorCode.NOT_AUTHENTICATED, status_code=401)
 
     svc = InvitationService(db)
-    svc.change_password(user, body.current_password, body.new_password, session_id)
+    try:
+        svc.change_password(user, body.current_password, body.new_password, session_id)
+    except _AppError:
+        rl.register_failure()
+        raise
 
     ip = request.client.host if request.client else None
     AuditService(db).record(
@@ -340,6 +361,7 @@ def change_password(
         ip_address=ip,
     )
 
+    rl.clear()
     return MessageResponse(message="Password changed successfully.")
 
 
@@ -368,7 +390,9 @@ _ONBOARDING_SENTINEL_KEY = "onboarding_completed"
 @router.post("/setup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 def setup(
     body: SetupRequest,
+    request: Request,
     db: Session = Depends(get_db),
+    rl: RateLimitHandle = Depends(auth_rate_limit("setup")),
 ) -> UserResponse:
     """Create the first admin user (first-run onboarding).
 
@@ -396,6 +420,7 @@ def setup(
     # expensive password hash and return immediately.
     sentinel_exists = db.get(AppConfig, _ONBOARDING_SENTINEL_KEY) is not None
     if sentinel_exists or repo.count() > 0:
+        rl.register_failure()
         raise AppError(
             ErrorCode.SETUP_ALREADY_COMPLETE,
             status_code=409,
@@ -419,6 +444,7 @@ def setup(
         db.commit()
     except IntegrityError:
         db.rollback()
+        rl.register_failure()
         raise AppError(
             ErrorCode.SETUP_ALREADY_COMPLETE,
             status_code=409,
@@ -426,4 +452,5 @@ def setup(
         ) from None
 
     db.refresh(user)
+    rl.clear()
     return UserResponse.model_validate(user)

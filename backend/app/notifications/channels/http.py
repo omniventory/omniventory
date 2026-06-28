@@ -224,8 +224,16 @@ class HttpChannel:
                 # "HeaderName: value", but the default is Authorization.
                 headers["Authorization"] = auth_header
 
+            # SSRF guard — reject unsafe URLs before any network connection.
+            # UnsafeUrlError is a ValueError → caught by the except Exception
+            # below and recorded as a failed delivery (best-effort).
+            from app.core.net_guard import validate_outbound_url
+
+            validate_outbound_url(webhook_url)
+
             # POST with a short timeout (§4.9: short timeout, e.g. 5 s).
-            with httpx.Client(timeout=_TIMEOUT_SECONDS) as client:
+            # ``follow_redirects=False`` prevents a 302→internal SSRF bypass.
+            with httpx.Client(timeout=_TIMEOUT_SECONDS, follow_redirects=False) as client:
                 response = client.post(webhook_url, json=payload, headers=headers)
                 # Raise for 4xx/5xx so they land in the except block as failures.
                 response.raise_for_status()

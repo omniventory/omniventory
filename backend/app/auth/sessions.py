@@ -13,16 +13,22 @@ Public API
 
 Session lifetime
 ----------------
-M0 uses a fixed expiry (``SESSION_TTL_HOURS`` = 24 h).  Sliding expiry and
-"remember me" are deferred to M6.
+Sessions use a fixed TTL (``SESSION_TTL_HOURS`` = 24 h) with a **throttled
+sliding-window refresh** implemented in M6 Step 7: ``verify`` extends
+``expires_at`` and updates ``last_seen_at`` when fewer than half of the TTL
+seconds remain (< 12 h left), keeping active sessions alive without
+re-authenticating.  "Remember me" (extended TTL) remains deferred.
 
-Expired-session cleanup
------------------------
-``verify`` is a **pure read**: it rejects expired sessions (returns ``None``)
-but does NOT delete the row.  Expired rows are cleaned up by ``purge_expired``,
-which is called on application startup (lifespan hook in ``app/main.py``).
-This avoids the rollback trap where a 401 response from a route handler would
-undo a flush-but-not-committed DELETE inside ``verify``.
+Expired-session cleanup / write semantics
+-----------------------------------------
+``verify`` is **not a pure read** when the sliding-window condition is met:
+it calls ``db.flush()`` to stage the refresh write.  The flush is committed
+by ``get_db``'s success path; an erroring request rolls back the flush, so
+the session is simply not extended that round — acceptable best-effort
+semantics (active sessions are rarely within 12 h of expiry, and a single
+missed extension is harmless).  Expired rows are cleaned up by
+``purge_expired``, called on application startup (lifespan hook in
+``app/main.py``).
 """
 
 import secrets
@@ -32,7 +38,7 @@ from sqlalchemy.orm import Session as DBSession
 
 from app.models.session import Session
 
-# Fixed session lifetime for M0.  Sliding window and "remember me" → M6.
+# Fixed TTL; sliding-window refresh implemented in M6 Step 7.  "Remember me" (extended TTL) remains deferred.
 SESSION_TTL_HOURS: int = 24
 
 
@@ -86,28 +92,45 @@ def verify(db: DBSession, session_id: str) -> Session | None:
     Returns the ``Session`` ORM object if the session exists and has not
     expired; returns ``None`` if the session is missing or expired.
 
-    This function is a **pure read** — it never mutates the DB.  In
-    particular it does NOT delete expired rows; that is handled by
-    ``purge_expired`` (called on app startup).  Keeping ``verify`` free of
-    writes avoids the rollback trap: when a caller raises ``HTTPException``
-    after this function returns ``None``, the ``get_db`` error handler would
-    roll back any pending flush, silently undoing a DELETE.
+    This function does NOT delete expired rows; expired rows are handled by
+    ``purge_expired`` (called on app startup).  This avoids the rollback
+    trap: when a caller raises an exception after this function returns
+    ``None``, the ``get_db`` error handler would roll back any pending flush.
 
-    Note on ``last_seen_at``
-    ------------------------
-    The model carries a ``last_seen_at`` column as a pre-wired hook for M6's
-    sliding-window expiry.  M0 uses fixed expiry, so updating it on every
-    authenticated request would be pure write-amplification with no benefit.
-    The column is left untouched here; M6 will enable the update when sliding
-    expiry is actually implemented.
+    Sliding-window expiry (M6 Step 7)
+    -----------------------------------
+    When a valid session has less than half the TTL remaining
+    (``expires_at - now < TTL/2``), this function refreshes the session:
+
+    - ``expires_at ← now + TTL``
+    - ``last_seen_at ← now``
+
+    The update is ``flush``-ed but not committed here.  It is committed by
+    ``get_db``'s success-commit path on non-erroring requests.  If the
+    request raises an exception, the refresh is rolled back — this is
+    acceptable best-effort (active users are rarely near expiry and a single
+    missed refresh is harmless).
+
+    The half-life throttle ensures most requests (with ample TTL remaining)
+    do **not** write to the DB, keeping the overhead low.
+
+    Expired sessions still return ``None`` (unchanged behaviour).
     """
     session = db.get(Session, session_id)
     if session is None:
         return None
 
-    if _now_utc() >= _as_utc(session.expires_at):
+    now = _now_utc()
+    if now >= _as_utc(session.expires_at):
         # Expired — reject without deleting.  purge_expired handles cleanup.
         return None
+
+    # Sliding-window: refresh if less than half the TTL remains.
+    half_ttl = timedelta(hours=SESSION_TTL_HOURS / 2)
+    if _as_utc(session.expires_at) - now < half_ttl:
+        session.expires_at = now + timedelta(hours=SESSION_TTL_HOURS)
+        session.last_seen_at = now
+        db.flush()
 
     return session
 

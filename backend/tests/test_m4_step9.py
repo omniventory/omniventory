@@ -279,6 +279,24 @@ def _make_mock_paho_client() -> MagicMock:
 class TestMqttBridgeLifecycle:
     """Tests for MqttBridge.start() and stop() lifecycle."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_external_dns(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Patch socket.getaddrinfo so the SSRF guard allows test broker hostnames.
+
+        The M6 Step 7 SSRF guard validates broker hosts before connecting.
+        In the test environment these hostnames don't resolve, so we patch
+        getaddrinfo to return a public IP (1.2.3.4) for all lookups.
+        Tests that specifically test the SSRF guard are in test_m6_step7.py.
+        """
+        import socket as _socket
+
+        def _fake_getaddrinfo(
+            host: str, port: object, *args: object, **kwargs: object
+        ) -> list[object]:
+            return [(_socket.AF_INET, _socket.SOCK_STREAM, 0, "", ("1.2.3.4", 0))]
+
+        monkeypatch.setattr(_socket, "getaddrinfo", _fake_getaddrinfo)
+
     def test_start_calls_connect_async_and_loop_start(self) -> None:
         """start() calls client.connect_async(host, port) and client.loop_start() (non-blocking)."""
         from app.notifications.mqtt import MqttBridge, MqttBridgeConfig

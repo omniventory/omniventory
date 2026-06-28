@@ -131,6 +131,9 @@ class ErrorCode:
     USER_EMAIL_EXISTS = "user.email_exists"  # email already registered as a user
     INVITATION_NOT_FOUND = "invitation.not_found"  # revoke a missing invite
 
+    # --- Rate limiting (M6 Step 7) ---
+    AUTH_RATE_LIMITED = "auth.rate_limited"  # 429 — too many failed attempts
+
     # --- Internal / catch-all ---
     INTERNAL_ERROR = "internal.error"
 
@@ -187,6 +190,7 @@ _DEFAULT_MESSAGES: dict[str, str] = {
     ErrorCode.AUTH_PASSWORD_INCORRECT: "Current password is incorrect.",
     ErrorCode.USER_EMAIL_EXISTS: "A user with that email address already exists.",
     ErrorCode.INVITATION_NOT_FOUND: "Invitation not found.",
+    ErrorCode.AUTH_RATE_LIMITED: "Too many failed attempts. Please try again later.",
     ErrorCode.INTERNAL_ERROR: "An internal error occurred.",
 }
 
@@ -222,11 +226,13 @@ class AppError(Exception):
         status_code: int = 400,
         params: dict[str, object] | None = None,
         message: str | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.code = code
         self.status_code = status_code
         self.params = params
         self.message = message or _DEFAULT_MESSAGES.get(code, code)
+        self.headers = headers
         super().__init__(self.message)
 
     def to_response(self) -> ErrorResponse:
