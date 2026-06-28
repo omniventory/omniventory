@@ -405,9 +405,12 @@ class TestCheckOffUncheck:
         resp = admin_client.post(f"/api/shopping-list/{item['id']}/check")
         assert resp.status_code == 200
         data = resp.json()
-        assert data["purchased_at"] is not None
+        # Step 3: response is now ShoppingListCheckResponse {item, created_instance_id}.
+        assert data["item"]["purchased_at"] is not None
         # Item is still there (not deleted on check-off).
-        assert data["id"] == item["id"]
+        assert data["item"]["id"] == item["id"]
+        # No intake body → no lot created.
+        assert data["created_instance_id"] is None
 
     def test_uncheck_clears_purchased_at(self, admin_client: TestClient) -> None:
         item = _add_item(admin_client, {"name": "Flour"})

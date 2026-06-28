@@ -1,4 +1,4 @@
-"""Shopping-list endpoints (M7 Steps 1 + 2).
+"""Shopping-list endpoints (M7 Steps 1–3).
 
 All endpoints require a valid session.  Reads require VIEW (any authenticated
 user); mutations require EDIT (member or admin).
@@ -9,12 +9,15 @@ Routes (all under the api_prefix, e.g. /api):
     POST   /shopping-list/clear-purchased     Delete all checked items (EDIT).
     POST   /shopping-list/refresh             Force auto-reconcile; return list (EDIT).
     PATCH  /shopping-list/{id}                Edit qty/name/note (EDIT).
-    POST   /shopping-list/{id}/check          Mark purchased (EDIT).
+    POST   /shopping-list/{id}/check          Mark purchased; optional intake (EDIT).
     POST   /shopping-list/{id}/uncheck        Revert purchased (EDIT).
     DELETE /shopping-list/{id}                Remove an item (EDIT).
 
 Step 1 scope: CRUD + check/uncheck (no intake — that is Step 3).
 Step 2 scope: POST /shopping-list/refresh + auto-reconcile wired in.
+Step 3 scope: POST /shopping-list/{id}/check now accepts an optional
+              ``{intake: {location_id?, quantity?}}`` body and returns
+              ``ShoppingListCheckResponse`` (item + created_instance_id).
 
 Route ordering note: ``/clear-purchased`` and ``/refresh`` are registered
 BEFORE ``/{item_id}`` to avoid FastAPI trying (and failing) to convert the
@@ -25,7 +28,10 @@ Error contract:
     403  Insufficient role (auth.forbidden).
     404  Item definition not found (item_definition.not_found) on POST.
     404  Shopping list item not found (shopping_list.not_found) on PATCH/DELETE/check/uncheck.
+    404  Location not found (location.not_found) on check with bad intake.location_id.
+    409  Non-exact definition on check with intake (stock.movement_not_applicable).
     422  Cross-field guard: neither definition_id nor name provided (validation.invalid_input).
+    422  Both intake.quantity and desired_quantity NULL on check with intake (validation.invalid_input).
 """
 
 from __future__ import annotations
@@ -42,6 +48,8 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.shopping_list import (
     ClearPurchasedResponse,
+    ShoppingListCheck,
+    ShoppingListCheckResponse,
     ShoppingListItemCreate,
     ShoppingListItemResponse,
     ShoppingListItemUpdate,
@@ -204,28 +212,46 @@ def edit_shopping_list_item(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/{item_id}/check", response_model=ShoppingListItemResponse)
+@router.post("/{item_id}/check", response_model=ShoppingListCheckResponse)
 def check_off_item(
     item_id: int,
     _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
     _: Annotated[User, Depends(require_edit)],
     service: Annotated[ShoppingListService, Depends(_get_service)],
     db: Annotated[Session, Depends(get_db)],
-) -> ShoppingListItemResponse:
+    body: ShoppingListCheck | None = None,
+) -> ShoppingListCheckResponse:
     """Mark a shopping-list item as purchased (check-off).
 
-    Step 1: stamps ``purchased_at = now`` only (no intake body or stock creation).
-    Check-off with intake is added in Step 3.
-    Returns 404 if the item does not exist.
+    Step 3: accepts an optional ``{intake: {location_id?, quantity?}}`` body.
+    When ``intake`` is provided and the item has a ``definition_id`` in 'exact'
+    mode, a new stock lot is created via the M2 ledger
+    (``StockInstanceService.create``) before stamping ``purchased_at``.
+    All operations share one transaction — an intake failure rolls back both
+    the lot creation and the ``purchased_at`` stamp.
+
+    Returns ``ShoppingListCheckResponse`` with:
+    - ``item``: the updated shopping-list row (``purchased_at`` now set).
+    - ``created_instance_id``: the new lot's id, or ``None`` when no intake ran.
+
+    Error responses (in addition to 401/403):
+    - 404 ``shopping_list.not_found`` — item does not exist.
+    - 404 ``location.not_found`` — intake.location_id does not exist.
+    - 409 ``stock.movement_not_applicable`` — definition is not 'exact' mode.
+    - 422 ``validation.invalid_input`` — intake provided but qty cannot be resolved.
     """
-    item = service.check_off(item_id)
+    intake = body.intake if body is not None else None
+    item, created_instance_id = service.check_off(item_id, intake)
     db.commit()
     db.refresh(item)
     from app.repositories.shopping_list import ShoppingListRepository
 
     fresh = ShoppingListRepository(db).get(item.id)
     assert fresh is not None
-    return ShoppingListItemResponse.from_item(fresh)
+    return ShoppingListCheckResponse(
+        item=ShoppingListItemResponse.from_item(fresh),
+        created_instance_id=created_instance_id,
+    )
 
 
 @router.post("/{item_id}/uncheck", response_model=ShoppingListItemResponse)

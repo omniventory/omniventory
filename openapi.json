@@ -4010,6 +4010,80 @@
         "title": "SetupStatusResponse",
         "type": "object"
       },
+      "ShoppingListCheck": {
+        "description": "Optional request body for POST /shopping-list/{id}/check (M7 Step 3).\n\nWhen omitted (or when ``intake`` is None), check-off only stamps\n``purchased_at`` (the Step 1 behaviour).  When ``intake`` is provided\non a definition-linked item in 'exact' mode, a new stock lot is also\ncreated via the M2 ledger.",
+        "properties": {
+          "intake": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShoppingListIntake"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ShoppingListCheck",
+        "type": "object"
+      },
+      "ShoppingListCheckResponse": {
+        "description": "Response for POST /shopping-list/{id}/check (M7 Step 3).\n\n``item``\n    The updated shopping-list row (with ``purchased_at`` now set).\n``created_instance_id``\n    The id of the newly created stock lot when intake ran; ``None``\n    when check-off ran without intake (no body, or a free-text row\n    with no ``definition_id``).",
+        "properties": {
+          "created_instance_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created Instance Id"
+          },
+          "item": {
+            "$ref": "#/components/schemas/ShoppingListItemResponse"
+          }
+        },
+        "required": [
+          "item"
+        ],
+        "title": "ShoppingListCheckResponse",
+        "type": "object"
+      },
+      "ShoppingListIntake": {
+        "description": "Intake parameters for the optional stock-creation step during check-off.\n\nExposes only ``location_id`` and ``quantity`` \u2014 the two fields the M2\n``StockInstanceService.create`` path threads.  ``occurred_at`` and\n``note`` are deliberately absent because ``StockInstanceService.create``\ndoes not accept them (M7 \u00a713 deferred attribution/fields notes).\n\nWhen ``location_id`` is None (omitted from the request), the service\nfalls through to the definition's ``default_location_id`` rather than\noverriding it with an explicit NULL (see check_off algorithm \u00a74.2).",
+        "properties": {
+          "location_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location Id"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          }
+        },
+        "title": "ShoppingListIntake",
+        "type": "object"
+      },
       "ShoppingListItemCreate": {
         "description": "Body for POST /shopping-list (add a manual item).\n\nAt least one of ``definition_id`` / ``name`` must be provided.  This is\nenforced by the service layer (not Pydantic) so the client receives the\nstable ``validation.invalid_input`` error code.",
         "properties": {
@@ -10448,7 +10522,7 @@
     },
     "/api/shopping-list/{item_id}/check": {
       "post": {
-        "description": "Mark a shopping-list item as purchased (check-off).\n\nStep 1: stamps ``purchased_at = now`` only (no intake body or stock creation).\nCheck-off with intake is added in Step 3.\nReturns 404 if the item does not exist.",
+        "description": "Mark a shopping-list item as purchased (check-off).\n\nStep 3: accepts an optional ``{intake: {location_id?, quantity?}}`` body.\nWhen ``intake`` is provided and the item has a ``definition_id`` in 'exact'\nmode, a new stock lot is created via the M2 ledger\n(``StockInstanceService.create``) before stamping ``purchased_at``.\nAll operations share one transaction \u2014 an intake failure rolls back both\nthe lot creation and the ``purchased_at`` stamp.\n\nReturns ``ShoppingListCheckResponse`` with:\n- ``item``: the updated shopping-list row (``purchased_at`` now set).\n- ``created_instance_id``: the new lot's id, or ``None`` when no intake ran.\n\nError responses (in addition to 401/403):\n- 404 ``shopping_list.not_found`` \u2014 item does not exist.\n- 404 ``location.not_found`` \u2014 intake.location_id does not exist.\n- 409 ``stock.movement_not_applicable`` \u2014 definition is not 'exact' mode.\n- 422 ``validation.invalid_input`` \u2014 intake provided but qty cannot be resolved.",
         "operationId": "check_off_item_api_shopping_list__item_id__check_post",
         "parameters": [
           {
@@ -10461,12 +10535,29 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ShoppingListCheck"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ShoppingListItemResponse"
+                  "$ref": "#/components/schemas/ShoppingListCheckResponse"
                 }
               }
             },

@@ -1,4 +1,4 @@
-"""Pydantic request/response schemas for shopping-list endpoints (M7 Step 1).
+"""Pydantic request/response schemas for shopping-list endpoints (M7 Steps 1–3).
 
 Schemas are thin wire DTOs; business logic lives in the service layer.
 
@@ -21,6 +21,19 @@ ShoppingListItemUpdate
 
 ClearPurchasedResponse
     Response for ``POST /shopping-list/clear-purchased``.
+
+ShoppingListIntake (Step 3)
+    Intake parameters for the optional stock-creation step during check-off.
+    Exposes only ``{location_id?, quantity?}`` — the two fields the M2
+    ``StockInstanceService.create`` path threads.  ``occurred_at`` and ``note``
+    are deliberately absent (M7 §13).
+
+ShoppingListCheck (Step 3)
+    Optional request body for ``POST /shopping-list/{id}/check``.
+
+ShoppingListCheckResponse (Step 3)
+    Response for ``POST /shopping-list/{id}/check``.  Wraps the updated item
+    and the id of the newly created stock lot (None when no intake ran).
 """
 
 from __future__ import annotations
@@ -119,3 +132,52 @@ class ClearPurchasedResponse(BaseModel):
     """Response for POST /shopping-list/clear-purchased."""
 
     deleted_count: int
+
+
+# ---------------------------------------------------------------------------
+# Step 3 — Check-off with optional stock intake
+# ---------------------------------------------------------------------------
+
+
+class ShoppingListIntake(BaseModel):
+    """Intake parameters for the optional stock-creation step during check-off.
+
+    Exposes only ``location_id`` and ``quantity`` — the two fields the M2
+    ``StockInstanceService.create`` path threads.  ``occurred_at`` and
+    ``note`` are deliberately absent because ``StockInstanceService.create``
+    does not accept them (M7 §13 deferred attribution/fields notes).
+
+    When ``location_id`` is None (omitted from the request), the service
+    falls through to the definition's ``default_location_id`` rather than
+    overriding it with an explicit NULL (see check_off algorithm §4.2).
+    """
+
+    location_id: int | None = None
+    quantity: Decimal | None = None
+
+
+class ShoppingListCheck(BaseModel):
+    """Optional request body for POST /shopping-list/{id}/check (M7 Step 3).
+
+    When omitted (or when ``intake`` is None), check-off only stamps
+    ``purchased_at`` (the Step 1 behaviour).  When ``intake`` is provided
+    on a definition-linked item in 'exact' mode, a new stock lot is also
+    created via the M2 ledger.
+    """
+
+    intake: ShoppingListIntake | None = None
+
+
+class ShoppingListCheckResponse(BaseModel):
+    """Response for POST /shopping-list/{id}/check (M7 Step 3).
+
+    ``item``
+        The updated shopping-list row (with ``purchased_at`` now set).
+    ``created_instance_id``
+        The id of the newly created stock lot when intake ran; ``None``
+        when check-off ran without intake (no body, or a free-text row
+        with no ``definition_id``).
+    """
+
+    item: ShoppingListItemResponse
+    created_instance_id: int | None = None

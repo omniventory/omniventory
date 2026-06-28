@@ -54,7 +54,7 @@ from app.core.stock import SHOPPING_LIST_SOURCES
 from app.models.shopping_list_item import ShoppingListItem
 from app.repositories.item_definition import ItemDefinitionRepository
 from app.repositories.shopping_list import ShoppingListRepository
-from app.schemas.shopping_list import ShoppingListItemUpdate
+from app.schemas.shopping_list import ShoppingListIntake, ShoppingListItemUpdate
 from app.services.settings import SettingsService
 
 logger = logging.getLogger(__name__)
@@ -188,21 +188,130 @@ class ShoppingListService:
             self._repo.update(item, **fields)
         return item
 
-    def check_off(self, item_id: int) -> ShoppingListItem:
-        """Mark a shopping-list item as purchased (check-off without intake).
+    def check_off(
+        self,
+        item_id: int,
+        intake: ShoppingListIntake | None = None,
+    ) -> tuple[ShoppingListItem, int | None]:
+        """Mark a shopping-list item as purchased, optionally delegating to the M2 ledger.
 
-        Stamps ``purchased_at = now(UTC)`` on the item.  Step 1 only stamps
-        the timestamp; check-off **with** intake (Step 3) extends this.
+        Step 1 behaviour (``intake=None`` or row has no ``definition_id``):
+            Only stamp ``purchased_at = now(UTC)``.  No stock creation, no new
+            quantity math, no new ledger code.
+
+        Step 3 behaviour (``intake`` provided + row has ``definition_id``):
+            Algorithm from M7 §4.2 — implemented in **one transaction** (the
+            route commits only at the end; a raised ``AppError`` propagates
+            and the whole request transaction rolls back, leaving ``purchased_at``
+            unchanged and no lot/movement created):
+
+            1. Pre-check the definition is ``exact`` mode — if not, raise
+               ``stock.movement_not_applicable`` (409).  This is the **only**
+               check-off-specific stock logic; the lot creation itself is pure
+               delegation (roadmap §2.3).
+
+            2. Resolve intake quantity = ``intake.quantity ?? desired_quantity``.
+               If **both** are NULL raise ``validation.invalid_input`` (422) —
+               the caller must say how many were bought.
+
+            3. Create a new lot by delegating to ``StockInstanceService.create``
+               (records the initial ``intake`` movement; quantity stays
+               **ledger-derived, never blind-set** — roadmap §2.3).
+               ``location_id`` is passed only when explicitly provided in the
+               intake body (non-None), so an omitted location falls through to
+               the definition's ``default_location_id``.
+
+            4. Stamp ``purchased_at = now(UTC)`` (AFTER the lot creation, so a
+               failing intake propagates before this line and the stamp is never
+               made within the same transaction).
 
         For auto rows this does NOT delete the row — it stays as the single
-        auto row for its definition (M7 §3.1 / §4.2), and will be removed
-        only by ``clear_purchased``.
+        auto row for its definition (M7 §3.1 / §4.2), removed only by
+        ``clear_purchased``.
 
-        Raises ``shopping_list.not_found`` (404) when the item is missing.
+        Returns
+        -------
+        (item, created_instance_id)
+            ``created_instance_id`` is ``None`` when no intake ran.
+
+        Raises
+        ------
+        AppError(shopping_list.not_found, 404)
+            When the item does not exist.
+        AppError(stock.movement_not_applicable, 409)
+            When ``intake`` is provided but the definition is not ``exact`` mode
+            (§10 Step 3: use ``stock.movement_not_applicable``, NOT
+            ``instance.field_mode_mismatch``).
+        AppError(validation.invalid_input, 422)
+            When ``intake`` is provided but neither ``intake.quantity`` nor
+            ``desired_quantity`` is set.
         """
         item = self._get_or_404(item_id)
         now_utc = datetime.now(tz=UTC)
-        return self._repo.stamp_purchased(item, now_utc)
+        created_instance_id: int | None = None
+
+        if intake is not None and item.definition_id is not None:
+            # Step 3 path: intake on a definition-linked item.
+            # Fetch the definition to pre-check the tracking mode.
+            defn = self._def_repo.get(item.definition_id)
+            if defn is not None:
+                # 1. Pre-check: only 'exact' mode definitions support intake.
+                #    This is the only check-off-specific stock logic (M7 §4.2).
+                if defn.stock_tracking_mode != "exact":
+                    raise AppError(
+                        ErrorCode.STOCK_MOVEMENT_NOT_APPLICABLE,
+                        status_code=409,
+                        message=(
+                            "Stock movements are not applicable to this definition's tracking mode."
+                        ),
+                    )
+
+                # 2. Resolve intake quantity: intake.quantity ?? desired_quantity.
+                qty = intake.quantity if intake.quantity is not None else item.desired_quantity
+                if qty is None:
+                    raise AppError(
+                        ErrorCode.INVALID_INPUT,
+                        status_code=422,
+                        message=(
+                            "Cannot determine intake quantity: neither "
+                            "intake.quantity nor desired_quantity is set."
+                        ),
+                    )
+
+                # 3. Create a new lot by delegating to StockInstanceService.
+                #    No new stock semantics or quantity math here — pure
+                #    delegation (roadmap §2.3 / M7 §2 / §10 Step 3).
+                #    Local imports to avoid circular dependencies (mirrors the
+                #    LowStockService local import in reconcile_auto_items).
+                from app.schemas.stock_instance import InstanceCreate
+                from app.services.stock_instance import StockInstanceService
+
+                if intake.location_id is not None:
+                    # Explicit location: pass it so StockInstanceService validates
+                    # and uses it (overrides definition default_location_id).
+                    create_data = InstanceCreate(
+                        definition_id=item.definition_id,
+                        location_id=intake.location_id,
+                        quantity=qty,
+                    )
+                else:
+                    # No location specified: omit the field so StockInstanceService
+                    # falls back to the definition's default_location_id.
+                    create_data = InstanceCreate(
+                        definition_id=item.definition_id,
+                        quantity=qty,
+                    )
+                inst = StockInstanceService(self._db).create(create_data)
+                created_instance_id = inst.id
+            # If defn is None (definition deleted mid-request via concurrent
+            # CASCADE — essentially impossible), fall through and just stamp.
+
+        # 4. Stamp purchased_at = now.
+        #    Placed AFTER the lot creation (step 3): if the intake raises,
+        #    the AppError propagates before this line, purchased_at stays NULL,
+        #    and the route's db.commit() is never reached — one transaction.
+        self._repo.stamp_purchased(item, now_utc)
+        return item, created_instance_id
 
     def uncheck(self, item_id: int) -> ShoppingListItem:
         """Revert a shopping-list item to the open/unchecked state.

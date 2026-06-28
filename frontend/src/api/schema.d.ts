@@ -1598,9 +1598,22 @@ export interface paths {
          * Check Off Item
          * @description Mark a shopping-list item as purchased (check-off).
          *
-         *     Step 1: stamps ``purchased_at = now`` only (no intake body or stock creation).
-         *     Check-off with intake is added in Step 3.
-         *     Returns 404 if the item does not exist.
+         *     Step 3: accepts an optional ``{intake: {location_id?, quantity?}}`` body.
+         *     When ``intake`` is provided and the item has a ``definition_id`` in 'exact'
+         *     mode, a new stock lot is created via the M2 ledger
+         *     (``StockInstanceService.create``) before stamping ``purchased_at``.
+         *     All operations share one transaction — an intake failure rolls back both
+         *     the lot creation and the ``purchased_at`` stamp.
+         *
+         *     Returns ``ShoppingListCheckResponse`` with:
+         *     - ``item``: the updated shopping-list row (``purchased_at`` now set).
+         *     - ``created_instance_id``: the new lot's id, or ``None`` when no intake ran.
+         *
+         *     Error responses (in addition to 401/403):
+         *     - 404 ``shopping_list.not_found`` — item does not exist.
+         *     - 404 ``location.not_found`` — intake.location_id does not exist.
+         *     - 409 ``stock.movement_not_applicable`` — definition is not 'exact' mode.
+         *     - 422 ``validation.invalid_input`` — intake provided but qty cannot be resolved.
          */
         post: operations["check_off_item_api_shopping_list__item_id__check_post"];
         delete?: never;
@@ -3371,6 +3384,53 @@ export interface components {
         SetupStatusResponse: {
             /** Setup Required */
             setup_required: boolean;
+        };
+        /**
+         * ShoppingListCheck
+         * @description Optional request body for POST /shopping-list/{id}/check (M7 Step 3).
+         *
+         *     When omitted (or when ``intake`` is None), check-off only stamps
+         *     ``purchased_at`` (the Step 1 behaviour).  When ``intake`` is provided
+         *     on a definition-linked item in 'exact' mode, a new stock lot is also
+         *     created via the M2 ledger.
+         */
+        ShoppingListCheck: {
+            intake?: components["schemas"]["ShoppingListIntake"] | null;
+        };
+        /**
+         * ShoppingListCheckResponse
+         * @description Response for POST /shopping-list/{id}/check (M7 Step 3).
+         *
+         *     ``item``
+         *         The updated shopping-list row (with ``purchased_at`` now set).
+         *     ``created_instance_id``
+         *         The id of the newly created stock lot when intake ran; ``None``
+         *         when check-off ran without intake (no body, or a free-text row
+         *         with no ``definition_id``).
+         */
+        ShoppingListCheckResponse: {
+            /** Created Instance Id */
+            created_instance_id?: number | null;
+            item: components["schemas"]["ShoppingListItemResponse"];
+        };
+        /**
+         * ShoppingListIntake
+         * @description Intake parameters for the optional stock-creation step during check-off.
+         *
+         *     Exposes only ``location_id`` and ``quantity`` — the two fields the M2
+         *     ``StockInstanceService.create`` path threads.  ``occurred_at`` and
+         *     ``note`` are deliberately absent because ``StockInstanceService.create``
+         *     does not accept them (M7 §13 deferred attribution/fields notes).
+         *
+         *     When ``location_id`` is None (omitted from the request), the service
+         *     falls through to the definition's ``default_location_id`` rather than
+         *     overriding it with an explicit NULL (see check_off algorithm §4.2).
+         */
+        ShoppingListIntake: {
+            /** Location Id */
+            location_id?: number | null;
+            /** Quantity */
+            quantity?: number | string | null;
         };
         /**
          * ShoppingListItemCreate
@@ -8141,7 +8201,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ShoppingListCheck"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -8149,7 +8213,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ShoppingListItemResponse"];
+                    "application/json": components["schemas"]["ShoppingListCheckResponse"];
                 };
             };
             /** @description Unauthorized */
