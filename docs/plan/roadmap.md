@@ -86,7 +86,7 @@ Legend: ⬜ planned · 🟡 active · 🟢 done. **Active milestone = the single
 | **M4** | Unified reminder & notification engine | ①②③ proactive alerts | 🟢 |
 | **M5** | Cross-cutting + barcode + data export | all | 🟢 |
 | **M6** | Multi-user & roles | all | 🟢 |
-| **M7** | Shopping list & maintenance schedules | ③ / ② | ⬜ |
+| **M7** | Shopping list & maintenance schedules | ③ / ② | 🟡 |
 | **M8** | Multi-unit conversion | ③ | ⬜ |
 | **M9** | Integrations & extensions (public API / LLM) | all | ⬜ |
 
@@ -174,6 +174,8 @@ Legend: ⬜ planned · 🟡 active · 🟢 done. **Active milestone = the single
 - Maintenance schedules for durables (recurring; feed the M4 reminder engine as the maintenance-due source).
 - 🟢 Low stock auto-populates the shopping list; checking an item off can intake it; a scheduled maintenance fires a reminder.
 
+> Locked: the detailed design doc (`docs/plan/milestones/M7.md`) is now written. It makes the **shopping list a persisted, household-shared `shopping_list_items` table** (migration `0033`) that is **idempotently reconciled** from the live `LowStockService` signal (one open `auto` row per low definition, behind a partial-unique index, gated by a `shopping_list.auto_add_low_stock` setting) plus free-text **manual** rows; **check-off → intake** delegates to the **existing M2 ledger** (a new lot via `StockInstanceService`, quantity stays ledger-derived — §2.3). **Maintenance schedules** attach to a **durable stock instance** (`maintenance_schedules`, migration `0034`) with **calendar-correct recurrence** (a unit-tested `add_interval` helper, stdlib-only, end-of-month clamp) and a "mark done → advance" flow. The **maintenance-due source** is an **additive** `_evaluate_maintenance` pass in `ReminderEngine` (the M4 §2 promise) — routed by the durable's M6 responsible party, deduped per occurrence, rendered in-app + email/MQTT/HTTP via a new `reminder.maintenance` catalog entry; the three existing sources are untouched. **Three** new error codes (`shopping_list.not_found`, `maintenance.not_found`, `validation.unsupported_interval_unit`); **no new runtime deps**; **3 phases / 8 atomic steps**; migrations `0033`–`0034`. M7 **reserves — but does not build — the external task-sync seam (TickTick)**: `ShoppingListService` stays the single mutation choke-point and the `NotificationChannel` protocol the single delivery extension point, so a later outbound shopping mirror + a "reminder → TickTick task" channel are additive. The actual OAuth2 + two-way sync build is deferred to the integrations milestone family (§6/§7). See `M7.md` §1/§2/§12.
+
 ### M8 — Multi-unit conversion
 **Goal:** "buy by the case, use by the piece" (Grocy-style), opt-in.
 - Purchase / stock / consume / price units + conversion factors on the Definition; intake/consume honour conversions; pricing follows.
@@ -183,6 +185,7 @@ Legend: ⬜ planned · 🟡 active · 🟢 done. **Active milestone = the single
 **Goal:** unlock AI-assisted entry and open the system to third-party automation. *(The MQTT / Home Assistant bridge moved to **M4** — see §1.3 / M4.)*
 - **Public third-party REST API + generic event webhooks + OpenAPI client** (beyond M4's reminder-specific HTTP/MQTT integration).
 - **LLM (OpenAI-compatible)** features on the reserved hook: scan product/receipt → auto-categorize; receipt → batch product creation.
+- **External task-list sync (e.g. TickTick)** — the OAuth2 home for the seams M7 reserved (`M7.md` §12): an outbound shopping-list mirror + a "reminder → to-do task" `NotificationChannel` (a perishable/warranty/maintenance reminder becomes a task on the user's to-do app). Belongs here because it reuses M9's OAuth/token infrastructure and is a two-way external integration.
 - 🟢 A third-party client drives the public API with a scoped token; an uploaded receipt drafts a batch of products via the LLM.
 
 ---
@@ -193,6 +196,7 @@ Not scheduled; revisit when the core is stable.
 - Opened/frozen/thawed "+N days" perishable refinement (if not folded into M3).
 - OIDC / SSO; 2FA.
 - **Asset tagging & label printing** (complements M5 barcode scanning): for durables without a manufacturer serial, auto-assign an **internal asset tag** — a short human-readable code (e.g. `OMNI-000123`), *not* a raw UUID, kept **distinct from the manufacturer `serial`** field. Generate a printer-friendly **QR/barcode label as SVG** (QR + the human-readable code), stick it on the box/tool, then later **scan to locate / file** it (the scan side lands in M5). Closes the loop: auto-tag → print → stick → scan.
+- **External task-list integration (TickTick et al.)** — sync the shopping list **and** route reminders to a third-party to-do app (e.g. "a perishable is about to expire → add a task to TickTick"). **Seam reserved in M7** (`M7.md` §12): `ShoppingListService` is the single mutation choke-point and the `NotificationChannel` protocol is the single delivery extension point, so the build is additive. Slot the actual OAuth2 + two-way sync into the **integrations milestone family (M9)**, reusing its credential/token infrastructure. Technical realities to handle then: OAuth2 + token refresh; TickTick's Open API has tasks/projects but (per current knowledge) no change-webhooks → inbound sync needs polling; two-way conflict/dedup/idempotency.
 - **"Promote an instance to a container location"** one-click UX: create the mirror location node + the `item_instance_id` container-as-item link in a single step (removes the manual two-step when a tracked asset is also used as a place — see the container-as-item bridge, M1 §3.1).
 - React Native native mobile client (the responsive PWA covers v1).
 - Postgres + RLS (only if true multi-tenant SaaS is ever wanted).
@@ -201,5 +205,6 @@ Not scheduled; revisit when the core is stable.
 - ~~Exact role set & permission granularity for M6 (admin/member/viewer is the current assumption).~~ **Resolved in M6 planning:** three fixed roles (admin/member/viewer) + a code-defined permission matrix; custom/fine-grained roles are parking-lot (`M6.md` §2/§12).
 - **M4 channel security — addressed in the M6 hardening pass** (`M6.md` §4.6/§4.7): SSRF guard on the outbound HTTP webhook is a **lightweight, always-on** guard that blocks loopback/link-local/cloud-metadata/reserved but **allows private LAN** (Home Assistant on the LAN stays first-class); rate limiting is **auth-endpoints-only, in-memory, with exponential backoff**. **Still open / deferred from M6:** SSRF *strict* modes (block-private toggle, DNS-rebinding IP-pinning), a persistent/shared rate-limit store + `X-Forwarded-For` proxy-trust, and tighter **MQTT inbound-command** auth/allow-listing (the broker is operator-trusted and `commands_enabled` defaults off; MQTT is currently disabled). Also open from M4: the **per-item vs per-user lead-time precedence** rule (M4 locks per-item > per-user; a "max-of-applicable" alternative may revisit) and the **low-stock repeat cadence** default (`[1,3,7]`). See `M4.md` §12 / `M6.md` §12.
 - Whether multi-unit conversion (M8) earns its complexity for the household use case, or stays a thin opt-in.
+- **External task-sync (TickTick) — when & how.** M7 reserves the seam but builds nothing (`M7.md` §12). Open: which milestone implements it (current intent: the M9 integrations family, reusing OAuth/token infra — §6 parking lot); whether the TickTick account binds **per-household** or **per-user**; outbound-only (mirror the shopping list / push reminders as tasks) vs full **two-way** (inbound check-off → mark purchased, which likely needs polling since the Open API appears to lack change-webhooks). Revisit when the integrations milestone is scoped.
 - **Stock-tracking modes `level` / `none` ergonomics:** in practice (M2) the author finds the current `level` (qualitative high/medium/low) and `none` (presence-only) modes not fully satisfying, but no concrete better design has emerged yet — revisit once real usage clarifies what's missing (relates to M2 §12's `level` granularity question).
 - Author noted "probably more capabilities not yet thought of" — additions get slotted here, then into the table.
