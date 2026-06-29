@@ -28,6 +28,47 @@ logger = logging.getLogger(__name__)
 # and static serving is silently skipped (the condition is checked at startup).
 _STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
+# ---------------------------------------------------------------------------
+# SPA shell / service-worker cache-control helper
+# ---------------------------------------------------------------------------
+
+# Exact filenames that must always be revalidated by the browser.  These are
+# the entry points whose content changes with every build but whose URLs are
+# stable (no content hash in the filename).  Without no-cache the browser
+# applies heuristic caching and can serve a stale sw.js / index.html for hours
+# or days, blocking the Service Worker update cycle so Ctrl-R keeps showing the
+# old build.  ``no-cache`` means "store but revalidate before use".
+#
+# Note: Starlette's FileResponse does not implement conditional-GET
+# (If-None-Match / If-Modified-Since), so revalidation always returns a full
+# 200 rather than a 304 Not Modified.  The shell/SW files are tiny, so the
+# round-trip cost is negligible; the important effect is that the browser never
+# serves a stale cached copy without checking the server first.
+#
+# ``index.html`` is included here so that an explicit GET /index.html also
+# receives no-cache (consistent with the index.html fallback path which always
+# sets the header directly).  Content-hashed /assets/* bundles are NOT in this
+# set; they are immutable by filename and must stay cacheable.
+_NO_CACHE_SHELL_NAMES: frozenset[str] = frozenset({"sw.js", "registerSW.js", "index.html"})
+
+
+def _spa_cache_headers(filename: str) -> dict[str, str]:
+    """Return ``{"Cache-Control": "no-cache"}`` for SPA shell and SW files.
+
+    Covers the service-worker script (``sw.js``), the SW registration shim
+    (``registerSW.js``), any Web App Manifest (``.webmanifest``), and any
+    Workbox runtime chunk (``workbox-*.js``).  All other files (icons, fonts,
+    …) get an empty dict so their caching is left to the browser default.
+    """
+    name = Path(filename).name
+    if (
+        name in _NO_CACHE_SHELL_NAMES
+        or name.endswith(".webmanifest")
+        or name.startswith("workbox-")
+    ):
+        return {"Cache-Control": "no-cache"}
+    return {}
+
 
 def _resolve_secret_key(app: FastAPI) -> None:
     """Resolve the effective secret key and stash it on ``app.state.secret_key``.
@@ -516,11 +557,17 @@ def create_app() -> FastAPI:
             if full_path == api_prefix or full_path.startswith(api_prefix + "/"):
                 raise HTTPException(status_code=404)
 
-            # Try the exact path first (e.g. /icon-192.png, /manifest.webmanifest)
+            # Try the exact path first (e.g. /icon-192.png, /manifest.webmanifest,
+            # /sw.js, /registerSW.js).  Service-worker-critical and manifest files
+            # receive Cache-Control: no-cache so the browser always revalidates
+            # them; other root files (icons, …) are left to browser defaults.
             candidate = _STATIC_DIR / full_path
             if candidate.is_file():
-                return FileResponse(str(candidate))
-            # Fall back to index.html for all SPA client-side routes
-            return FileResponse(str(_index_html))
+                return FileResponse(str(candidate), headers=_spa_cache_headers(candidate.name))
+            # Fall back to index.html for all SPA client-side routes.
+            # Always no-cache: the browser must revalidate index.html on every
+            # load so the SW update cycle fires on a normal Ctrl-R after a new
+            # build is deployed.
+            return FileResponse(str(_index_html), headers={"Cache-Control": "no-cache"})
 
     return app

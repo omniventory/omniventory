@@ -62,6 +62,13 @@ def static_client(
     assets_dir.mkdir()
     # A dummy asset so the /assets mount has at least one file.
     (assets_dir / "main.js").write_text("// bundle")
+    # Service-worker and manifest files (non-content-hashed root files).
+    (static_dir / "sw.js").write_text("// service worker")
+    (static_dir / "registerSW.js").write_text("// register SW")
+    (static_dir / "manifest.webmanifest").write_text("{}")
+    (static_dir / "workbox-abc123.js").write_text("// workbox runtime")
+    # A non-SW root file (icon) — must NOT receive no-cache.
+    (static_dir / "icon-192.png").write_bytes(b"\x89PNG")
 
     # --- Patch module-level _STATIC_DIR BEFORE create_app() is called -------
     import app.main as main_mod
@@ -150,3 +157,95 @@ class TestSpaFallbackWithStaticServing:
         )
         body = response.json()
         assert body.get("status") == "ok"
+
+
+class TestSpaCacheControlHeaders:
+    """Cache-Control headers on the SPA shell and service-worker files.
+
+    Regression guard for the stale-PWA bug: without ``no-cache`` the browser
+    applies heuristic caching to ``index.html`` / ``sw.js`` so a normal
+    Ctrl-R keeps showing the old build.  Content-hashed ``/assets/*`` bundles
+    must NOT be flagged no-cache (they are immutable by filename).
+    """
+
+    def test_index_html_fallback_has_no_cache(self, static_client: TestClient) -> None:
+        """GET / (SPA root) must respond with Cache-Control: no-cache."""
+        response = static_client.get("/")
+        assert response.status_code == 200
+        assert response.headers.get("cache-control") == "no-cache", (
+            f"index.html fallback missing no-cache; got: {response.headers.get('cache-control')!r}"
+        )
+
+    def test_explicit_index_html_has_no_cache(self, static_client: TestClient) -> None:
+        """GET /index.html (explicit exact-file path) must also respond with Cache-Control: no-cache.
+
+        The fallback path always sets no-cache, but an explicit request for
+        /index.html goes through the exact-file branch where _spa_cache_headers
+        is called.  This test ensures "index.html" is covered there too, so
+        both access paths are consistent.
+        """
+        response = static_client.get("/index.html")
+        assert response.status_code == 200
+        assert response.headers.get("cache-control") == "no-cache", (
+            f"explicit GET /index.html missing no-cache; got: {response.headers.get('cache-control')!r}"
+        )
+
+    def test_spa_client_route_index_html_has_no_cache(self, static_client: TestClient) -> None:
+        """GET /shopping-list (any SPA route) must also carry Cache-Control: no-cache."""
+        response = static_client.get("/shopping-list")
+        assert response.status_code == 200
+        assert response.headers.get("cache-control") == "no-cache", (
+            f"SPA route index.html missing no-cache; got: {response.headers.get('cache-control')!r}"
+        )
+
+    def test_sw_js_has_no_cache(self, static_client: TestClient) -> None:
+        """GET /sw.js must respond with Cache-Control: no-cache."""
+        response = static_client.get("/sw.js")
+        assert response.status_code == 200
+        assert response.headers.get("cache-control") == "no-cache", (
+            f"sw.js missing no-cache; got: {response.headers.get('cache-control')!r}"
+        )
+
+    def test_register_sw_js_has_no_cache(self, static_client: TestClient) -> None:
+        """GET /registerSW.js must respond with Cache-Control: no-cache."""
+        response = static_client.get("/registerSW.js")
+        assert response.status_code == 200
+        assert response.headers.get("cache-control") == "no-cache", (
+            f"registerSW.js missing no-cache; got: {response.headers.get('cache-control')!r}"
+        )
+
+    def test_webmanifest_has_no_cache(self, static_client: TestClient) -> None:
+        """GET /manifest.webmanifest must respond with Cache-Control: no-cache."""
+        response = static_client.get("/manifest.webmanifest")
+        assert response.status_code == 200
+        assert response.headers.get("cache-control") == "no-cache", (
+            f"manifest.webmanifest missing no-cache; got: {response.headers.get('cache-control')!r}"
+        )
+
+    def test_workbox_chunk_has_no_cache(self, static_client: TestClient) -> None:
+        """GET /workbox-<hash>.js must respond with Cache-Control: no-cache."""
+        response = static_client.get("/workbox-abc123.js")
+        assert response.status_code == 200
+        assert response.headers.get("cache-control") == "no-cache", (
+            f"workbox chunk missing no-cache; got: {response.headers.get('cache-control')!r}"
+        )
+
+    def test_icon_does_not_have_no_cache(self, static_client: TestClient) -> None:
+        """GET /icon-192.png (non-SW root file) must NOT carry Cache-Control: no-cache."""
+        response = static_client.get("/icon-192.png")
+        assert response.status_code == 200
+        assert response.headers.get("cache-control") != "no-cache", (
+            "icon-192.png should not receive no-cache (leave to browser default)"
+        )
+
+    def test_assets_bundle_does_not_have_no_cache(self, static_client: TestClient) -> None:
+        """GET /assets/main.js (content-hashed bundle) must NOT carry Cache-Control: no-cache.
+
+        Content-hashed assets are immutable by filename and must stay fully
+        cacheable; no-cache would break their long-lived caching contract.
+        """
+        response = static_client.get("/assets/main.js")
+        assert response.status_code == 200
+        assert response.headers.get("cache-control") != "no-cache", (
+            "/assets/* bundles must not receive no-cache (they are content-hashed)"
+        )
