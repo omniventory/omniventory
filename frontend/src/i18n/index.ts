@@ -50,6 +50,7 @@ import enAccount from "./locales/en/account.json";
 import enResponsible from "./locales/en/responsible.json";
 import enAudit from "./locales/en/audit.json";
 import enShoppingList from "./locales/en/shoppingList.json";
+import enMaintenance from "./locales/en/maintenance.json";
 
 // Locale bundles — zh
 import zhCommon from "./locales/zh/common.json";
@@ -79,6 +80,7 @@ import zhAccount from "./locales/zh/account.json";
 import zhResponsible from "./locales/zh/responsible.json";
 import zhAudit from "./locales/zh/audit.json";
 import zhShoppingList from "./locales/zh/shoppingList.json";
+import zhMaintenance from "./locales/zh/maintenance.json";
 
 const NAMESPACES = [
   "common",
@@ -108,6 +110,7 @@ const NAMESPACES = [
   "responsible",
   "audit",
   "shoppingList",
+  "maintenance",
 ] as const;
 
 i18next
@@ -148,6 +151,7 @@ i18next
         responsible: enResponsible,
         audit: enAudit,
         shoppingList: enShoppingList,
+        maintenance: enMaintenance,
       },
       zh: {
         common: zhCommon,
@@ -177,6 +181,7 @@ i18next
         responsible: zhResponsible,
         audit: zhAudit,
         shoppingList: zhShoppingList,
+        maintenance: zhMaintenance,
       },
     },
     detection: {

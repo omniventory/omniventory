@@ -53,6 +53,7 @@ import { ExpiryBadge } from "../components/ExpiryBadge";
 import { AttachmentPanel } from "../components/AttachmentPanel";
 import { TagPanel } from "../components/TagPanel";
 import { NotePanel } from "../components/NotePanel";
+import { MaintenancePanel } from "../components/MaintenancePanel";
 import { formatDate, formatQuantity } from "../i18n/format";
 
 // ── Schema types ─────────────────────────────────────────────────────────────
@@ -703,6 +704,10 @@ export function InstanceDetail() {
           </Stack>
         </>
       )}
+
+      {/* Maintenance schedules */}
+      <Divider />
+      <MaintenancePanel instanceId={instId} />
 
       {/* Attachments */}
       <Divider />

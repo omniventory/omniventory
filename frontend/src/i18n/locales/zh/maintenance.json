@@ -1,0 +1,86 @@
+{
+  "sectionTitle": "维护计划",
+  "empty": "该实例暂无维护计划。",
+  "col": {
+    "name": "任务名称",
+    "recurrence": "周期",
+    "nextDue": "下次到期",
+    "status": "状态",
+    "lastCompleted": "上次完成"
+  },
+  "status": {
+    "overdue": "已逾期",
+    "due_soon": "即将到期",
+    "ok": "正常"
+  },
+  "recurrence": {
+    "day_one": "每 {{count}} 天",
+    "day_other": "每 {{count}} 天",
+    "week_one": "每 {{count}} 周",
+    "week_other": "每 {{count}} 周",
+    "month_one": "每 {{count}} 个月",
+    "month_other": "每 {{count}} 个月",
+    "year_one": "每 {{count}} 年",
+    "year_other": "每 {{count}} 年"
+  },
+  "intervalUnits": {
+    "day": "天",
+    "week": "周",
+    "month": "月",
+    "year": "年"
+  },
+  "actions": {
+    "add": "添加计划",
+    "edit": "编辑",
+    "pause": "暂停",
+    "resume": "恢复",
+    "delete": "删除",
+    "markDone": "标记完成"
+  },
+  "addModal": {
+    "title": "添加维护计划",
+    "nameLabel": "任务名称",
+    "namePlaceholder": "例如：更换空调滤网",
+    "intervalCountLabel": "每",
+    "intervalUnitLabel": "单位",
+    "nextDueDateLabel": "下次到期日期",
+    "leadDaysLabel": "提前天数（可选）",
+    "leadDaysHint": "提前多少天开始提醒。留空则使用全局默认值。",
+    "notesLabel": "备注（可选）",
+    "submit": "添加"
+  },
+  "editModal": {
+    "title": "编辑维护计划",
+    "nameLabel": "任务名称",
+    "intervalCountLabel": "每",
+    "intervalUnitLabel": "单位",
+    "nextDueDateLabel": "下次到期日期",
+    "leadDaysLabel": "提前天数（可选）",
+    "leadDaysHint": "提前多少天开始提醒。留空则使用全局默认值。",
+    "notesLabel": "备注（可选）",
+    "submit": "保存"
+  },
+  "markDoneModal": {
+    "title": "标记维护完成",
+    "completedOnLabel": "完成日期（可选）",
+    "completedOnHint": "默认为今天。如果更早完成，可回填日期。",
+    "noteLabel": "备注（可选）",
+    "submit": "标记完成"
+  },
+  "deleteModal": {
+    "title": "删除维护计划",
+    "confirmation": "确定要删除计划「{{name}}」吗？此操作无法撤销。",
+    "submit": "删除"
+  },
+  "success": {
+    "created": "维护计划已添加。",
+    "updated": "维护计划已更新。",
+    "deleted": "维护计划已删除。",
+    "paused": "计划已暂停。",
+    "resumed": "计划已恢复。",
+    "markedDone": "已标记完成，下次到期日期已更新。"
+  },
+  "errors": {
+    "loadFailed": "加载维护计划失败。"
+  }
+}

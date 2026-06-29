@@ -24,7 +24,8 @@
     "invalid_input": "提交的数据无效，请检查表单后重试。",
     "unsupported_language": "不支持语言「{{value}}」，支持的语言：{{supported}}。",
     "unsupported_tracking_mode": "不支持库存追踪模式「{{value}}」，支持的模式：{{supported}}。",
-    "unsupported_stock_level": "不支持库存水位「{{value}}」，支持的水位：{{supported}}。"
+    "unsupported_stock_level": "不支持库存水位「{{value}}」，支持的水位：{{supported}}。",
+    "unsupported_interval_unit": "不支持周期单位「{{value}}」，支持的单位：day、week、month、year。"
   },
   "tree": {
     "cycle": "此操作将在{{kind}}树中造成循环引用。",
@@ -67,6 +68,9 @@
   },
   "shopping_list": {
     "not_found": "未找到购物清单项目 #{{id}}。"
+  },
+  "maintenance": {
+    "not_found": "未找到维护计划 #{{id}}。"
   },
   "notification": {
     "not_found": "未找到通知 #{{id}}。"

@@ -24,5 +24,12 @@
     "emptyState": "所有库存水平正常。",
     "loadError": "加载低库存数据失败。",
     "viewAll": "查看所有低库存物品"
+  },
+  "maintenanceCard": {
+    "title": "即将到期的维护",
+    "countLabel_one": "{{count}} 项任务待处理",
+    "countLabel_other": "{{count}} 项任务待处理",
+    "emptyState": "暂无即将到期的维护任务。",
+    "loadError": "加载维护数据失败。"
   }
 }

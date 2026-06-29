@@ -24,5 +24,12 @@
     "emptyState": "All stock levels look good.",
     "loadError": "Failed to load low-stock data.",
     "viewAll": "View all low-stock items"
+  },
+  "maintenanceCard": {
+    "title": "Upcoming Maintenance",
+    "countLabel_one": "{{count}} task due",
+    "countLabel_other": "{{count}} tasks due",
+    "emptyState": "No maintenance tasks due soon.",
+    "loadError": "Failed to load maintenance data."
   }
 }

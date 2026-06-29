@@ -24,7 +24,8 @@
     "invalid_input": "The submitted data is invalid. Please check the form and try again.",
     "unsupported_language": "Language \"{{value}}\" is not supported. Supported languages: {{supported}}.",
     "unsupported_tracking_mode": "Stock tracking mode \"{{value}}\" is not supported. Supported modes: {{supported}}.",
-    "unsupported_stock_level": "Stock level \"{{value}}\" is not supported. Supported levels: {{supported}}."
+    "unsupported_stock_level": "Stock level \"{{value}}\" is not supported. Supported levels: {{supported}}.",
+    "unsupported_interval_unit": "Interval unit \"{{value}}\" is not supported. Supported units: day, week, month, year."
   },
   "tree": {
     "cycle": "This change would create a circular reference in the {{kind}} tree.",
@@ -67,6 +68,9 @@
   },
   "shopping_list": {
     "not_found": "Shopping list item #{{id}} was not found."
+  },
+  "maintenance": {
+    "not_found": "Maintenance schedule #{{id}} was not found."
   },
   "notification": {
     "not_found": "Notification #{{id}} was not found."

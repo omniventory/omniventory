@@ -10,6 +10,9 @@
  * Card 3 (lowStockCard): LIVE — fetches GET /api/low-stock and shows
  *   a count + short list.  Empty state when nothing is low.
  *   Links to /low-stock for the full list.
+ * Card 4 (MaintenanceCard): LIVE — fetches GET /api/maintenance-schedules?active=true,
+ *   filters client-side for overdue/due_soon (server-provided status), sorts nearest-first,
+ *   shows count + short list linking to instance detail. M7 §7.3.
  */
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -27,7 +30,7 @@ import {
   Loader,
   List,
 } from "@mantine/core";
-import { Clock, Archive, TrendingDown } from "react-feather";
+import { Clock, Archive, TrendingDown, Tool } from "react-feather";
 import { PageShell } from "../components/PageShell";
 import { ExpiryBadge } from "../components/ExpiryBadge";
 import { client } from "../api/client";
@@ -36,6 +39,7 @@ import type { components } from "../api/schema";
 
 type LowStockItem = components["schemas"]["LowStockItem"];
 type ExpiringItem = components["schemas"]["ExpiringItem"];
+type MaintenanceScheduleResponse = components["schemas"]["MaintenanceScheduleResponse"];
 
 // ── Static concept card ───────────────────────────────────────────────────────
 
@@ -350,6 +354,137 @@ function LowStockCard() {
   );
 }
 
+// ── Live upcoming-maintenance tile ────────────────────────────────────────────
+
+/**
+ * Upcoming-maintenance tile (M7 §7.3):
+ *   - Fetches GET /api/maintenance-schedules?active=true once on mount.
+ *   - Filters CLIENT-SIDE: keeps rows whose server-provided `status` is
+ *     'overdue' or 'due_soon'. Does NOT add any query param for this — the
+ *     design doc explicitly requires client-side filtering on the server field.
+ *   - Sorts by next_due_date ascending (nearest-first).
+ *   - Shows a count badge + short list (up to 3; instance name · task name · due date),
+ *     each linking to the instance detail route (/instances/{instance_id}).
+ *   - Empty state when nothing is due soon.
+ */
+function MaintenanceCard() {
+  const { t } = useTranslation("dashboard");
+
+  const [allSchedules, setAllSchedules] = useState<MaintenanceScheduleResponse[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      const result = await client.GET("/api/maintenance-schedules", {
+        params: { query: { active: true } },
+      });
+      if (cancelled) return;
+      const data = result?.data;
+      if (Array.isArray(data)) {
+        setAllSchedules(data);
+      } else {
+        setFetchError(true);
+      }
+      setLoading(false);
+    }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Filter client-side: keep overdue + due_soon; sort nearest-first.
+  const dueSchedules = (allSchedules ?? [])
+    .filter((s) => s.status === "overdue" || s.status === "due_soon")
+    .sort((a, b) => a.next_due_date.localeCompare(b.next_due_date));
+
+  const count = dueSchedules.length;
+  const previewItems = dueSchedules.slice(0, 3);
+
+  return (
+    <Card component="article" data-testid="maintenance-tile">
+      <Stack gap="md">
+        <Group justify="space-between" align="flex-start" wrap="nowrap">
+          <ThemeIcon size={44} radius="md" variant="light" color="blue">
+            <Tool size={22} strokeWidth={1.5} />
+          </ThemeIcon>
+          {!loading && !fetchError && count > 0 && (
+            <Badge
+              variant="filled"
+              color="blue"
+              size="sm"
+              data-testid="maintenance-count-badge"
+            >
+              {t("maintenanceCard.countLabel", { count })}
+            </Badge>
+          )}
+        </Group>
+
+        <Stack gap={6}>
+          <Title order={3} size="h4">
+            {t("maintenanceCard.title")}
+          </Title>
+
+          {loading && <Loader size="xs" />}
+
+          {!loading && fetchError && (
+            <Text
+              c="dimmed"
+              size="sm"
+              lh={1.5}
+              data-testid="maintenance-load-error"
+            >
+              {t("maintenanceCard.loadError")}
+            </Text>
+          )}
+
+          {!loading && !fetchError && count === 0 && (
+            <Text
+              c="dimmed"
+              size="sm"
+              lh={1.5}
+              data-testid="maintenance-empty-state"
+            >
+              {t("maintenanceCard.emptyState")}
+            </Text>
+          )}
+
+          {!loading && !fetchError && count > 0 && (
+            <List
+              size="sm"
+              spacing={4}
+              data-testid="maintenance-list"
+            >
+              {previewItems.map((s) => (
+                <List.Item key={s.id} data-testid={`maintenance-item-${s.id}`}>
+                  <Anchor
+                    component={Link}
+                    to={`/instances/${s.instance_id}`}
+                    size="sm"
+                    fw={500}
+                  >
+                    {s.instance_name}
+                  </Anchor>
+                  <Text size="sm" span c="dimmed">
+                    {" — "}{s.name}
+                  </Text>
+                  <Text size="sm" span c={s.status === "overdue" ? "red" : "orange"}>
+                    {" "}{formatDate(s.next_due_date)}
+                  </Text>
+                </List.Item>
+              ))}
+            </List>
+          )}
+        </Stack>
+      </Stack>
+    </Card>
+  );
+}
+
 // ── Dashboard page ────────────────────────────────────────────────────────────
 
 export function Dashboard() {
@@ -371,6 +506,8 @@ export function Dashboard() {
         />
 
         <LowStockCard />
+
+        <MaintenanceCard />
       </SimpleGrid>
     </PageShell>
   );

@@ -1,0 +1,86 @@
+{
+  "sectionTitle": "Maintenance",
+  "empty": "No maintenance schedules for this instance.",
+  "col": {
+    "name": "Name",
+    "recurrence": "Recurrence",
+    "nextDue": "Next Due",
+    "status": "Status",
+    "lastCompleted": "Last Completed"
+  },
+  "status": {
+    "overdue": "Overdue",
+    "due_soon": "Due Soon",
+    "ok": "OK"
+  },
+  "recurrence": {
+    "day_one": "every {{count}} day",
+    "day_other": "every {{count}} days",
+    "week_one": "every {{count}} week",
+    "week_other": "every {{count}} weeks",
+    "month_one": "every {{count}} month",
+    "month_other": "every {{count}} months",
+    "year_one": "every {{count}} year",
+    "year_other": "every {{count}} years"
+  },
+  "intervalUnits": {
+    "day": "Day",
+    "week": "Week",
+    "month": "Month",
+    "year": "Year"
+  },
+  "actions": {
+    "add": "Add schedule",
+    "edit": "Edit",
+    "pause": "Pause",
+    "resume": "Resume",
+    "delete": "Delete",
+    "markDone": "Mark done"
+  },
+  "addModal": {
+    "title": "Add maintenance schedule",
+    "nameLabel": "Task name",
+    "namePlaceholder": "e.g. Replace AC filter",
+    "intervalCountLabel": "Every",
+    "intervalUnitLabel": "Unit",
+    "nextDueDateLabel": "Next due date",
+    "leadDaysLabel": "Lead days (optional)",
+    "leadDaysHint": "Days before due to start reminders. Leave empty to use the global default.",
+    "notesLabel": "Notes (optional)",
+    "submit": "Add"
+  },
+  "editModal": {
+    "title": "Edit maintenance schedule",
+    "nameLabel": "Task name",
+    "intervalCountLabel": "Every",
+    "intervalUnitLabel": "Unit",
+    "nextDueDateLabel": "Next due date",
+    "leadDaysLabel": "Lead days (optional)",
+    "leadDaysHint": "Days before due to start reminders. Leave empty to use the global default.",
+    "notesLabel": "Notes (optional)",
+    "submit": "Save"
+  },
+  "markDoneModal": {
+    "title": "Mark maintenance done",
+    "completedOnLabel": "Completed on (optional)",
+    "completedOnHint": "Defaults to today. Back-date if completed earlier.",
+    "noteLabel": "Note (optional)",
+    "submit": "Mark done"
+  },
+  "deleteModal": {
+    "title": "Delete maintenance schedule",
+    "confirmation": "Delete schedule \"{{name}}\"? This cannot be undone.",
+    "submit": "Delete"
+  },
+  "success": {
+    "created": "Maintenance schedule added.",
+    "updated": "Maintenance schedule updated.",
+    "deleted": "Maintenance schedule deleted.",
+    "paused": "Schedule paused.",
+    "resumed": "Schedule resumed.",
+    "markedDone": "Marked as done. Next due date advanced."
+  },
+  "errors": {
+    "loadFailed": "Failed to load maintenance schedules."
+  }
+}
