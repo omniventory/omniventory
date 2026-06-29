@@ -382,6 +382,21 @@ describe("ItemDetail — Consume (FIFO) button", () => {
     });
   });
 
+  it("defaults the consume quantity to 1 when the modal opens", async () => {
+    mockItemDetailLoad(defExact, [instanceExactAboveMin]);
+    renderItemDetail(42);
+
+    await waitFor(() => {
+      expect(screen.getAllByText("AA Batteries").length).toBeGreaterThan(0);
+    });
+
+    fireEvent.click(screen.getByTestId("consume-btn"));
+    await screen.findByTestId("consume-quantity-input");
+
+    const qtyInput = screen.getByTestId("consume-quantity-input") as HTMLInputElement;
+    expect(qtyInput.value).toBe("1");
+  });
+
   it("surfaces server error from consume via mapApiError", async () => {
     mockItemDetailLoad(defExact, [instanceExactAboveMin]);
     vi.mocked(client.POST).mockResolvedValue({

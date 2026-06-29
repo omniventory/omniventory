@@ -1257,7 +1257,8 @@ export function ItemDetail() {
   // ── Consume (FIFO) ───────────────────────────────────────────────────────────
 
   function openConsume() {
-    setConsumeForm({ quantity: "", note: "" });
+    // Default to 1 — most items are consumed one at a time, saving a keystroke.
+    setConsumeForm({ quantity: "1", note: "" });
     setConsumeError(null);
     setConsumeOpen(true);
   }
