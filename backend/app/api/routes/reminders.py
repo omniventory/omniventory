@@ -101,4 +101,5 @@ def run_reminders(
         best_before=summary.best_before,
         warranty=summary.warranty,
         low_stock=summary.low_stock,
+        maintenance=summary.maintenance,
     )

@@ -4008,7 +4008,7 @@
         "type": "object"
       },
       "ReminderRunSummary": {
-        "description": "Summary of a single reminder scan run.\n\nFields\n------\nbest_before\n    Number of new best-before notifications created in this scan.\nwarranty\n    Number of new warranty notifications created in this scan.\nlow_stock\n    Number of new low-stock notifications created in this scan.\n    Always 0 in Step 3; Step 4 fills it in.",
+        "description": "Summary of a single reminder scan run.\n\nFields\n------\nbest_before\n    Number of new best-before notifications created in this scan.\nwarranty\n    Number of new warranty notifications created in this scan.\nlow_stock\n    Number of new low-stock notifications created in this scan.\n    Always 0 in Step 3; Step 4 fills it in.\nmaintenance\n    Number of new maintenance-due notifications created in this scan.\n    Always 0 before M7 Step 5; Step 5 fills it in.",
         "properties": {
           "best_before": {
             "title": "Best Before",
@@ -4016,6 +4016,10 @@
           },
           "low_stock": {
             "title": "Low Stock",
+            "type": "integer"
+          },
+          "maintenance": {
+            "title": "Maintenance",
             "type": "integer"
           },
           "warranty": {
@@ -4026,7 +4030,8 @@
         "required": [
           "best_before",
           "warranty",
-          "low_stock"
+          "low_stock",
+          "maintenance"
         ],
         "title": "ReminderRunSummary",
         "type": "object"
@@ -4046,6 +4051,11 @@
             "title": "Low Stock Repeat Days",
             "type": "array"
           },
+          "maintenance_lead_days": {
+            "minimum": 0.0,
+            "title": "Maintenance Lead Days",
+            "type": "integer"
+          },
           "scan_time": {
             "title": "Scan Time",
             "type": "string"
@@ -4060,7 +4070,8 @@
           "best_before_lead_days",
           "warranty_lead_days",
           "low_stock_repeat_days",
-          "scan_time"
+          "scan_time",
+          "maintenance_lead_days"
         ],
         "title": "RemindersSettings",
         "type": "object"
@@ -4093,6 +4104,18 @@
               }
             ],
             "title": "Low Stock Repeat Days"
+          },
+          "maintenance_lead_days": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maintenance Lead Days"
           },
           "scan_time": {
             "anyOf": [

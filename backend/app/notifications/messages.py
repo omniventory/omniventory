@@ -26,11 +26,12 @@ Public API
 
 Supported codes
 ---------------
-- ``reminder.best_before``   — a lot is approaching or past its best-before date.
-- ``reminder.warranty``      — a lot's warranty is expiring or has expired.
-- ``reminder.low_stock``     — a definition's stock has dropped below its threshold
-                               (episode opener).
+- ``reminder.best_before``      — a lot is approaching or past its best-before date.
+- ``reminder.warranty``         — a lot's warranty is expiring or has expired.
+- ``reminder.low_stock``        — a definition's stock has dropped below its threshold
+                                  (episode opener).
 - ``reminder.low_stock_repeat`` — the low-stock condition persists (repeat reminder).
+- ``reminder.maintenance``      — a maintenance schedule is due or overdue (M7 §4.5).
 """
 
 from __future__ import annotations
@@ -129,6 +130,32 @@ def _render_low_stock(params: dict[str, Any], lang: str) -> str:
         return f"[Low stock] {name} — current: {current}, threshold: {threshold}"
 
 
+def _render_maintenance(params: dict[str, Any], lang: str) -> str:
+    """Render a maintenance-due reminder line (M7 §4.5).
+
+    Params expected:
+    - ``name``           — the maintenance task name (e.g. "Replace AC filter").
+    - ``instance_name``  — the durable's product name.
+    - ``days_remaining`` — calendar days until due; negative = overdue.
+    """
+    name = params.get("name", "")
+    instance_name = params.get("instance_name", "")
+    days: int = params.get("days_remaining", 0)
+
+    if lang == "zh":
+        if days < 0:
+            return f"【维护提醒】{instance_name} — {name} 已逾期 {abs(days)} 天"
+        if days == 0:
+            return f"【维护提醒】{instance_name} — {name} 今天到期"
+        return f"【维护提醒】{instance_name} — {name} 还有 {days} 天到期"
+    else:
+        if days < 0:
+            return f"[Maintenance] {instance_name} — {name} overdue by {abs(days)} day(s)"
+        if days == 0:
+            return f"[Maintenance] {instance_name} — {name} due today"
+        return f"[Maintenance] {instance_name} — {name} due in {days} day(s)"
+
+
 def _render_low_stock_repeat(params: dict[str, Any], lang: str) -> str:
     name = params.get("name", "")
     offset = params.get("offset", "")
@@ -166,6 +193,7 @@ _RENDERERS = {
     "reminder.warranty": _render_warranty,
     "reminder.low_stock": _render_low_stock,
     "reminder.low_stock_repeat": _render_low_stock_repeat,
+    "reminder.maintenance": _render_maintenance,
 }
 
 

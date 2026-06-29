@@ -213,6 +213,7 @@ class ScanSummary:
     best_before: int = 0
     warranty: int = 0
     low_stock: int = 0
+    maintenance: int = 0
     new_notifications: list[Notification] = None  # type: ignore[assignment]
 
     def __post_init__(self) -> None:
@@ -406,6 +407,15 @@ class ReminderEngine:
             summary.low_stock += low_count
             all_new.extend(new_notifs)
 
+        # ---- Evaluate maintenance source (M7 §4.5 — additive, untouches above) ---
+        maint_count, maint_notifications = self._evaluate_maintenance(
+            active_users=active_users,
+            active_by_id=active_by_id,
+            today_local=today_local,
+        )
+        summary.maintenance += maint_count
+        all_new.extend(maint_notifications)
+
         # ---- Return new notifications to the caller --------------------------
         # The caller (scheduler job or route handler) MUST:
         #   1. Commit the DB transaction (to persist notification rows).
@@ -415,10 +425,11 @@ class ReminderEngine:
         summary.new_notifications = all_new
 
         logger.info(
-            "run_scan complete: best_before=%d, warranty=%d, low_stock=%d, new=%d",
+            "run_scan complete: best_before=%d, warranty=%d, low_stock=%d, maintenance=%d, new=%d",
             summary.best_before,
             summary.warranty,
             summary.low_stock,
+            summary.maintenance,
             len(all_new),
         )
         return summary
@@ -795,6 +806,104 @@ class ReminderEngine:
             if scoped_definition_id is not None and opener.subject_id != scoped_definition_id:
                 continue
             self._notification_repo.mark_resolved(opener)
+
+        return created_count, new_notifications
+
+    # ------------------------------------------------------------------
+    # Internal: maintenance source (M7 §4.5 — additive pass)
+    # ------------------------------------------------------------------
+
+    def _evaluate_maintenance(
+        self,
+        *,
+        active_users: list[User],
+        active_by_id: dict[int, User],
+        today_local: date,
+    ) -> tuple[int, list[Notification]]:
+        """Additive maintenance-due reminder pass (M7 §4.5).
+
+        Evaluates **all** active maintenance schedules (no scalar horizon) and
+        creates ``Notification`` rows for those whose advance-notice window has
+        opened (``today_local >= next_due_date - lead``).
+
+        This pass is **purely additive**: the two ``_DateSource`` evaluators and
+        the low-stock episode logic are completely unchanged.
+
+        Lead resolution
+        ---------------
+        Per-schedule ``lead_days`` → global ``reminders.maintenance.lead_days``
+        (default 7, M7 §4.6).  A lead of 0 fires on the due date itself;
+        overdue schedules (today past ``next_due_date``) also fire, with a
+        negative ``days_remaining`` so the renderer shows "overdue".
+
+        No horizon
+        ----------
+        ``list_active()`` returns ALL active schedules; the window test is
+        applied here in Python.  A fixed DB-side horizon would silently drop a
+        schedule with a large per-schedule ``lead_days`` whose window is already
+        open — this is the "long-lead" B-class fix (M7 §4.1 / §4.5).
+
+        Routing / dedup
+        ---------------
+        Routing reuses M6 verbatim: ``_effective_responsible_for_lot(s.instance)``
+        → ``_recipients_for`` → pref gate.  Dedup fires once per
+        ``(recipient, schedule, next_due_date)``; completion advances
+        ``next_due_date`` so the next occurrence gets a fresh key.
+
+        The low-stock-only columns (``episode_started_on``, ``offset_days``)
+        are left at their defaults (not passed) — maintenance is NOT an episode.
+
+        Returns
+        -------
+        (created_count, list_of_new_notifications)
+        """
+        from app.repositories.maintenance_schedule import MaintenanceScheduleRepository
+
+        schedules = MaintenanceScheduleRepository(self._db).list_active()
+        created_count = 0
+        new_notifications: list[Notification] = []
+
+        for s in schedules:
+            lead = (
+                s.lead_days
+                if s.lead_days is not None
+                else self._settings_service.maintenance_lead_days()
+            )
+            window: date = s.next_due_date - timedelta(days=lead)
+            if today_local < window:
+                # Too early: window has not opened yet.
+                continue
+
+            recipients = self._recipients_for(
+                self._effective_responsible_for_lot(s.instance),
+                active_users,
+                active_by_id,
+            )
+            for u in recipients:
+                # M6 pref gate: skip users who want no notifications at all.
+                if not u.notify_in_app and not u.notify_email_digest:
+                    continue
+
+                dedup = f"maintenance:u{u.id}:s{s.id}:{s.next_due_date.isoformat()}"
+                params: dict[str, object] = {
+                    "name": s.name,
+                    "instance_name": s.instance.definition.name,
+                    "next_due_date": s.next_due_date.isoformat(),
+                    "days_remaining": (s.next_due_date - today_local).days,
+                    "location_id": s.instance.location_id,
+                }
+                notification, created = self._notification_repo.create_if_absent(
+                    user_id=u.id,
+                    source="maintenance",
+                    subject_type="maintenance_schedule",
+                    subject_id=s.id,
+                    dedup_key=dedup,
+                    message_code="reminder.maintenance",
+                    params=params,
+                )
+                if created:
+                    created_count += 1
+                    new_notifications.append(notification)
 
         return created_count, new_notifications
 

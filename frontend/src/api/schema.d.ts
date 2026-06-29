@@ -3496,12 +3496,17 @@ export interface components {
          *     low_stock
          *         Number of new low-stock notifications created in this scan.
          *         Always 0 in Step 3; Step 4 fills it in.
+         *     maintenance
+         *         Number of new maintenance-due notifications created in this scan.
+         *         Always 0 before M7 Step 5; Step 5 fills it in.
          */
         ReminderRunSummary: {
             /** Best Before */
             best_before: number;
             /** Low Stock */
             low_stock: number;
+            /** Maintenance */
+            maintenance: number;
             /** Warranty */
             warranty: number;
         };
@@ -3514,6 +3519,8 @@ export interface components {
             best_before_lead_days: number;
             /** Low Stock Repeat Days */
             low_stock_repeat_days: number[];
+            /** Maintenance Lead Days */
+            maintenance_lead_days: number;
             /** Scan Time */
             scan_time: string;
             /** Warranty Lead Days */
@@ -3528,6 +3535,8 @@ export interface components {
             best_before_lead_days?: number | null;
             /** Low Stock Repeat Days */
             low_stock_repeat_days?: number[] | null;
+            /** Maintenance Lead Days */
+            maintenance_lead_days?: number | null;
             /** Scan Time */
             scan_time?: string | null;
             /** Warranty Lead Days */

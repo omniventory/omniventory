@@ -73,6 +73,7 @@ class RemindersSettings(BaseModel):
     warranty_lead_days: int = Field(ge=0)
     low_stock_repeat_days: list[int]
     scan_time: str
+    maintenance_lead_days: int = Field(ge=0)
 
     @field_validator("low_stock_repeat_days")
     @classmethod
@@ -95,6 +96,7 @@ class RemindersUpdate(BaseModel):
     warranty_lead_days: int | None = Field(default=None, ge=0)
     low_stock_repeat_days: list[int] | None = None
     scan_time: str | None = None
+    maintenance_lead_days: int | None = Field(default=None, ge=0)
 
     @field_validator("low_stock_repeat_days")
     @classmethod

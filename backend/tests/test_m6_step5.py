@@ -83,6 +83,7 @@ def _make_in_memory_session() -> tuple[DBSession, object]:
     import app.models.item_definition as idef_mod
     import app.models.item_kind as ikind_mod
     import app.models.location as loc_mod
+    import app.models.maintenance_schedule as ms_mod
     import app.models.media_file as media_file_mod
     import app.models.note as note_mod
     import app.models.notification as notif_mod
@@ -94,6 +95,7 @@ def _make_in_memory_session() -> tuple[DBSession, object]:
     import app.models.tag as tag_mod
     import app.models.user as user_mod
     import app.models.user_token as user_token_mod
+    import app.repositories.maintenance_schedule as ms_repo_mod
 
     for mod in (
         db_base_mod,
@@ -117,8 +119,12 @@ def _make_in_memory_session() -> tuple[DBSession, object]:
         barcode_mod,
         user_token_mod,
         audit_log_mod,
+        ms_mod,
     ):
         importlib.reload(mod)
+
+    # Reload repository AFTER models (M7 Step 5: maintenance engine pass).
+    importlib.reload(ms_repo_mod)
 
     from app.db.base import Base as _Base
 
@@ -195,6 +201,7 @@ def _reload_all_models() -> None:
     import app.models.item_definition as idef_mod
     import app.models.item_kind as ikind_mod
     import app.models.location as loc_mod
+    import app.models.maintenance_schedule as ms_mod
     import app.models.media_file as media_file_mod
     import app.models.note as note_mod
     import app.models.notification as notif_mod
@@ -205,6 +212,7 @@ def _reload_all_models() -> None:
     import app.models.tag as tag_mod
     import app.models.user as user_mod
     import app.models.user_token as user_token_mod
+    import app.repositories.maintenance_schedule as ms_repo_mod
 
     importlib.reload(db_base_mod)
     importlib.reload(hh_mod)
@@ -226,6 +234,9 @@ def _reload_all_models() -> None:
     importlib.reload(barcode_mod)
     importlib.reload(user_token_mod)
     importlib.reload(audit_log_mod)
+    importlib.reload(ms_mod)
+    # Reload repository AFTER models (M7 Step 5: maintenance engine pass).
+    importlib.reload(ms_repo_mod)
 
 
 @pytest.fixture()

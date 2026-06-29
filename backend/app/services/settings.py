@@ -275,6 +275,7 @@ class SettingsService:
             warranty_lead_days=self._get_value("reminders.warranty_lead_days"),
             low_stock_repeat_days=self._get_value("reminders.low_stock_repeat_days"),
             scan_time=self._get_value("reminders.scan_time"),
+            maintenance_lead_days=self.maintenance_lead_days(),
         )
 
     def _email_encryption(self) -> Literal["none", "starttls", "ssl"]:
@@ -384,6 +385,8 @@ class SettingsService:
             self._set_value("reminders.low_stock_repeat_days", upd.low_stock_repeat_days)
         if upd.scan_time is not None:
             self._set_value("reminders.scan_time", upd.scan_time)
+        if upd.maintenance_lead_days is not None:
+            self._set_value("reminders.maintenance.lead_days", upd.maintenance_lead_days)
 
     def _apply_channels_update(self, upd: ChannelsUpdate) -> None:
         if upd.email is not None:

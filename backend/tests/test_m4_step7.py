@@ -73,6 +73,7 @@ def _make_in_memory_session() -> tuple[Session, object]:
     import app.models.item_definition as idef_mod
     import app.models.item_kind as ikind_mod
     import app.models.location as loc_mod
+    import app.models.maintenance_schedule as ms_mod
     import app.models.notification as notif_mod
     import app.models.notification_delivery as nd_mod
     import app.models.session as sess_mod
@@ -80,6 +81,7 @@ def _make_in_memory_session() -> tuple[Session, object]:
     import app.models.stock_instance as si_mod
     import app.models.stock_movement as sm_mod
     import app.models.user as user_mod
+    import app.repositories.maintenance_schedule as ms_repo_mod
 
     for mod in (
         db_base_mod,
@@ -97,8 +99,12 @@ def _make_in_memory_session() -> tuple[Session, object]:
         notif_mod,
         nd_mod,
         audit_log_mod,
+        ms_mod,
     ):
         importlib.reload(mod)
+
+    # Reload repository AFTER models (M7 Step 5: maintenance engine pass).
+    importlib.reload(ms_repo_mod)
 
     from app.db.base import Base as _Base
 
@@ -183,6 +189,7 @@ def http_client(temp_db: Path) -> Generator[object]:  # noqa: ARG001
     import app.models.item_definition as idef_mod
     import app.models.item_kind as ikind_mod
     import app.models.location as loc_mod
+    import app.models.maintenance_schedule as ms_mod
     import app.models.notification as notif_mod
     import app.models.notification_delivery as nd_mod
     import app.models.session as sess_mod
@@ -190,6 +197,7 @@ def http_client(temp_db: Path) -> Generator[object]:  # noqa: ARG001
     import app.models.stock_instance as si_mod
     import app.models.stock_movement as sm_mod
     import app.models.user as user_mod
+    import app.repositories.maintenance_schedule as ms_repo_mod
 
     for mod in (
         db_base_mod,
@@ -207,8 +215,12 @@ def http_client(temp_db: Path) -> Generator[object]:  # noqa: ARG001
         notif_mod,
         nd_mod,
         audit_log_mod,
+        ms_mod,
     ):
         importlib.reload(mod)
+
+    # Reload repository AFTER models (M7 Step 5: maintenance engine pass).
+    importlib.reload(ms_repo_mod)
 
     from app.db.base import Base, get_engine
     from app.main import create_app
