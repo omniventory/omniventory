@@ -41,7 +41,7 @@ import logging
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -128,6 +128,63 @@ class NotificationRepository:
             if existing is not None:
                 return existing, False
             raise  # Unexpected integrity error -- re-raise.
+
+    def delete_for_subject(self, subject_type: str, subject_id: int) -> int:
+        """Bulk-delete all notification rows for a given (subject_type, subject_id).
+
+        Intended for cleanup when the subject itself is deleted (e.g. a
+        maintenance schedule is hard-deleted).  Without this call, orphaned
+        notification rows with a stale dedup key persist in the bell and the
+        dedup logic silently suppresses new notifications for any new row that
+        reuses the deleted subject's PK and the same ``next_due_date``.
+
+        Deliberately **not** user-scoped: one subject (e.g. a maintenance
+        schedule routed by responsible party) can fire notifications for
+        multiple users, and deleting the subject must clean up *all* of them.
+        Do not add a ``user_id`` filter here — doing so would re-orphan other
+        users' rows.
+
+        Parameters
+        ----------
+        subject_type:
+            The value to match against ``notifications.subject_type``
+            (e.g. ``"maintenance_schedule"``).
+        subject_id:
+            The value to match against ``notifications.subject_id`` (the
+            deleted row's PK).
+
+        Returns
+        -------
+        int
+            Number of rows deleted (0 when nothing matched).
+
+        Implementation follows the ``ShoppingListRepository.clear_purchased``
+        idiom: SELECT-count first (reliable cross-dialect rowcount), then a
+        bulk DELETE with ``synchronize_session="fetch"``, then flush.
+        """
+        count_stmt = (
+            select(func.count())
+            .select_from(Notification)
+            .where(
+                Notification.subject_type == subject_type,
+                Notification.subject_id == subject_id,
+            )
+        )
+        count: int = self._db.execute(count_stmt).scalar_one()
+        if count == 0:
+            return 0
+
+        bulk_stmt = (
+            delete(Notification)
+            .where(
+                Notification.subject_type == subject_type,
+                Notification.subject_id == subject_id,
+            )
+            .execution_options(synchronize_session="fetch")
+        )
+        self._db.execute(bulk_stmt)
+        self._db.flush()
+        return count
 
     def mark_resolved(self, opener: Notification) -> None:
         """Close a low-stock episode by stamping resolved_at on the opener and its open repeats.

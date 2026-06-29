@@ -61,6 +61,7 @@ from app.core.errors import AppError, ErrorCode
 from app.core.stock import MAINTENANCE_INTERVAL_UNITS
 from app.models.maintenance_schedule import MaintenanceSchedule
 from app.repositories.maintenance_schedule import MaintenanceScheduleRepository
+from app.repositories.notification import NotificationRepository
 from app.repositories.stock_instance import StockInstanceRepository
 from app.schemas.maintenance_schedule import MaintenanceScheduleUpdate
 from app.services.settings import SettingsService
@@ -75,6 +76,7 @@ class MaintenanceScheduleService:
         self._db = db
         self._repo = MaintenanceScheduleRepository(db)
         self._instance_repo = StockInstanceRepository(db)
+        self._notification_repo = NotificationRepository(db)
         self._settings = SettingsService(db)
 
     # ---------------------------------------------------------------------- #
@@ -211,7 +213,18 @@ class MaintenanceScheduleService:
         return schedule
 
     def delete(self, schedule_id: int) -> None:
-        """Hard-delete a maintenance schedule.
+        """Hard-delete a maintenance schedule and its notification rows.
+
+        Deletes all ``notifications`` rows whose ``subject_type ==
+        "maintenance_schedule"`` and ``subject_id == schedule_id`` in the same
+        transaction before removing the schedule itself.  Without this cleanup,
+        orphaned notification rows linger in the bell, and — because SQLite
+        reuses integer PKs — the orphaned dedup key can silently suppress new
+        notifications for a freshly-created schedule that lands on the same id
+        and ``next_due_date``.
+
+        Both deletes happen inside the same transaction; the route handler
+        commits at the end (no commit is added here).
 
         Raises
         ------
@@ -219,6 +232,7 @@ class MaintenanceScheduleService:
             When the schedule does not exist.
         """
         schedule = self._get_or_404(schedule_id)
+        self._notification_repo.delete_for_subject("maintenance_schedule", schedule_id)
         self._repo.delete(schedule)
 
     def complete(
