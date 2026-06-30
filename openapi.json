@@ -2726,6 +2726,62 @@
         "title": "LlmConfigUpdate",
         "type": "object"
       },
+      "LlmTestResult": {
+        "description": "Result of POST /settings/llm/test.\n\n``ok`` is True iff all non-skipped stages passed.\nLater stages are ``skipped`` when an earlier stage fails (short-circuit).\nA failing result is a *diagnostic outcome* \u2014 the endpoint always returns HTTP 200.",
+        "properties": {
+          "connectivity": {
+            "$ref": "#/components/schemas/LlmTestStage"
+          },
+          "model_answers": {
+            "$ref": "#/components/schemas/LlmTestStage"
+          },
+          "multimodal": {
+            "$ref": "#/components/schemas/LlmTestStage"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok",
+          "connectivity",
+          "model_answers",
+          "multimodal"
+        ],
+        "title": "LlmTestResult",
+        "type": "object"
+      },
+      "LlmTestStage": {
+        "description": "Result of a single stage in the LLM connection test.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "status": {
+            "enum": [
+              "pass",
+              "fail",
+              "skipped"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "LlmTestStage",
+        "type": "object"
+      },
       "LocationCreate": {
         "description": "Body for POST /locations.",
         "properties": {
@@ -11058,6 +11114,38 @@
           }
         },
         "summary": "Test Email",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/llm/test": {
+      "post": {
+        "description": "Run the staged LLM provider connection test.\n\n**Diagnostic semantics \u2014 always returns HTTP 200 when authenticated.**\nA failed connection is a diagnostic outcome, not an API error.\nThe ``ok`` field and per-stage ``status`` fields indicate the result.\n\nThree stages are run in sequence and **short-circuit**:\n1. **connectivity** \u2014 ``GET {base_url}/models`` to verify reachability\n   and authentication.\n2. **model_answers** \u2014 a minimal chat round-trip to confirm the\n   configured model is served and responds.\n3. **multimodal** \u2014 a vision prompt carrying a bundled fixture image;\n   passes iff the model replies with the expected token.\n\nThis endpoint **ignores the ``enabled`` flag** \u2014 the connection can be\nverified before enabling the provider.",
+        "operationId": "test_llm_api_settings_llm_test_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LlmTestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "Test Llm",
         "tags": [
           "settings"
         ]

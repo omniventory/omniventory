@@ -135,6 +135,11 @@ class OpenAICompatibleProvider:
         Used by the Step 3 connectivity probe to verify the provider is
         reachable and the API key is accepted.
 
+        Note: only ``base_url`` and ``api_key`` are required here — ``model``
+        is not needed to hit the ``/models`` endpoint.  This allows the
+        connectivity stage of the test to pass even when ``model`` is not yet
+        configured (Stage 1 advisory, M9.1 Step 3).
+
         Returns
         -------
         list[str]
@@ -145,7 +150,7 @@ class OpenAICompatibleProvider:
         ``AppError``
             With an ``llm.*`` code on any failure.
         """
-        base_url, api_key = self._require_config()
+        base_url, api_key = self._require_connectivity_config()
         url = f"{base_url}/models"
         response_json = self._get(url, api_key)
 
@@ -166,6 +171,9 @@ class OpenAICompatibleProvider:
     def _require_config(self) -> tuple[str, str]:
         """Read and validate the LLM config; raise ``llm.not_configured`` if incomplete.
 
+        Requires all three of ``base_url``, ``model``, and ``api_key``.
+        Use ``_require_connectivity_config()`` for probes that only need the URL and key.
+
         Returns
         -------
         tuple[str, str]
@@ -180,6 +188,31 @@ class OpenAICompatibleProvider:
 
         cfg = SettingsService(self._db).llm_config()
         if not cfg.base_url or not cfg.model or not cfg.api_key:
+            raise AppError(ErrorCode.LLM_NOT_CONFIGURED, status_code=409)
+        return cfg.base_url, cfg.api_key
+
+    def _require_connectivity_config(self) -> tuple[str, str]:
+        """Read and validate only ``base_url`` + ``api_key`` for connectivity probes.
+
+        ``model`` is intentionally NOT checked here — hitting ``GET /models``
+        only requires the endpoint and an authenticated key; the model name is
+        irrelevant for that call.  This lets Stage 1 of ``test_connection()``
+        pass even when no model has been configured yet.
+
+        Returns
+        -------
+        tuple[str, str]
+            ``(base_url, api_key)`` — both guaranteed non-empty.
+
+        Raises
+        ------
+        ``AppError(llm.not_configured)``
+            When ``base_url`` or ``api_key`` is not set.
+        """
+        from app.services.settings import SettingsService
+
+        cfg = SettingsService(self._db).llm_config()
+        if not cfg.base_url or not cfg.api_key:
             raise AppError(ErrorCode.LLM_NOT_CONFIGURED, status_code=409)
         return cfg.base_url, cfg.api_key
 

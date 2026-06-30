@@ -1568,6 +1568,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/settings/llm/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Llm
+         * @description Run the staged LLM provider connection test.
+         *
+         *     **Diagnostic semantics — always returns HTTP 200 when authenticated.**
+         *     A failed connection is a diagnostic outcome, not an API error.
+         *     The ``ok`` field and per-stage ``status`` fields indicate the result.
+         *
+         *     Three stages are run in sequence and **short-circuit**:
+         *     1. **connectivity** — ``GET {base_url}/models`` to verify reachability
+         *        and authentication.
+         *     2. **model_answers** — a minimal chat round-trip to confirm the
+         *        configured model is served and responds.
+         *     3. **multimodal** — a vision prompt carrying a bundled fixture image;
+         *        passes iff the model replies with the expected token.
+         *
+         *     This endpoint **ignores the ``enabled`` flag** — the connection can be
+         *     verified before enabling the provider.
+         */
+        post: operations["test_llm_api_settings_llm_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/mqtt/test": {
         parameters: {
             query?: never;
@@ -2913,6 +2948,34 @@ export interface components {
             enabled?: boolean | null;
             /** Model */
             model?: string | null;
+        };
+        /**
+         * LlmTestResult
+         * @description Result of POST /settings/llm/test.
+         *
+         *     ``ok`` is True iff all non-skipped stages passed.
+         *     Later stages are ``skipped`` when an earlier stage fails (short-circuit).
+         *     A failing result is a *diagnostic outcome* — the endpoint always returns HTTP 200.
+         */
+        LlmTestResult: {
+            connectivity: components["schemas"]["LlmTestStage"];
+            model_answers: components["schemas"]["LlmTestStage"];
+            multimodal: components["schemas"]["LlmTestStage"];
+            /** Ok */
+            ok: boolean;
+        };
+        /**
+         * LlmTestStage
+         * @description Result of a single stage in the LLM connection test.
+         */
+        LlmTestStage: {
+            /** Detail */
+            detail?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "fail" | "skipped";
         };
         /**
          * LocationCreate
@@ -8536,6 +8599,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmailTestResult"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    test_llm_api_settings_llm_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LlmTestResult"];
                 };
             };
             /** @description Unauthorized */

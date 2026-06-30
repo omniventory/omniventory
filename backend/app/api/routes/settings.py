@@ -30,7 +30,13 @@ from app.core.context import RequestContext, get_authenticated_context
 from app.core.errors import ErrorResponse
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.settings import EmailTestResult, MqttTestResult, SettingsResponse, SettingsUpdate
+from app.schemas.settings import (
+    EmailTestResult,
+    LlmTestResult,
+    MqttTestResult,
+    SettingsResponse,
+    SettingsUpdate,
+)
 from app.services.settings import SettingsService
 
 logger = logging.getLogger(__name__)
@@ -240,3 +246,40 @@ def test_mqtt(
         detail = str(exc)
         logger.warning("MQTT test publish failed: %s", detail)
         return MqttTestResult(ok=False, detail=detail, topic="")
+
+
+@router.post("/settings/llm/test", response_model=LlmTestResult)
+def test_llm(
+    _ctx: Annotated[RequestContext, Depends(get_authenticated_context)],
+    _: Annotated[User, Depends(require_manage_settings)],
+    db: Session = Depends(get_db),
+) -> LlmTestResult:
+    """Run the staged LLM provider connection test.
+
+    **Diagnostic semantics — always returns HTTP 200 when authenticated.**
+    A failed connection is a diagnostic outcome, not an API error.
+    The ``ok`` field and per-stage ``status`` fields indicate the result.
+
+    Three stages are run in sequence and **short-circuit**:
+    1. **connectivity** — ``GET {base_url}/models`` to verify reachability
+       and authentication.
+    2. **model_answers** — a minimal chat round-trip to confirm the
+       configured model is served and responds.
+    3. **multimodal** — a vision prompt carrying a bundled fixture image;
+       passes iff the model replies with the expected token.
+
+    This endpoint **ignores the ``enabled`` flag** — the connection can be
+    verified before enabling the provider.
+    """
+    from app.services.llm.service import build_llm_service
+
+    llm_service = build_llm_service(db)
+    result = llm_service.test_connection()
+    logger.info(
+        "LLM test connection: ok=%s connectivity=%s model_answers=%s multimodal=%s",
+        result.ok,
+        result.connectivity.status,
+        result.model_answers.status,
+        result.multimodal.status,
+    )
+    return result

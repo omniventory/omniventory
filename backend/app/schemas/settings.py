@@ -264,6 +264,32 @@ class LlmConfigUpdate(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# LLM test result schemas (M9.1 Step 3)
+# ---------------------------------------------------------------------------
+
+
+class LlmTestStage(BaseModel):
+    """Result of a single stage in the LLM connection test."""
+
+    status: Literal["pass", "fail", "skipped"]
+    detail: str | None = None
+
+
+class LlmTestResult(BaseModel):
+    """Result of POST /settings/llm/test.
+
+    ``ok`` is True iff all non-skipped stages passed.
+    Later stages are ``skipped`` when an earlier stage fails (short-circuit).
+    A failing result is a *diagnostic outcome* — the endpoint always returns HTTP 200.
+    """
+
+    ok: bool
+    connectivity: LlmTestStage
+    model_answers: LlmTestStage
+    multimodal: LlmTestStage
+
+
+# ---------------------------------------------------------------------------
 # Shopping-list sub-schemas (Step 2)
 # ---------------------------------------------------------------------------
 
