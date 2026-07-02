@@ -567,9 +567,9 @@ class TestHappyPath:
         payload = call_kwargs[1]["json"]
         assert payload["temperature"] == 0.5
 
-    def test_post_url_is_v1_chat_completions(self, db_session: Session) -> None:
-        """chat() POSTs to {base_url}/v1/chat/completions."""
-        _seed_llm_config(db_session, base_url="http://192.168.1.100")
+    def test_post_url_is_chat_completions(self, db_session: Session) -> None:
+        """chat() POSTs to {base_url}/chat/completions (base_url includes the version segment)."""
+        _seed_llm_config(db_session, base_url="http://192.168.1.100/v1")
         provider = self._make_provider(db_session)
         mock_ctx = _mock_httpx_client(status_code=200, json_body=self._CHAT_RESPONSE)
 
@@ -578,7 +578,72 @@ class TestHappyPath:
 
         call_kwargs = mock_ctx.__enter__.return_value.post.call_args
         url_called = call_kwargs[0][0] if call_kwargs[0] else call_kwargs[1].get("url", "")
-        assert "/v1/chat/completions" in url_called
+        assert url_called == "http://192.168.1.100/v1/chat/completions"
+
+    def test_openrouter_chat_url_has_no_double_v1(self, db_session: Session) -> None:
+        """Regression: an OpenRouter-style base_url (already ending in /v1) must not
+        get a second /v1.
+
+        Before the fix, chat() appended "/v1/chat/completions" to a base_url that
+        already ended in "/v1", producing ".../v1/v1/chat/completions" — a 404 on
+        OpenRouter. list_models() was always correct ("{base_url}/models"); this
+        test pins both endpoints to the same, correct convention.
+
+        Uses a LAN IP (rather than the literal "openrouter.ai" domain) with a
+        "/api/v1" path so the SSRF guard's ``socket.getaddrinfo`` resolves the
+        numeric address directly with no real DNS lookup — the test stays
+        hermetic while still reproducing the exact base_url shape
+        (".../api/v1") that triggered the double-"/v1" bug.
+        """
+        _seed_llm_config(
+            db_session,
+            base_url="http://192.168.1.100/api/v1",
+            model="openai/gpt-4o-mini",
+            api_key="or-sk-test",
+        )
+        provider = self._make_provider(db_session)
+
+        # --- chat() ---
+        mock_ctx = _mock_httpx_client(status_code=200, json_body=self._CHAT_RESPONSE)
+        with _patch_client(mock_ctx):
+            provider.chat(self._messages(), model="openai/gpt-4o-mini")
+
+        call_kwargs = mock_ctx.__enter__.return_value.post.call_args
+        chat_url = call_kwargs[0][0] if call_kwargs[0] else call_kwargs[1].get("url", "")
+        assert chat_url == "http://192.168.1.100/api/v1/chat/completions"
+        assert "/v1/v1/" not in chat_url
+
+        # --- list_models() ---
+        mock_ctx2 = _mock_httpx_client(status_code=200, json_body=self._MODELS_RESPONSE)
+        with _patch_client(mock_ctx2):
+            provider.list_models()
+
+        call_kwargs2 = mock_ctx2.__enter__.return_value.get.call_args
+        models_url = call_kwargs2[0][0] if call_kwargs2[0] else call_kwargs2[1].get("url", "")
+        assert models_url == "http://192.168.1.100/api/v1/models"
+
+    def test_trailing_slash_on_base_url_is_normalized(self, db_session: Session) -> None:
+        """A base_url with a trailing slash does not produce a double slash in the URL.
+
+        Uses a LAN IP (see test_openrouter_chat_url_has_no_double_v1 above) so the
+        SSRF guard needs no real DNS lookup, keeping the test hermetic.
+        """
+        _seed_llm_config(
+            db_session,
+            base_url="http://192.168.1.100/api/v1/",
+            model="openai/gpt-4o-mini",
+            api_key="or-sk-test",
+        )
+        provider = self._make_provider(db_session)
+        mock_ctx = _mock_httpx_client(status_code=200, json_body=self._CHAT_RESPONSE)
+
+        with _patch_client(mock_ctx):
+            provider.chat(self._messages(), model="openai/gpt-4o-mini")
+
+        call_kwargs = mock_ctx.__enter__.return_value.post.call_args
+        chat_url = call_kwargs[0][0] if call_kwargs[0] else call_kwargs[1].get("url", "")
+        assert chat_url == "http://192.168.1.100/api/v1/chat/completions"
+        assert "//chat/completions" not in chat_url
 
     def test_authorization_bearer_header_sent(self, db_session: Session) -> None:
         """chat() sends Authorization: Bearer <api_key> in the request headers."""

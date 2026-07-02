@@ -32,6 +32,15 @@ Well-formed 200                               → ``ChatResult``
 Hits ``GET {base_url}/models`` — used by the Step 3 connectivity probe.
 Applies the same URL validation, timeout, and error mapping.
 Returns a list of model IDs (strings) from the ``data[].id`` field.
+
+``base_url`` convention
+------------------------
+Follows the universal OpenAI-compatible convention (OpenAI SDK, OpenRouter,
+LM Studio, vLLM, etc.): ``base_url`` already includes the version segment
+(e.g. ``https://openrouter.ai/api/v1``, ``https://api.openai.com/v1``), and
+endpoints are appended **without** another ``/v1``: ``{base_url}/chat/completions``
+and ``{base_url}/models``. A trailing slash on the stored ``base_url`` is
+stripped before use so it composes cleanly either way.
 """
 
 from __future__ import annotations
@@ -79,7 +88,11 @@ class OpenAICompatibleProvider:
         max_tokens: int | None = None,
         temperature: float | None = None,
     ) -> ChatResult:
-        """Send a chat completion request to ``{base_url}/v1/chat/completions``.
+        """Send a chat completion request to ``{base_url}/chat/completions``.
+
+        ``base_url`` is expected to already include the version segment
+        (e.g. ``https://openrouter.ai/api/v1``), matching the universal
+        OpenAI-compatible convention — see the module docstring.
 
         Parameters
         ----------
@@ -113,7 +126,7 @@ class OpenAICompatibleProvider:
         if temperature is not None:
             payload["temperature"] = temperature
 
-        url = f"{base_url}/v1/chat/completions"
+        url = f"{base_url}/chat/completions"
         response_json = self._post(url, payload, api_key)
 
         # Parse the first choice's message content.
@@ -177,7 +190,8 @@ class OpenAICompatibleProvider:
         Returns
         -------
         tuple[str, str]
-            ``(base_url, api_key)`` — both guaranteed non-empty.
+            ``(base_url, api_key)`` — both guaranteed non-empty; ``base_url``
+            has any trailing slash(es) stripped (see module docstring).
 
         Raises
         ------
@@ -189,7 +203,7 @@ class OpenAICompatibleProvider:
         cfg = SettingsService(self._db).llm_config()
         if not cfg.base_url or not cfg.model or not cfg.api_key:
             raise AppError(ErrorCode.LLM_NOT_CONFIGURED, status_code=409)
-        return cfg.base_url, cfg.api_key
+        return cfg.base_url.rstrip("/"), cfg.api_key
 
     def _require_connectivity_config(self) -> tuple[str, str]:
         """Read and validate only ``base_url`` + ``api_key`` for connectivity probes.
@@ -202,7 +216,8 @@ class OpenAICompatibleProvider:
         Returns
         -------
         tuple[str, str]
-            ``(base_url, api_key)`` — both guaranteed non-empty.
+            ``(base_url, api_key)`` — both guaranteed non-empty; ``base_url``
+            has any trailing slash(es) stripped (see module docstring).
 
         Raises
         ------
@@ -214,7 +229,7 @@ class OpenAICompatibleProvider:
         cfg = SettingsService(self._db).llm_config()
         if not cfg.base_url or not cfg.api_key:
             raise AppError(ErrorCode.LLM_NOT_CONFIGURED, status_code=409)
-        return cfg.base_url, cfg.api_key
+        return cfg.base_url.rstrip("/"), cfg.api_key
 
     def _validate_url(self, url: str) -> None:
         """Run the SSRF guard on *url*; raise ``llm.unsafe_url`` on rejection."""
