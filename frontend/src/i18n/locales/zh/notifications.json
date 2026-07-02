@@ -4,8 +4,10 @@
     "ariaLabel": "通知",
     "noNotifications": "暂无新通知",
     "viewAll": "查看全部",
-    "markAllRead": "全部标为已读"
+    "markAllRead": "全部标为已读",
+    "clearAll": "清除全部"
   },
+  "dismiss": "消除",
   "unread": "未读",
   "filter": {
     "allNotifications": "全部",

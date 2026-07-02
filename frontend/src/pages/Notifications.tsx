@@ -11,6 +11,7 @@ import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import {
+  ActionIcon,
   Anchor,
   Badge,
   Button,
@@ -21,6 +22,7 @@ import {
   Table,
   Text,
 } from "@mantine/core";
+import { X } from "react-feather";
 import { PageShell } from "../components/PageShell";
 import { ErrorState } from "../components/ErrorState";
 import { client } from "../api/client";
@@ -93,6 +95,8 @@ export function Notifications() {
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
   const [markingId, setMarkingId] = useState<number | null>(null);
+  const [dismissingAll, setDismissingAll] = useState(false);
+  const [dismissingId, setDismissingId] = useState<number | null>(null);
 
   const load = useCallback(async (unreadOnlyFlag: boolean) => {
     setLoading(true);
@@ -129,6 +133,22 @@ export function Notifications() {
     void load(unreadOnly);
   }
 
+  async function handleDismiss(id: number) {
+    setDismissingId(id);
+    await client.POST("/api/notifications/{notification_id}/dismiss", {
+      params: { path: { notification_id: id } },
+    });
+    setDismissingId(null);
+    void load(unreadOnly);
+  }
+
+  async function handleDismissAll() {
+    setDismissingAll(true);
+    await client.POST("/api/notifications/dismiss-all");
+    setDismissingAll(false);
+    void load(unreadOnly);
+  }
+
   const actions = (
     <Group gap="sm">
       <SegmentedControl
@@ -149,6 +169,15 @@ export function Notifications() {
         data-testid="page-mark-all-read-btn"
       >
         {t("bell.markAllRead")}
+      </Button>
+      <Button
+        size="xs"
+        variant="light"
+        onClick={() => { void handleDismissAll(); }}
+        loading={dismissingAll}
+        data-testid="page-dismiss-all-btn"
+      >
+        {t("bell.clearAll")}
       </Button>
     </Group>
   );
@@ -235,17 +264,29 @@ export function Notifications() {
                       )}
                     </Table.Td>
                     <Table.Td>
-                      {isUnread && (
-                        <Button
-                          size="compact-xs"
+                      <Group gap={4} wrap="nowrap" justify="flex-end">
+                        {isUnread && (
+                          <Button
+                            size="compact-xs"
+                            variant="subtle"
+                            loading={markingId === n.id}
+                            onClick={() => { void handleMarkRead(n.id); }}
+                            data-testid={`page-mark-read-btn-${n.id}`}
+                          >
+                            {t("markRead")}
+                          </Button>
+                        )}
+                        <ActionIcon
+                          size="sm"
                           variant="subtle"
-                          loading={markingId === n.id}
-                          onClick={() => { void handleMarkRead(n.id); }}
-                          data-testid={`page-mark-read-btn-${n.id}`}
+                          loading={dismissingId === n.id}
+                          onClick={() => { void handleDismiss(n.id); }}
+                          aria-label={t("dismiss")}
+                          data-testid={`page-dismiss-btn-${n.id}`}
                         >
-                          {t("markRead")}
-                        </Button>
-                      )}
+                          <X size={14} />
+                        </ActionIcon>
+                      </Group>
                     </Table.Td>
                   </Table.Tr>
                 );

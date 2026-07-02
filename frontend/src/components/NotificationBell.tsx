@@ -22,7 +22,7 @@ import {
   Text,
   Anchor,
 } from "@mantine/core";
-import { Bell } from "react-feather";
+import { Bell, X } from "react-feather";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { client } from "../api/client";
@@ -95,9 +95,10 @@ function relativeTime(isoString: string, t: TFunction<any, any>): string {
 interface NotificationRowProps {
   notification: Notification;
   onMarkRead: (id: number) => void;
+  onDismiss: (id: number) => void;
 }
 
-function NotificationRow({ notification: n, onMarkRead }: NotificationRowProps) {
+function NotificationRow({ notification: n, onMarkRead, onDismiss }: NotificationRowProps) {
   const { t } = useTranslation("notifications");
   const message = localizeNotification(n, t);
   const isUnread = n.read_at === null;
@@ -129,16 +130,27 @@ function NotificationRow({ notification: n, onMarkRead }: NotificationRowProps) 
             {relativeTime(n.created_at, t)}
           </Text>
         </Stack>
-        {isUnread && (
-          <Button
-            size="compact-xs"
+        <Group gap={4} wrap="nowrap">
+          {isUnread && (
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              onClick={() => onMarkRead(n.id)}
+              data-testid={`mark-read-btn-${n.id}`}
+            >
+              {t("markRead")}
+            </Button>
+          )}
+          <ActionIcon
+            size="sm"
             variant="subtle"
-            onClick={() => onMarkRead(n.id)}
-            data-testid={`mark-read-btn-${n.id}`}
+            onClick={() => onDismiss(n.id)}
+            aria-label={t("dismiss")}
+            data-testid={`dismiss-btn-${n.id}`}
           >
-            {t("markRead")}
-          </Button>
-        )}
+            <X size={14} />
+          </ActionIcon>
+        </Group>
       </Group>
     </Box>
   );
@@ -158,6 +170,7 @@ export function NotificationBell({ onCountChange }: NotificationBellProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [loadingList, setLoadingList] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+  const [dismissingAll, setDismissingAll] = useState(false);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -225,6 +238,20 @@ export function NotificationBell({ onCountChange }: NotificationBellProps) {
     await Promise.all([fetchCount(), fetchList()]);
   }
 
+  async function handleDismiss(id: number) {
+    await client.POST("/api/notifications/{notification_id}/dismiss", {
+      params: { path: { notification_id: id } },
+    });
+    await Promise.all([fetchCount(), fetchList()]);
+  }
+
+  async function handleDismissAll() {
+    setDismissingAll(true);
+    await client.POST("/api/notifications/dismiss-all");
+    setDismissingAll(false);
+    await Promise.all([fetchCount(), fetchList()]);
+  }
+
   function handleViewAll() {
     setPopoverOpen(false);
     navigate("/notifications");
@@ -272,15 +299,26 @@ export function NotificationBell({ onCountChange }: NotificationBellProps) {
               </Badge>
             )}
           </Group>
-          <Button
-            size="compact-xs"
-            variant="subtle"
-            onClick={handleMarkAllRead}
-            loading={markingAll}
-            data-testid="mark-all-read-btn"
-          >
-            {t("bell.markAllRead")}
-          </Button>
+          <Group gap={4}>
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              onClick={handleMarkAllRead}
+              loading={markingAll}
+              data-testid="mark-all-read-btn"
+            >
+              {t("bell.markAllRead")}
+            </Button>
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              onClick={() => { void handleDismissAll(); }}
+              loading={dismissingAll}
+              data-testid="dismiss-all-btn"
+            >
+              {t("bell.clearAll")}
+            </Button>
+          </Group>
         </Group>
 
         <Divider />
@@ -309,6 +347,7 @@ export function NotificationBell({ onCountChange }: NotificationBellProps) {
                   key={n.id}
                   notification={n}
                   onMarkRead={(id) => { void handleMarkRead(id); }}
+                  onDismiss={(id) => { void handleDismiss(id); }}
                 />
               ))}
             </Stack>

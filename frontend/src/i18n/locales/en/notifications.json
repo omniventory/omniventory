@@ -4,8 +4,10 @@
     "ariaLabel": "Notifications",
     "noNotifications": "No new notifications",
     "viewAll": "View all",
-    "markAllRead": "Mark all as read"
+    "markAllRead": "Mark all as read",
+    "clearAll": "Clear all"
   },
+  "dismiss": "Dismiss",
   "unread": "unread",
   "filter": {
     "allNotifications": "All",
