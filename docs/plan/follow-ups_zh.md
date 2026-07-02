@@ -12,8 +12,6 @@
 
 - **A1 —— 各仓库 PATCH null 处理统一化。** 仓库层守卫 `reject_null_on_non_nullable`(`backend/app/repositories/_update_guard.py`)已应用到两个"盲 `setattr` 循环"仓库(`maintenance_schedule`、`shopping_list`),故对 NOT NULL 列发显式 `null` 会返回干净的 **422**。其余七个仓库(`category`、`location`、`item_definition`、`stock_instance`、`note`、`tag`、`attachment`)则**静默忽略**对 NOT NULL 列的显式 `null`(`if x is not None` / `set_*` flag 模式跳过它,返回 **200** 不变)。两种行为在各 PATCH 端点间不一致。后续:做一次一致性 pass,把所有 PATCH 更新都接到同一守卫(或明确决定保留静默忽略并写明)。*来源:`review-notes/patch-null-guard-review.md` MINOR #2。*
 
-- **A2 —— 通知的 subject 实体被删除时的孤儿通知。** 删除**维护计划**现在会经 `NotificationRepository.delete_for_subject`(由 `MaintenanceScheduleService.delete` 调用)清理其通知。同一类孤儿/dedup 碰撞对其他 subject 仍存在:删除**库存实例**或**物品定义**会留下其 `instance` / `best_before` / `warranty` 通知 —— 以及经级联删除的维护计划而来的 `maintenance_schedule` 通知 —— 都未清理。症状:铃铛里残留指向已删 subject 的陈旧条目;且因 SQLite 复用整型主键,重建一个复用旧 id + 相同目标日期的 subject 会被静默判重而压掉。后续:在实例/定义删除路径上调用 `delete_for_subject`(或一个更通用的 subject 清理钩子)。*来源:`review-notes/maint-delete-notif-cleanup-review.md`(范围外说明)。*
-
 ### UX
 
 - **B1 —— 购物清单勾选入库:弹窗 → 内联动作。** 勾选一条绑定了定义的购物项会弹出一个 modal 让你输入入库数量/位置。建议改为内联/快捷动作(或预填+确认),而不是用 modal 打断。*来源:走查记录。涉及 `frontend/src/pages/ShoppingList.tsx`(勾选流程)。*
@@ -48,6 +46,13 @@
 为可追溯而记录(在 `main` 上):
 
 - LLM chat URL 双 `/v1` —— `chat()` 拼了 `/v1/chat/completions`,而 `list_models()` 用 `/models`,于是一个标准的带版本段 base URL(`…/api/v1`)得到 `…/api/v1/v1/chat/completions` → 404 被误标为"模型不可用"。已修:两个端点都对"已含版本段的 base URL"追加 `/<endpoint>`,并做尾部斜杠归一化(`e6971bb`)。
+
+## 0.1.0 上线前收尾期间已解决
+
+为可追溯而记录(在 `main` 上)。一轮小型编排"通知卫生"随 0.1.0 上线准备一起落地:
+
+- **A2 —— 删除 subject 时的孤儿通知 —— 已修复。** `delete_for_subject` 现已接入两条删除路径:`StockInstanceService.delete` 清理该 lot 自身的 `instance`(best_before / warranty)通知,**以及**随它级联删除的维护计划的 `maintenance_schedule` 通知(FK 为 `ondelete=CASCADE`,会删掉计划行但不删其通知);`ItemDefinitionService.delete` 清理该定义的 `low_stock` 通知(在既有的 409 "有实例"守卫之后)。这消除了铃铛里的陈旧条目,也堵上了静默判重的洞(复用了被释放 PK + 相同目标日期的新 subject 不再被压掉)。含级联维护场景的回归测试(`4f6eb69`)。
+- **通知收件箱:清除全部 + 单条消除 —— 新增。** 收件箱此前只能标记已读、无法清空。新增软消除(`dismissed_at`,迁移 0035):铃铛与完整页面上各有一个"清除全部"动作 + 每条一个单独消除。消除只把该行从收件箱**隐藏** —— 刻意保留其去重锚与低库存 episode 状态,因此仍在活跃的来源不会在下次扫描又刷屏、低库存节奏也不会被重置(后端 `be759c0`、前端 `850f701`)。
 
 ## 设计层推迟(刻意,非缺陷)
 
