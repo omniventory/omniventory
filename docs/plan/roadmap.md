@@ -88,11 +88,11 @@ Legend: ⬜ planned · 🟡 active · 🟢 done. **Active milestone = the single
 | **M6** | Multi-user & roles | all | 🟢 |
 | **M7** | Shopping list & maintenance schedules | ③ / ② | 🟢 |
 | **M8** | Multi-unit conversion | ③ | ⏸ |
-| **M9.1** | LLM backend foundation (provider config + connection test) | infra | 🟡 |
+| **M9.1** | LLM backend foundation (provider config + connection test) | infra | 🟢 |
 | **M9.2** | LLM applications (receipt → batch entry · auto-categorize · semantic search) | all | ⬜ |
 | **M10** | External integrations (TickTick sync · API tokens · outbound webhooks) | all | ⬜ |
 
-**Suggested 1.0 cut: through M6** (all three needs fully covered with proactive reminders, data I/O, and multi-user). M7 is done (🟢); **M8 is ⏸ paused / deferred** (see §7); the active post-1.0 track is **M9.1 → M9.2 → M10**. All 1.x / post-1.0, adjustable. *(⏸ = deferred / paused.)*
+**Suggested 1.0 cut: through M6** (all three needs fully covered with proactive reminders, data I/O, and multi-user). M7 and M9.1 are done (🟢); **M8 is ⏸ paused / deferred** (see §7); the active post-1.0 track is **M9.2 → M10** (next up: M9.2, which flips 🟡 once its design doc is authored). All 1.x / post-1.0, adjustable. *(⏸ = deferred / paused.)*
 
 ---
 
