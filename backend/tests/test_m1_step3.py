@@ -172,8 +172,10 @@ def test_client(temp_db: Path) -> Generator[TestClient]:  # noqa: ARG001
     import app.models.item_definition as idef_mod
     import app.models.item_kind as ikind_mod
     import app.models.location as loc_mod
+    import app.models.maintenance_schedule as ms_mod
     import app.models.media_file as media_file_mod
     import app.models.note as note_mod
+    import app.models.notification as notif_mod
     import app.models.session as sess_mod
     import app.models.stock_instance as stock_instance_mod
     import app.models.stock_movement as stock_movement_mod
@@ -191,6 +193,8 @@ def test_client(temp_db: Path) -> Generator[TestClient]:  # noqa: ARG001
     importlib.reload(cat_mod)
     importlib.reload(ikind_mod)
     importlib.reload(idef_mod)
+    importlib.reload(notif_mod)
+    importlib.reload(ms_mod)
     importlib.reload(media_file_mod)
     importlib.reload(attachment_mod)
     importlib.reload(tag_mod)

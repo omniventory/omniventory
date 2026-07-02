@@ -31,6 +31,7 @@ from app.repositories.category import CategoryRepository
 from app.repositories.item_definition import ItemDefinitionRepository
 from app.repositories.item_kind import ItemKindRepository
 from app.repositories.location import LocationRepository
+from app.repositories.notification import NotificationRepository
 from app.repositories.stock_instance import StockInstanceRepository
 from app.repositories.user import UserRepository
 from app.schemas.custom_fields import serialize_custom_fields
@@ -50,6 +51,7 @@ class ItemDefinitionService:
         self._loc_repo = LocationRepository(db)
         self._inst_repo = StockInstanceRepository(db)
         self._user_repo = UserRepository(db)
+        self._notification_repo = NotificationRepository(db)
 
     # ---------------------------------------------------------------------- #
     # Private helpers                                                          #
@@ -310,6 +312,16 @@ class ItemDefinitionService:
         Cascades attachments (M5 Step 1), tag links (M5 Step 2), and notes
         (M5 Step 3) before removing the row.
 
+        Also cleans up notification rows before the delete (post-1.0 hardening,
+        notif-hygiene A2 fix): deletes this definition's own
+        ``subject_type="definition"`` notifications (low_stock).  Because the
+        409 guard above already ensures there are no instances left, there are
+        no instance- or maintenance-schedule-scoped notifications to worry
+        about here.  Without this cleanup, an orphaned low_stock notification
+        row would linger in the bell with a stale dedup key, silently
+        suppressing a future notification for a freshly created definition
+        that lands on the same id.
+
         Returns
         -------
         List of on-disk media paths to unlink after ``db.commit()`` (best-effort).
@@ -338,5 +350,6 @@ class ItemDefinitionService:
         )
         TagService(self._db).detach_all_for_owner("item_definition", definition_id)
         NoteService(self._db).delete_for_owner("item_definition", definition_id)
+        self._notification_repo.delete_for_subject("definition", definition_id)
         self._repo.delete(defn)
         return paths

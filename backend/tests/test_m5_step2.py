@@ -82,6 +82,7 @@ def test_client(
     import app.models.item_definition as idef_mod
     import app.models.item_kind as ikind_mod
     import app.models.location as loc_mod
+    import app.models.maintenance_schedule as ms_mod
     import app.models.media_file as media_file_mod
     import app.models.note as note_mod
     import app.models.notification as notif_mod
@@ -91,6 +92,7 @@ def test_client(
     import app.models.stock_movement as stock_movement_mod
     import app.models.tag as tag_mod
     import app.models.user as user_mod
+    import app.repositories.maintenance_schedule as ms_repo_mod
 
     # Re-register all models (including new tag models) with a fresh Base.
     importlib.reload(db_base_mod)
@@ -106,6 +108,11 @@ def test_client(
     importlib.reload(loc_mod)
     importlib.reload(setting_mod)
     importlib.reload(notif_mod)
+    importlib.reload(ms_mod)
+    # Reload the maintenance repo AFTER the models so its module-level
+    # StockInstance / MaintenanceSchedule references bind to the fresh Base
+    # (otherwise list_for_instance's cross-class joinedload mixes registries).
+    importlib.reload(ms_repo_mod)
     importlib.reload(media_file_mod)
     importlib.reload(attachment_mod)
     importlib.reload(tag_mod)

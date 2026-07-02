@@ -55,6 +55,8 @@ from app.models.item_definition import ItemDefinition
 from app.models.stock_instance import StockInstance
 from app.repositories.item_definition import ItemDefinitionRepository
 from app.repositories.location import LocationRepository
+from app.repositories.maintenance_schedule import MaintenanceScheduleRepository
+from app.repositories.notification import NotificationRepository
 from app.repositories.stock_instance import StockInstanceRepository
 from app.repositories.stock_movement import StockMovementRepository
 from app.repositories.user import UserRepository
@@ -75,6 +77,8 @@ class StockInstanceService:
         self._loc_repo = LocationRepository(db)
         self._movement_repo = StockMovementRepository(db)
         self._user_repo = UserRepository(db)
+        self._notification_repo = NotificationRepository(db)
+        self._maintenance_repo = MaintenanceScheduleRepository(db)
 
     # ---------------------------------------------------------------------- #
     # Private helpers                                                          #
@@ -552,6 +556,24 @@ class StockInstanceService:
         Cascades attachments (M5 Step 1), tag links (M5 Step 2), and notes
         (M5 Step 3) before removing the row.
 
+        Also cleans up notification rows before the delete (post-1.0 hardening,
+        notif-hygiene A2 fix):
+
+        - Deletes this instance's own ``subject_type="instance"`` notifications
+          (best_before / warranty).
+        - Enumerates the instance's maintenance schedules and deletes each
+          schedule's ``subject_type="maintenance_schedule"`` notifications.
+          This is required because ``maintenance_schedules.instance_id`` is
+          ``ondelete=CASCADE`` — the DB removes the schedule rows automatically
+          when the instance is deleted, but it does **not** remove their
+          notification rows, which would otherwise orphan with a stale dedup
+          key (silently suppressing a future notification that reuses the same
+          PK + date).
+
+        Without this cleanup, orphaned notification rows linger in the bell and
+        the dedup logic silently suppresses new notifications for a freshly
+        created subject that lands on the same id + target date.
+
         Returns
         -------
         List of on-disk media paths to unlink after ``db.commit()`` (best-effort).
@@ -569,5 +591,8 @@ class StockInstanceService:
         )
         TagService(self._db).detach_all_for_owner("stock_instance", instance_id)
         NoteService(self._db).delete_for_owner("stock_instance", instance_id)
+        self._notification_repo.delete_for_subject("instance", instance_id)
+        for schedule in self._maintenance_repo.list_for_instance(instance_id):
+            self._notification_repo.delete_for_subject("maintenance_schedule", schedule.id)
         self._repo.delete(inst)
         return paths

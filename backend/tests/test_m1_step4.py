@@ -57,13 +57,16 @@ def _make_fresh_session() -> Session:
     import app.models.item_definition as idef_mod
     import app.models.item_kind as ikind_mod
     import app.models.location as loc_mod
+    import app.models.maintenance_schedule as ms_mod
     import app.models.media_file as media_file_mod
     import app.models.note as note_mod
+    import app.models.notification as notif_mod
     import app.models.session as sess_mod
     import app.models.stock_instance as stock_instance_mod
     import app.models.stock_movement as stock_movement_mod
     import app.models.tag as tag_mod
     import app.models.user as user_mod
+    import app.repositories.maintenance_schedule as ms_repo_mod
 
     importlib.reload(db_base_mod)
     importlib.reload(hh_mod)
@@ -76,6 +79,12 @@ def _make_fresh_session() -> Session:
     importlib.reload(stock_instance_mod)
     importlib.reload(stock_movement_mod)
     importlib.reload(loc_mod)
+    importlib.reload(notif_mod)
+    importlib.reload(ms_mod)
+    # Reload the maintenance repo AFTER the models so its module-level
+    # StockInstance / MaintenanceSchedule references bind to the fresh Base
+    # (otherwise list_for_instance's cross-class joinedload mixes registries).
+    importlib.reload(ms_repo_mod)
     importlib.reload(media_file_mod)
     importlib.reload(attachment_mod)
     importlib.reload(tag_mod)
@@ -194,13 +203,16 @@ def test_client(temp_db: Path) -> Generator[TestClient]:  # noqa: ARG001
     import app.models.item_definition as idef_mod
     import app.models.item_kind as ikind_mod
     import app.models.location as loc_mod
+    import app.models.maintenance_schedule as ms_mod
     import app.models.media_file as media_file_mod
     import app.models.note as note_mod
+    import app.models.notification as notif_mod
     import app.models.session as sess_mod
     import app.models.stock_instance as stock_instance_mod
     import app.models.stock_movement as stock_movement_mod
     import app.models.tag as tag_mod
     import app.models.user as user_mod
+    import app.repositories.maintenance_schedule as ms_repo_mod
 
     importlib.reload(db_base_mod)
     importlib.reload(hh_mod)
@@ -213,6 +225,12 @@ def test_client(temp_db: Path) -> Generator[TestClient]:  # noqa: ARG001
     importlib.reload(stock_instance_mod)
     importlib.reload(stock_movement_mod)
     importlib.reload(loc_mod)
+    importlib.reload(notif_mod)
+    importlib.reload(ms_mod)
+    # Reload the maintenance repo AFTER the models so its module-level
+    # StockInstance / MaintenanceSchedule references bind to the fresh Base
+    # (otherwise list_for_instance's cross-class joinedload mixes registries).
+    importlib.reload(ms_repo_mod)
     importlib.reload(media_file_mod)
     importlib.reload(attachment_mod)
     importlib.reload(tag_mod)
