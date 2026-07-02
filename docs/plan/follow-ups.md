@@ -22,6 +22,8 @@ Priority is advisory: **Robustness** > **UX** > **Cosmetic** / **Test hygiene**.
 
 - **B3 — MaintenancePanel renders for every instance.** The panel is shown unconditionally for all instances, including consumables, because there is no clean durable/kind signal to gate on; a consumable lot shows an empty maintenance section (no functional harm). Gate it to durables once a clean signal exists. *Source: `review-notes/M7-report.md` §5 #3. Touches `frontend/src/pages/InstanceDetail.tsx`.*
 
+- **B4 — LLM base URL field has no example/hint.** The provider config's **Base URL** input has no placeholder, so it isn't obvious that the value must **already include the version segment** (e.g. `https://openrouter.ai/api/v1`, not `https://openrouter.ai/api`). During the M9.1 walkthrough this ambiguity — combined with the now-fixed double-`/v1` bug — produced a confusing "model unavailable" error. Follow-up: add a placeholder / helper text (e.g. `https://openrouter.ai/api/v1`) to the Base URL field, and optionally a light client-side hint when the URL doesn't look version-suffixed. *Source: M9.1 walkthrough. Touches `frontend/src/pages/Configuration.tsx` (LLM section) + `frontend/src/i18n/locales/{en,zh}/llm.json`.*
+
 ### Cosmetic / i18n
 
 - **C1 — "Due today" has no dedicated copy.** For maintenance (and the existing best_before / warranty templates), `days_remaining === 0` renders as "0 days remaining" instead of a dedicated "due today" string. Add a dedicated string across the reminder templates. *Source: `review-notes/M7-report.md` §5 #5. Touches `frontend/src/pages/Notifications.tsx` + notifications i18n catalogs.*
@@ -41,6 +43,12 @@ Recorded for traceability (all on `main`):
 - PATCH null guard — explicit null on a non-nullable column returns 422 in the two blind-loop repos (`b6430a5`); the cross-repo consistency pass remains open as **A1**.
 - Delete a maintenance schedule — also delete its notifications (`60eb95f`).
 
+## Resolved during the M9.1 walkthrough
+
+Recorded for traceability (on `main`):
+
+- LLM chat URL double-`/v1` — `chat()` appended `/v1/chat/completions` while `list_models()` used `/models`, so a standard version-included base URL (`…/api/v1`) produced `…/api/v1/v1/chat/completions` → a 404 mislabeled as "model unavailable". Fixed so both endpoints append `/<endpoint>` to a base URL that already includes the version segment, with trailing-slash normalization (`e6971bb`).
+
 ## Design-deferred (by design, not defects)
 
-These are intentionally out of scope and tracked in `docs/plan/milestones/M7.md` §13: usage-based maintenance, maintenance completion history, per-definition schedules, per-user maintenance lead time, and the TickTick shopping-list sync seam.
+These are intentionally out of scope and tracked in each milestone's design doc. From `docs/plan/milestones/M7.md` §13: usage-based maintenance, maintenance completion history, per-definition schedules, per-user maintenance lead time, and the TickTick shopping-list sync seam. From `docs/plan/milestones/M9.1.md` §13: the allow-loopback toggle (same-host Ollama), model auto-discovery UI, streaming / function-calling / structured-output, token & cost accounting + budgets, retry / backoff, multiple providers / fallback + per-user config, and secret encryption at rest.

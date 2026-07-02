@@ -22,6 +22,8 @@
 
 - **B3 —— MaintenancePanel 对每个实例都渲染。** 该面板对所有实例(含消耗品)无条件显示,因为没有干净的耐用/kind 信号可用于门控;消耗品 lot 会多出一个空的维护区块(无功能损害)。待有干净信号后将其限定到耐用品。*来源:`review-notes/M7-report.md` §5 #3。涉及 `frontend/src/pages/InstanceDetail.tsx`。*
 
+- **B4 —— LLM base URL 字段无示例/提示。** provider 配置的 **Base URL** 输入框没有 placeholder,因此不明显:该值必须**已经带上版本段**(如 `https://openrouter.ai/api/v1`,而非 `https://openrouter.ai/api`)。M9.1 走查中,这个歧义叠加(已修的)双 `/v1` bug,产生了一个令人困惑的"模型不可用"报错。后续:给 Base URL 字段加 placeholder / 帮助文案(如 `https://openrouter.ai/api/v1`),并可选地在 URL 看起来不带版本段时给个轻量客户端提示。*来源:M9.1 走查。涉及 `frontend/src/pages/Configuration.tsx`(LLM 区块) + `frontend/src/i18n/locales/{en,zh}/llm.json`。*
+
 ### 装饰 / i18n
 
 - **C1 —— "今天到期"无独立文案。** 对维护(以及既有 best_before / warranty 模板),`days_remaining === 0` 渲染成"0 days remaining",而非独立的"今天到期"文案。在各提醒模板里加一个独立字符串。*来源:`review-notes/M7-report.md` §5 #5。涉及 `frontend/src/pages/Notifications.tsx` + notifications i18n 目录。*
@@ -41,6 +43,12 @@
 - PATCH null 守卫 —— 两个盲循环仓库对非空列的显式 null 返回 422(`b6430a5`);跨仓库一致性 pass 作为 **A1** 仍待办。
 - 删除维护计划 —— 连带删除其通知(`60eb95f`)。
 
+## M9.1 走查期间已解决
+
+为可追溯而记录(在 `main` 上):
+
+- LLM chat URL 双 `/v1` —— `chat()` 拼了 `/v1/chat/completions`,而 `list_models()` 用 `/models`,于是一个标准的带版本段 base URL(`…/api/v1`)得到 `…/api/v1/v1/chat/completions` → 404 被误标为"模型不可用"。已修:两个端点都对"已含版本段的 base URL"追加 `/<endpoint>`,并做尾部斜杠归一化(`e6971bb`)。
+
 ## 设计层推迟(刻意,非缺陷)
 
-以下刻意不做、在 `docs/plan/milestones/M7_zh.md` §13 追踪:按用量计的维护、维护完成历史、按定义的计划、按用户的维护提前期、以及 TickTick 购物清单同步接缝。
+以下刻意不做,在各里程碑设计文档追踪。来自 `docs/plan/milestones/M7_zh.md` §13:按用量计的维护、维护完成历史、按定义的计划、按用户的维护提前期、以及 TickTick 购物清单同步接缝。来自 `docs/plan/milestones/M9.1_zh.md` §13:允许 loopback 的开关(同机 Ollama)、模型自动发现 UI、流式 / 函数调用 / 结构化输出、token 与成本计量 + 预算、重试 / 退避、多 provider / 回退 + 按用户配置、以及密钥静态加密。
